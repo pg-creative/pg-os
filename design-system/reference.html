@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PG OS — Variant Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,500&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ── Palette tokens per variant ─────────────────────────────────────────── */
+:root[data-variant="howls"] {
+  --bg-0:#0D0806; --bg-1:#1A120C; --bg-2:#22180F;
+  --fg:#F4E8D1; --fg-dim:#C9B391; --muted:#8B7355;
+  --accent:#D6A367; --accent-2:#E89B6F; --accent-3:#6B8CAE;
+  --panel:rgba(38,26,18,0.55); --panel-solid:#201610;
+  --border:rgba(214,163,103,0.20); --border-soft:rgba(214,163,103,0.10);
+  --success:#7FB069; --danger:#D0594B;
+  --serif:"Cormorant Garamond",serif; --body:"Inter",sans-serif; --mono:"JetBrains Mono",monospace;
+  --hero-url:url("hero-howls.png");
+  --label:"HOWL'S GOLDEN HOUR";
+}
+:root[data-variant="totoro"] {
+  --bg-0:#070A08; --bg-1:#0F1410; --bg-2:#151C17;
+  --fg:#E8EDE3; --fg-dim:#BDC7B4; --muted:#7A8A78;
+  --accent:#E0B552; --accent-2:#D57A5F; --accent-3:#73A58E;
+  --panel:rgba(16,26,20,0.55); --panel-solid:#101A14;
+  --border:rgba(224,181,82,0.17); --border-soft:rgba(224,181,82,0.08);
+  --success:#8FBD7A; --danger:#C76A5A;
+  --serif:"EB Garamond",serif; --body:"Inter",sans-serif; --mono:"JetBrains Mono",monospace;
+  --hero-url:url("hero-totoro.png");
+  --label:"TOTORO DUSK";
+}
+:root[data-variant="mononoke"] {
+  --bg-0:#060908; --bg-1:#0D1311; --bg-2:#121A17;
+  --fg:#EFE8DA; --fg-dim:#C1B89F; --muted:#6F867F;
+  --accent:#C9A560; --accent-2:#B8564F; --accent-3:#87A89A;
+  --panel:rgba(14,22,20,0.58); --panel-solid:#0E1614;
+  --border:rgba(201,165,96,0.19); --border-soft:rgba(201,165,96,0.09);
+  --success:#86B08A; --danger:#B8564F;
+  --serif:"Playfair Display",serif; --body:"Inter",sans-serif; --mono:"Space Mono",monospace;
+  --hero-url:url("hero-mononoke.png");
+  --label:"MONONOKE FOREST";
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg-0);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.45;min-height:100vh;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em}
+body{
+  background:
+    radial-gradient(ellipse at top left, rgba(214,163,103,0.06), transparent 40%),
+    radial-gradient(ellipse at bottom right, rgba(107,140,174,0.05), transparent 45%),
+    var(--bg-0);
+  min-height:100vh;
+  transition:background 0.6s ease;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.shell{padding:20px 28px 28px;max-width:1920px;margin:0 auto}
+
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 18px;font-family:var(--mono);font-size:10.5px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
+.topbar .brand{color:var(--fg);display:flex;align-items:center;gap:10px}
+.topbar .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent);animation:pulse 2.4s ease-in-out infinite}
+.topbar .brand .ver{color:var(--muted)}
+.topbar .telemetry{display:flex;gap:18px;align-items:center}
+.topbar .telemetry span{display:inline-flex;gap:6px;align-items:center}
+.topbar .telemetry b{color:var(--fg-dim);font-weight:500;letter-spacing:0.08em}
+
+.grid{display:grid;grid-template-columns:1fr 2.2fr 1fr;grid-template-rows:auto auto auto;gap:14px;grid-template-areas:
+  "operator session vitals"
+  "location calendar inbox"
+  "location now-playing project";
+}
+
+.card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:20px 22px;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  position:relative;
+  overflow:hidden;
+}
+.card::before{
+  content:"";position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg, transparent, var(--border), transparent);
+}
+.card-label{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+.card-label .tag{color:var(--fg-dim);font-weight:500}
+.card-label .tag.live::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--success);box-shadow:0 0 8px var(--success);margin-right:6px;animation:pulse 2s ease-in-out infinite}
+
+/* ── Operator ───────────────────────────────────────────────────────────── */
+.operator{grid-area:operator}
+.op-body{display:flex;gap:16px;align-items:flex-start}
+.avatar{width:72px;height:72px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:28px;color:var(--bg-0);font-weight:600;flex-shrink:0;box-shadow:0 0 30px rgba(214,163,103,0.15)}
+.op-info h2{font-family:var(--serif);font-size:22px;font-weight:500;line-height:1.15;margin-bottom:4px}
+.op-info h2 em{color:var(--accent);font-style:italic}
+.op-info .meta{font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+.op-kv{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;font-family:var(--mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase}
+.op-kv .k{color:var(--muted);display:block;margin-bottom:3px}
+.op-kv .v{color:var(--fg);font-weight:500}
+
+/* ── Session ────────────────────────────────────────────────────────────── */
+.session{grid-area:session;min-height:190px;display:flex;flex-direction:column;justify-content:space-between}
+.session .greeting{font-family:var(--serif);font-size:44px;font-weight:500;line-height:1.1;letter-spacing:-0.01em}
+.session .greeting em{font-style:italic;color:var(--accent)}
+.session .datestamp{font-family:var(--mono);font-size:10.5px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-top:10px}
+.session .clock{position:absolute;top:20px;right:24px;text-align:right}
+.session .clock .tz{font-family:var(--mono);font-size:10px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.session .clock .time{font-family:var(--serif);font-size:54px;line-height:1;display:flex;align-items:baseline;gap:6px;color:var(--fg);font-weight:500}
+.session .clock .colon{color:var(--accent);animation:blink 1.2s ease-in-out infinite}
+.session .clock .secs{font-size:22px;color:var(--fg-dim);margin-left:4px}
+.session .clock .local{font-family:var(--mono);font-size:9.5px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-top:8px}
+
+/* ── Vitals ─────────────────────────────────────────────────────────────── */
+.vitals{grid-area:vitals}
+.vit-hero{margin:-6px 0 14px}
+.vit-big{font-family:var(--serif);font-size:38px;font-weight:500;line-height:1;display:flex;align-items:baseline;gap:8px}
+.vit-big small{font-family:var(--mono);font-size:11px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-left:6px}
+.vit-sub{font-family:var(--mono);font-size:10px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;margin-top:6px}
+.vit-sub .up{color:var(--success);margin-right:8px}
+.vit-spark{height:56px;margin:10px 0 14px;position:relative}
+.vit-spark svg{width:100%;height:100%;display:block}
+.vit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:14px}
+.vit-kv{font-family:var(--mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase}
+.vit-kv .k{color:var(--muted);margin-bottom:4px}
+.vit-kv .v{font-family:var(--serif);font-size:20px;letter-spacing:-0.01em;color:var(--fg);font-weight:500;text-transform:none;display:flex;align-items:baseline;gap:4px}
+.vit-kv .v small{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em}
+.rings{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px}
+.ring{display:flex;flex-direction:column;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
+.ring svg{display:block}
+.ring .num{font-family:var(--serif);font-size:13px;color:var(--fg);letter-spacing:-0.01em;font-weight:500;text-transform:none;margin-top:2px}
+
+/* ── Location ───────────────────────────────────────────────────────────── */
+.location{grid-area:location;min-height:560px;padding:0;overflow:hidden}
+.loc-head{padding:20px 22px 16px;position:relative;z-index:2}
+.loc-bg{position:absolute;inset:0;z-index:1;background-image:var(--hero-url);background-size:cover;background-position:center;opacity:0.55;filter:saturate(1.05) contrast(1.02)}
+.loc-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(13,8,6,0.15) 0%,rgba(13,8,6,0.75) 70%,var(--bg-1) 100%)}
+.loc-body{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:flex-end;height:100%;padding:20px 22px 22px;min-height:560px}
+.loc-coords{font-family:var(--mono);font-size:10.5px;letter-spacing:0.18em;color:var(--fg-dim);text-transform:uppercase;display:flex;justify-content:space-between;border-top:1px solid var(--border-soft);padding-top:14px;margin-top:14px}
+.loc-city{font-family:var(--serif);font-size:34px;font-weight:500;line-height:1.1;font-style:italic}
+.loc-meta{font-family:var(--mono);font-size:10px;letter-spacing:0.16em;color:var(--muted);text-transform:uppercase;margin-top:6px}
+.loc-list{margin-top:22px;display:flex;flex-direction:column;gap:10px}
+.loc-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:10.5px;letter-spacing:0.1em;color:var(--fg-dim);text-transform:uppercase}
+.loc-item .num{color:var(--accent);font-weight:500}
+
+/* ── Calendar ───────────────────────────────────────────────────────────── */
+.calendar{grid-area:calendar}
+.cal-title{font-family:var(--serif);font-size:28px;font-weight:500;margin-bottom:16px}
+.cal-title em{font-style:italic;color:var(--accent)}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:18px}
+.day{border:1px solid var(--border-soft);border-radius:6px;padding:10px 4px;text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;transition:all 0.2s}
+.day .num{display:block;font-family:var(--serif);font-size:18px;color:var(--fg-dim);margin-top:4px;letter-spacing:-0.01em;font-weight:500}
+.day.today{background:var(--fg);color:var(--bg-0);border-color:var(--fg)}
+.day.today .num{color:var(--bg-0)}
+.events{display:flex;flex-direction:column;gap:0}
+.ev{display:grid;grid-template-columns:70px 1fr auto;gap:14px;padding:14px 0;border-top:1px solid var(--border-soft);align-items:center}
+.ev:first-child{border-top:0}
+.ev .time{font-family:var(--mono);font-size:10.5px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
+.ev .time.now{color:var(--accent)}
+.ev .body .title{font-size:15px;color:var(--fg);font-weight:500;letter-spacing:-0.01em}
+.ev .body .sub{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;color:var(--muted);text-transform:uppercase;margin-top:3px}
+.ev .dot{width:6px;height:6px;border-radius:50%;background:var(--border);box-shadow:0 0 0 3px var(--bg-1)}
+.ev.active .dot{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+
+/* ── Inbox ──────────────────────────────────────────────────────────────── */
+.inbox{grid-area:inbox}
+.inbox-list{display:flex;flex-direction:column;gap:0}
+.inbox-item{display:grid;grid-template-columns:36px 1fr auto;gap:12px;padding:12px 0;border-top:1px solid var(--border-soft);align-items:center}
+.inbox-item:first-child{border-top:0}
+.inbox-av{width:32px;height:32px;border-radius:7px;background:var(--bg-2);border:1px solid var(--border-soft);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;letter-spacing:0.12em;color:var(--fg-dim);font-weight:500}
+.inbox-body .row{display:flex;gap:8px;align-items:center;margin-bottom:3px}
+.inbox-body .name{font-size:13px;color:var(--fg);font-weight:500;letter-spacing:-0.01em}
+.inbox-body .badge{font-family:var(--mono);font-size:8.5px;letter-spacing:0.14em;color:var(--bg-0);background:var(--accent-2);padding:2px 6px;border-radius:3px;text-transform:uppercase;font-weight:500}
+.inbox-body .sub{font-size:12px;color:var(--fg-dim);line-height:1.35}
+.inbox-time{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;align-self:flex-start;padding-top:3px}
+
+/* ── Now playing ───────────────────────────────────────────────────────── */
+.now-playing{grid-area:now-playing}
+.np-body{display:flex;gap:18px;align-items:center;margin-bottom:16px}
+.np-art{width:64px;height:64px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.np-art::after{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--bg-0);box-shadow:inset 0 0 0 2px var(--accent),0 0 18px rgba(0,0,0,0.3)}
+.np-art::before{content:"";position:absolute;top:50%;left:50%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%);z-index:2;box-shadow:0 0 0 10px var(--bg-0)}
+.np-info .title{font-family:var(--serif);font-size:24px;font-weight:500;line-height:1.15;margin-bottom:4px}
+.np-info .title em{font-style:italic;color:var(--accent)}
+.np-info .sub{font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
+.waveform{height:46px;display:flex;align-items:center;gap:2px;margin-bottom:10px}
+.waveform .bar{flex:1;background:var(--fg-dim);border-radius:1px;opacity:0.55;min-width:2px}
+.waveform .bar.active{background:var(--accent);opacity:1}
+.waveform .bar.played{background:var(--fg);opacity:0.9}
+.np-controls{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--muted)}
+.np-controls .btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--fg-dim);cursor:pointer}
+.np-controls .btn.play{background:var(--fg);color:var(--bg-0);border-color:var(--fg)}
+
+/* ── Active project ─────────────────────────────────────────────────────── */
+.project{grid-area:project}
+.proj-title{font-family:var(--serif);font-size:22px;font-weight:500;margin-bottom:4px}
+.proj-title em{font-style:italic;color:var(--accent)}
+.proj-sub{font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+.progress-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
+.progress-row .pct{color:var(--accent);font-family:var(--serif);font-size:22px;letter-spacing:-0.01em;font-weight:500;text-transform:none}
+.bar{height:3px;background:var(--border-soft);border-radius:2px;overflow:hidden;margin-bottom:18px;position:relative}
+.bar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:62%;background:linear-gradient(90deg,var(--accent),var(--accent-2));box-shadow:0 0 10px rgba(214,163,103,0.4)}
+.checklist{display:flex;flex-direction:column;gap:9px}
+.check{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--fg);letter-spacing:-0.005em}
+.check .box{width:15px;height:15px;border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.check.done{color:var(--muted);text-decoration:line-through}
+.check.done .box{background:var(--accent);border-color:var(--accent)}
+.check.done .box::after{content:"";width:7px;height:4px;border-left:1.5px solid var(--bg-0);border-bottom:1.5px solid var(--bg-0);transform:rotate(-45deg);margin-bottom:1px}
+
+/* ── Theme switcher ─────────────────────────────────────────────────────── */
+.switcher{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--panel-solid);border:1px solid var(--border);border-radius:999px;backdrop-filter:blur(20px);box-shadow:0 12px 40px rgba(0,0,0,0.4)}
+.switcher .chip{padding:8px 14px;border-radius:999px;font-family:var(--mono);font-size:10px;letter-spacing:0.16em;color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;display:flex;align-items:center;gap:8px;border:1px solid transparent}
+.switcher .chip:hover{color:var(--fg-dim)}
+.switcher .chip.active{background:var(--fg);color:var(--bg-0);border-color:var(--fg)}
+.switcher .chip.active .swatch{border-color:var(--bg-0)}
+.switcher .swatch{width:10px;height:10px;border-radius:50%;border:1px solid var(--border)}
+.switcher .swatch.howls{background:linear-gradient(135deg,#D6A367,#E89B6F)}
+.switcher .swatch.totoro{background:linear-gradient(135deg,#E0B552,#73A58E)}
+.switcher .swatch.mononoke{background:linear-gradient(135deg,#C9A560,#87A89A)}
+.switcher .label{font-family:var(--mono);font-size:9.5px;letter-spacing:0.2em;color:var(--muted);padding:0 4px;text-transform:uppercase}
+
+/* ── Animations ─────────────────────────────────────────────────────────── */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.45}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.card,.topbar,.switcher{animation:fadeIn 0.5s ease-out}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media(max-width:1200px){
+  .grid{grid-template-columns:1fr 1fr;grid-template-areas:"operator session" "vitals vitals" "location calendar" "location inbox" "now-playing project"}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span>PG OS</span>
+      <span class="ver">// v0.1 // <span id="variant-label">HOWL'S GOLDEN HOUR</span></span>
+    </div>
+    <div class="telemetry">
+      <span>CHICAGO, IL · <b>48°F</b></span>
+      <span>BAT <b>88%</b></span>
+      <span>NET · <b>240MB/S</b></span>
+      <span id="stamp"><b>20260421·1430</b></span>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- OPERATOR -->
+    <div class="card operator">
+      <div class="card-label"><span>01 // OPERATOR</span><span class="tag live">ONLINE</span></div>
+      <div class="op-body">
+        <div class="avatar">PG</div>
+        <div class="op-info">
+          <h2>Patrick <em>Smith</em></h2>
+          <div class="meta">GTM ENGINEER · CHICAGO</div>
+          <div class="op-kv">
+            <div><span class="k">FOCUS</span><span class="v">DEEP WORK</span></div>
+            <div><span class="k">STATUS</span><span class="v">DND</span></div>
+            <div><span class="k">RANK</span><span class="v">A · TIER III</span></div>
+            <div><span class="k">STREAK</span><span class="v">29 DAYS</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SESSION -->
+    <div class="card session">
+      <div class="card-label"><span>02 // SESSION</span></div>
+      <div class="clock">
+        <div class="tz">UTC -05:00 · CDT</div>
+        <div class="time"><span>14</span><span class="colon">:</span><span>30</span><span class="secs">47</span></div>
+        <div class="local">LOCAL TIME</div>
+      </div>
+      <div>
+        <div class="greeting">Good <em>afternoon,</em> Patrick.</div>
+        <div class="datestamp">TUESDAY · APRIL 21, 2026 · DAY 111 OF 365</div>
+      </div>
+    </div>
+
+    <!-- VITALS -->
+    <div class="card vitals">
+      <div class="card-label"><span>03 // VITALS</span><span class="tag live">LIVE</span></div>
+      <div class="vit-hero">
+        <div class="vit-big">8,347 <small>STEPS</small></div>
+        <div class="vit-sub"><span class="up">▲ 12% VS AVG</span>TODAY · GOAL 10,000</div>
+      </div>
+      <div class="vit-spark">
+        <svg viewBox="0 0 240 56" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sparkFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,48 L20,44 L40,40 L60,42 L80,36 L100,32 L120,28 L140,24 L160,22 L180,18 L200,14 L220,10 L240,6 L240,56 L0,56 Z" fill="url(#sparkFill)"/>
+          <path d="M0,48 L20,44 L40,40 L60,42 L80,36 L100,32 L120,28 L140,24 L160,22 L180,18 L200,14 L220,10 L240,6" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="vit-grid">
+        <div class="vit-kv"><div class="k">HEART</div><div class="v">68 <small>bpm</small></div></div>
+        <div class="vit-kv"><div class="k">SLEEP</div><div class="v">7.2 <small>hrs</small></div></div>
+        <div class="vit-kv"><div class="k">HRV</div><div class="v">48 <small>ms</small></div></div>
+        <div class="vit-kv"><div class="k">WATER</div><div class="v">1.4 <small>L</small></div></div>
+      </div>
+      <div class="rings">
+        <div class="ring">
+          <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--border-soft)" stroke-width="3"/><circle cx="22" cy="22" r="18" fill="none" stroke="var(--accent-2)" stroke-width="3" stroke-linecap="round" stroke-dasharray="88 113" transform="rotate(-90 22 22)"/></svg>
+          <span class="num">520</span>
+          MOVE
+        </div>
+        <div class="ring">
+          <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--border-soft)" stroke-width="3"/><circle cx="22" cy="22" r="18" fill="none" stroke="var(--success)" stroke-width="3" stroke-linecap="round" stroke-dasharray="84 113" transform="rotate(-90 22 22)"/></svg>
+          <span class="num">38/50</span>
+          EXERCISE
+        </div>
+        <div class="ring">
+          <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--border-soft)" stroke-width="3"/><circle cx="22" cy="22" r="18" fill="none" stroke="var(--accent-3)" stroke-width="3" stroke-linecap="round" stroke-dasharray="105 113" transform="rotate(-90 22 22)"/></svg>
+          <span class="num">11/12</span>
+          STAND
+        </div>
+      </div>
+    </div>
+
+    <!-- LOCATION -->
+    <div class="card location">
+      <div class="loc-bg"></div>
+      <div class="loc-body">
+        <div class="card-label" style="color:var(--fg-dim)"><span>02 // LOCATION</span><span class="tag" style="color:var(--accent)">PING · 18MS</span></div>
+        <div style="flex:1"></div>
+        <div class="loc-city">Chicago, <em>Illinois</em></div>
+        <div class="loc-meta">HOME · STUDIO · WORKSHOP</div>
+        <div class="loc-list">
+          <div class="loc-item"><span>Studio</span><span class="num">0.0 MI</span></div>
+          <div class="loc-item"><span>Metrasens HQ</span><span class="num">18.3 MI</span></div>
+          <div class="loc-item"><span>Lincoln Park Loop</span><span class="num">2.1 MI</span></div>
+        </div>
+        <div class="loc-coords">
+          <span>41.8781° N · 87.6298° W</span>
+          <span>ALT 182M</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="card calendar">
+      <div class="card-label"><span>04 // CALENDAR</span><span class="tag">APR 2026</span></div>
+      <div class="cal-title">Tuesday, <em>April 21</em></div>
+      <div class="days">
+        <div class="day">MON<span class="num">14</span></div>
+        <div class="day">TUE<span class="num">15</span></div>
+        <div class="day">WED<span class="num">16</span></div>
+        <div class="day">THU<span class="num">17</span></div>
+        <div class="day">FRI<span class="num">18</span></div>
+        <div class="day">SAT<span class="num">19</span></div>
+        <div class="day">SUN<span class="num">20</span></div>
+      </div>
+      <div class="days" style="margin-bottom:18px">
+        <div class="day today">TUE<span class="num">21</span></div>
+        <div class="day">WED<span class="num">22</span></div>
+        <div class="day">THU<span class="num">23</span></div>
+        <div class="day">FRI<span class="num">24</span></div>
+        <div class="day">SAT<span class="num">25</span></div>
+        <div class="day">SUN<span class="num">26</span></div>
+        <div class="day">MON<span class="num">27</span></div>
+      </div>
+      <div class="events">
+        <div class="ev active">
+          <span class="time now">NOW · 2:30</span>
+          <div class="body"><div class="title">Claude Design · personal OS prototype</div><div class="sub">Design exploration · Deep work</div></div>
+          <span class="dot"></span>
+        </div>
+        <div class="ev">
+          <span class="time">4:00 PM</span>
+          <div class="body"><div class="title">Metrasens GTM sync</div><div class="sub">Weekly · Q2 pipeline review</div></div>
+          <span class="dot"></span>
+        </div>
+        <div class="ev">
+          <span class="time">6:30 PM</span>
+          <div class="body"><div class="title">Run · Lincoln Park loop</div><div class="sub">5km · easy pace</div></div>
+          <span class="dot"></span>
+        </div>
+        <div class="ev">
+          <span class="time">8:00 PM</span>
+          <div class="body"><div class="title">Hero's Chronicle · review journal</div><div class="sub">Day 111 entry · evening ritual</div></div>
+          <span class="dot"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- INBOX -->
+    <div class="card inbox">
+      <div class="card-label"><span>05 // INBOX · CRITICAL</span><span class="tag">4 UNREAD</span></div>
+      <div class="inbox-list">
+        <div class="inbox-item">
+          <div class="inbox-av">ML</div>
+          <div class="inbox-body">
+            <div class="row"><span class="name">Maya Lin</span><span class="badge">URGENT</span></div>
+            <div class="sub">Re: HC v2.7 scope — need your sign-off today</div>
+          </div>
+          <span class="inbox-time">12M</span>
+        </div>
+        <div class="inbox-item">
+          <div class="inbox-av">TH</div>
+          <div class="inbox-body">
+            <div class="row"><span class="name">Theo Harris</span></div>
+            <div class="sub">Moved our sync · new calendar invite attached</div>
+          </div>
+          <span class="inbox-time">48M</span>
+        </div>
+        <div class="inbox-item">
+          <div class="inbox-av">EN</div>
+          <div class="inbox-body">
+            <div class="row"><span class="name">Eliza N.</span></div>
+            <div class="sub">Dinner Saturday still on? Booked a table 🍷</div>
+          </div>
+          <span class="inbox-time">2H</span>
+        </div>
+        <div class="inbox-item">
+          <div class="inbox-av">AC</div>
+          <div class="inbox-body">
+            <div class="row"><span class="name">Anthropic Labs</span></div>
+            <div class="sub">Claude Design research preview · welcome packet</div>
+          </div>
+          <span class="inbox-time">5H</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOW PLAYING -->
+    <div class="card now-playing">
+      <div class="card-label"><span>06 // NOW PLAYING</span><span class="tag">VINYL · SIDE A</span></div>
+      <div class="np-body">
+        <div class="np-art"></div>
+        <div class="np-info">
+          <div class="title">Harvest <em>Moon</em></div>
+          <div class="sub">NEIL YOUNG · HARVEST MOON '92</div>
+        </div>
+      </div>
+      <div class="waveform" id="waveform"></div>
+      <div class="np-controls">
+        <span>1:42</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="btn">‹</div>
+          <div class="btn play">▶</div>
+          <div class="btn">›</div>
+        </div>
+        <span>5:03</span>
+      </div>
+    </div>
+
+    <!-- ACTIVE PROJECT -->
+    <div class="card project">
+      <div class="card-label"><span>07 // ACTIVE PROJECT</span><span class="tag" style="color:var(--accent-2)">DUE OCT 2</span></div>
+      <div class="proj-title">Hero's Chronicle · <em>v1.0</em></div>
+      <div class="proj-sub">PG'S 30TH · LIFE GAMIFICATION APP</div>
+      <div class="progress-row"><span>PROGRESS</span><span class="pct">62%</span></div>
+      <div class="bar"></div>
+      <div class="checklist">
+        <div class="check done"><span class="box"></span>Design system + 5-tab architecture</div>
+        <div class="check done"><span class="box"></span>Supabase + Whoop API wiring</div>
+        <div class="check done"><span class="box"></span>Vercel deploy · PWA</div>
+        <div class="check"><span class="box"></span>iMessage integration · chat.db polling</div>
+        <div class="check"><span class="box"></span>Login + onboarding variant selection</div>
+        <div class="check"><span class="box"></span>Rive avatar wiring to UI</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- THEME SWITCHER -->
+<div class="switcher">
+  <span class="label">PALETTE</span>
+  <div class="chip active" data-theme="howls"><span class="swatch howls"></span>Howl's Golden Hour</div>
+  <div class="chip" data-theme="totoro"><span class="swatch totoro"></span>Totoro Dusk</div>
+  <div class="chip" data-theme="mononoke"><span class="swatch mononoke"></span>Mononoke Forest</div>
+</div>
+
+<script>
+// Waveform bars (deterministic pseudo-random)
+(function(){
+  const wf = document.getElementById('waveform');
+  if(!wf) return;
+  const N = 80;
+  const progress = 0.34; // 1:42 / 5:03
+  let html = '';
+  for(let i=0;i<N;i++){
+    const h = 20 + Math.abs(Math.sin(i*0.37 + i*i*0.013))*70;
+    const cls = i/N < progress ? 'played' : (Math.abs(i/N - progress) < 0.012 ? 'active' : '');
+    html += `<div class="bar ${cls}" style="height:${h}%"></div>`;
+  }
+  wf.innerHTML = html;
+})();
+
+// Theme switcher
+const chips = document.querySelectorAll('.chip[data-theme]');
+const label = document.getElementById('variant-label');
+const labels = {howls:"HOWL'S GOLDEN HOUR", totoro:"TOTORO DUSK", mononoke:"MONONOKE FOREST"};
+function setTheme(t){
+  document.documentElement.setAttribute('data-variant', t);
+  chips.forEach(c=>c.classList.toggle('active', c.dataset.theme===t));
+  if(label) label.textContent = labels[t];
+  localStorage.setItem('pg-os-variant', t);
+}
+chips.forEach(c=>c.addEventListener('click', ()=>setTheme(c.dataset.theme)));
+setTheme(localStorage.getItem('pg-os-variant') || 'howls');
+
+// Live clock
+(function(){
+  const t = document.querySelector('.clock .time');
+  if(!t) return;
+  function tick(){
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    const ss = String(d.getSeconds()).padStart(2,'0');
+    t.innerHTML = `<span>${hh}</span><span class="colon">:</span><span>${mm}</span><span class="secs">${ss}</span>`;
+    const stamp = document.getElementById('stamp');
+    if(stamp){
+      const ymd = d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+      stamp.innerHTML = `<b>${ymd}·${hh}${mm}</b>`;
+    }
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>
