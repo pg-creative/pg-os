@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
 import { calendarClient } from "@/lib/google";
+import { getTokens } from "@/lib/tokenStore";
 
 export type CalEvent = {
   id: string;
   summary: string;
-  start: string;      // ISO
-  end: string;        // ISO
+  start: string;
+  end: string;
   allDay: boolean;
   location?: string;
   description?: string;
@@ -21,18 +21,10 @@ function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); retur
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
 
 export async function GET(req: NextRequest) {
-  // Session might throw if SESSION_PASSWORD isn't set — treat as unauthed
-  let session;
-  try {
-    session = await getSession();
-  } catch {
-    return NextResponse.json({ authed: false } satisfies CalResponse);
-  }
-  if (!session.google?.refreshToken) {
-    return NextResponse.json({ authed: false } satisfies CalResponse);
-  }
+  const current = await getTokens("google");
+  if (!current?.refreshToken) return NextResponse.json({ authed: false } satisfies CalResponse);
 
-  const view = req.nextUrl.searchParams.get("view") ?? "today"; // today | week
+  const view = req.nextUrl.searchParams.get("view") ?? "today";
   const now = new Date();
   const from = startOfDay(now);
   const to = view === "week"
@@ -40,7 +32,8 @@ export async function GET(req: NextRequest) {
     : endOfDay(now);
 
   try {
-    const cal = calendarClient(session.google.refreshToken);
+    // Google SDK handles refresh internally when we pass the refresh_token.
+    const cal = calendarClient(current.refreshToken);
     const res = await cal.events.list({
       calendarId: "primary",
       timeMin: from.toISOString(),

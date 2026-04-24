@@ -1,10 +1,22 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ModeProvider } from "./_components/ModeProvider";
+import { TabProvider } from "./_components/useActiveTab";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "PG OS",
   description: "Personal operating system dashboard",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#E8F0F7" },
+    { media: "(prefers-color-scheme: dark)",  color: "#091433" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,7 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <ModeProvider>{children}</ModeProvider>
+        <ModeProvider>
+          <TabProvider>{children}</TabProvider>
+        </ModeProvider>
       </body>
     </html>
   );

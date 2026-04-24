@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.104.1",
     "googleapis": "^171.4.0",
     "iron-session": "^8.0.4",
     "next": "15.1.3",

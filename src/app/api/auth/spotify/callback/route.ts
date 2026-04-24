@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeSpotifyCode } from "@/lib/spotify";
-import { getSession } from "@/lib/session";
+import { setTokens } from "@/lib/tokenStore";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -13,13 +13,11 @@ export async function GET(req: NextRequest) {
     if (!tokens.refresh_token) {
       return NextResponse.redirect(new URL("/?auth=spotify_error&reason=no_refresh_token", req.url));
     }
-    const session = await getSession();
-    session.spotify = {
+    await setTokens("spotify", {
       refreshToken: tokens.refresh_token,
       accessToken: tokens.access_token,
       expiresAt: Date.now() + tokens.expires_in * 1000,
-    };
-    await session.save();
+    });
     return NextResponse.redirect(new URL("/?auth=spotify_ok", req.url));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
