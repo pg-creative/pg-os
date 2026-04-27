@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { RitualGate } from "../Ritual/RitualGate";
 
 interface Habit {
   id: string;
@@ -98,6 +99,8 @@ export function HabitsView() {
         <h1 className="view-title">Habits</h1>
         <div className="view-sub">MORNING · EVENING · WEEKLY REVIEW</div>
       </div>
+
+      <RitualGate />
 
       {loading && !data && <LoadingCard />}
       {fetchError && <div className="card"><div className="card-label">ERROR</div><p>{fetchError}</p><button className="fl-btn-primary" onClick={fetchData}>Retry</button></div>}
