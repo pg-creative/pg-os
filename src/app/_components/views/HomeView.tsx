@@ -6,10 +6,12 @@ import { NowPlayingLive } from "../NowPlayingLive";
 import { VitalsLive } from "../VitalsLive";
 import { Greeting } from "../ModeSwitcher";
 import { LocationLive } from "../LocationLive";
+import { PostMortemBanner } from "../PostMortemBanner";
 
 export function HomeView() {
   return (
     <>
+      <PostMortemBanner />
       {/* SESSION BANNER — full-width, time-responsive hero image */}
       <div className="card session">
         <SparkleCorner delayed variant="plus" />

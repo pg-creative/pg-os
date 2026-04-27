@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { TrustToggle } from "../../Claude/TrustToggle";
 
 type TrustCategory = {
   approvals: number;
@@ -66,7 +67,13 @@ export function ClaudeTrust() {
                   <span className="cl-trust-name">{name.replace(/-/g, " ")}</span>
                   <span className="cl-trust-meta">
                     {cat.approvals} / {cat.threshold}
-                    {cat.auto_execute && <span className="cl-trust-auto">AUTO</span>}
+                    <TrustToggle
+                      category={name}
+                      autoExecute={cat.auto_execute}
+                      approvals={cat.approvals}
+                      threshold={cat.threshold}
+                      onToggle={fetchTrust}
+                    />
                   </span>
                 </div>
                 <div className="cl-trust-bar">
