@@ -59,47 +59,117 @@ async function readDefinitionFile(name: string): Promise<{ description: string; 
   return { description: "", model: "sonnet" };
 }
 
-function findAgentMentions(log: string, name: string): { lastRun: string | null; status: AgentHealth["lastStatus"]; error?: string } {
-  // Look for date headings (## YYYY-MM-DD or ### YYYY-MM-DD) where the agent name appears in the section
-  const lines = log.split("\n");
-  let lastRun: string | null = null;
-  let status: AgentHealth["lastStatus"] = "unknown";
-  let error: string | undefined;
-  let currentDate: string | null = null;
-  let currentBlock: string[] = [];
+// Explicit failure markers — only these trigger an error status.
+// Substrings like "permission errors" (a sub-section heading inside a successful run)
+// or "memory-hygiene-2026-04-12.md" (a path) must NOT trigger.
+const FAILURE_MARKERS = [
+  /\bFAILED\b/,
+  /\bABORTED\b/,
+  /\bexit (?:code )?[1-9]/,
+  /\bAPI Error\b/i,
+  /^Error:/m,
+  /\bUnhandled (?:exception|rejection)\b/i,
+  /\bcommand not found\b/,
+];
+const TIMEOUT_MARKERS = [
+  /\bStream idle timeout\b/i,
+  /\bidle timeout\b/i,
+  /\brequest timed out\b/i,
+];
 
-  const flush = () => {
-    const block = currentBlock.join("\n");
-    if (currentDate && block.toLowerCase().includes(name.toLowerCase())) {
-      lastRun = currentDate;
-      const lower = block.toLowerCase();
-      if (lower.includes("stream idle") || lower.includes("idle timeout")) {
-        status = "timeout";
-        error = "Stream idle timeout — partial response";
-      } else if (lower.includes("error") || lower.includes("failed")) {
-        status = "error";
-        const m = block.match(/error[:\s].{0,140}/i);
-        if (m) error = m[0].slice(0, 160);
-      } else if (lower.includes("complete") || lower.includes("ok") || lower.includes("done") || lower.includes("appended") || lower.includes("proposed")) {
-        status = "ok";
-      } else {
-        status = "ok";
-      }
+function classifyBlock(block: string): { status: AgentHealth["lastStatus"]; error?: string } {
+  for (const re of TIMEOUT_MARKERS) {
+    const m = block.match(re);
+    if (m) return { status: "timeout", error: "Stream idle timeout — partial response" };
+  }
+  for (const re of FAILURE_MARKERS) {
+    const m = block.match(re);
+    if (m) {
+      const idx = m.index ?? 0;
+      const snippet = block.slice(idx, idx + 160).split("\n")[0].trim();
+      return { status: "error", error: snippet };
     }
-  };
+  }
+  return { status: "ok" };
+}
 
+function isPerAgentLog(log: string, name: string): boolean {
+  // The log files like memory-hygiene-log.md are dedicated to one agent.
+  // If the H1 contains the agent's words, treat dates anywhere in the file as runs of THIS agent.
+  const firstHeader = log.split("\n").find((l) => l.startsWith("# ")) ?? "";
+  const norm = firstHeader.toLowerCase().replace(/-/g, " ");
+  return norm.includes(name.replace(/-/g, " "));
+}
+
+function lastDateInLog(log: string): string | null {
+  // Find every YYYY-MM-DD anywhere in the file, return the maximum.
+  const matches = log.match(/\b(\d{4}-\d{2}-\d{2})\b/g);
+  if (!matches || !matches.length) return null;
+  return matches.sort().slice(-1)[0];
+}
+
+function findAgentMentions(
+  log: string,
+  name: string,
+): { lastRun: string | null; status: AgentHealth["lastStatus"]; error?: string } {
+  if (!log.trim()) return { lastRun: null, status: "unknown" };
+
+  // Per-agent log file (e.g. memory-hygiene-log.md) — single owner, every dated run is theirs.
+  if (isPerAgentLog(log, name)) {
+    const lastRun = lastDateInLog(log);
+    if (!lastRun) return { lastRun: null, status: "unknown" };
+    // Slice the log to ONLY the section for the most recent run by splitting on heading
+    // boundaries that contain that date.
+    const idx = log.lastIndexOf(lastRun);
+    const lineStart = log.lastIndexOf("\n", idx) + 1;
+    const headerLineEnd = log.indexOf("\n", idx);
+    const lastBlock = log.slice(headerLineEnd === -1 ? lineStart : headerLineEnd + 1);
+    const cls = classifyBlock(lastBlock);
+    return { lastRun, ...cls };
+  }
+
+  // Multi-agent log (e.g. review-log.md). Split on date-anchored headings;
+  // attribute a block to an agent only if the agent name appears OUTSIDE a file-path mention.
+  const lines = log.split("\n");
+  const blocks: { date: string; body: string }[] = [];
+  let currentDate: string | null = null;
+  let currentBuf: string[] = [];
+
+  const headingDateRe = /^#{1,4}\s+.*?(\d{4}-\d{2}-\d{2})/;
+  const flush = () => {
+    if (currentDate) blocks.push({ date: currentDate, body: currentBuf.join("\n") });
+  };
   for (const line of lines) {
-    const dm = line.match(/^#{2,3}\s+(\d{4}-\d{2}-\d{2})/);
+    const dm = line.match(headingDateRe);
     if (dm) {
       flush();
       currentDate = dm[1];
-      currentBlock = [];
+      currentBuf = [];
     } else {
-      currentBlock.push(line);
+      currentBuf.push(line);
     }
   }
   flush();
+
+  let lastRun: string | null = null;
+  let status: AgentHealth["lastStatus"] = "unknown";
+  let error: string | undefined;
+  for (const b of blocks) {
+    if (!mentionsAgent(b.body, name)) continue;
+    if (lastRun === null || b.date > lastRun) {
+      lastRun = b.date;
+      const cls = classifyBlock(b.body);
+      status = cls.status;
+      error = cls.error;
+    }
+  }
   return { lastRun, status, error };
+}
+
+function mentionsAgent(body: string, name: string): boolean {
+  // Match agent name as a word, but NOT inside `agent-name-YYYY-MM-DD.md` style file paths.
+  const re = new RegExp(`(?<![\\w-])${name}(?![\\w-])`, "i");
+  return re.test(body);
 }
 
 export async function getAgentHealth(): Promise<AgentHealth[]> {
