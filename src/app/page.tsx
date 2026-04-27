@@ -6,6 +6,8 @@ import { HomeModeToggle } from "./_components/HomeModeToggle";
 import { AmbientParticles } from "./_components/AmbientParticles";
 import { TabBar } from "./_components/TabBar";
 import { CaptureFAB } from "./_components/CaptureFAB";
+import { BrandModePicker } from "./_components/BrandModePicker";
+import { CopilotLauncher } from "./_components/Copilot/CopilotPanel";
 import { useActiveTab } from "./_components/useActiveTab";
 import { HomeView } from "./_components/views/HomeView";
 import { HabitsView } from "./_components/views/HabitsView";
@@ -31,6 +33,7 @@ export default function Page() {
           <div className="telemetry">
             <span><CityTemp /></span>
             <span><LiveStamp /></span>
+            <BrandModePicker />
             <HomeModeToggle />
           </div>
         </div>
@@ -53,6 +56,7 @@ export default function Page() {
 
       <ModeSwitcher />
       <CaptureFAB />
+      <CopilotLauncher />
     </>
   );
 }
