@@ -8,19 +8,30 @@ A Next.js 15 + React 19 + Tailwind v4 personal dashboard running at `http://127.
 Kickoff: 2026-04-21. Current live URL (cloudflared tunnel): `https://shorts-visible-overhead-broadband.trycloudflare.com` (per-session; reset on Mac sleep).
 
 ## Current Status
-**Phases 1-8 shipped (2026-04-27).** Tab shell, OAuth hardening, location sync, mobile-first CSS, Flow tab (ships + approval queue), Projects tab + Ghostty launchers, Habits wired to HC Supabase, Capture FAB + voice, Home mode toggle, full accessibility audit implementation. **Phase 8 (Claude tab):** 3-source self-improvement observatory — overview / proposals / trust state / agent health / signals / skills+rules / archive search. Approve+dismiss writes back to `~/.claude/self-improvement/data/`. Run-agent launches Ghostty. See `docs/specs/os-blueprint.md` for the v1.1 blueprint and phase mapping.
+**Phases 1-8 + Recursive Fox tracks A/B/C/D shipped (2026-04-27).** Tab shell, OAuth hardening, mobile-first CSS, Flow tab, Projects tab, Habits wired to HC Supabase, Capture FAB, Home mode, accessibility audit. Phase 8 = Claude tab (self-improvement observatory). **Recursive Fox** then layered on:
+- **Track A (foundation):** Supabase backend + dedicated PG OS project, encrypted tokenStore, queueStore mirror (filesystem still source of truth for Claude Code's queue rule), claudeStore mirror to proposals_log + decisions_log, single-user middleware + unlock page, sqlite fallback when env not set.
+- **Track B (AI co-pilot):** ⌘J slide-in panel, Anthropic streaming with prompt caching, 9 tools (read_ships/queue/calendar/vitals/signals/archive + propose_action/add_ship/add_queue_item).
+- **Track C (brand modes):** ⌘⇧M cycles alchmy/voyager/writer/metrasens/recovery; per-mode filters + accent override.
+- **Track D (rituals):** Morning + Evening RitualGate above habits; localStorage now, Supabase migration markers in place.
+
+**Track A tail is PG-blocking** — see `supabase/PG_SETUP_CHECKLIST.md` for the manual steps (create Supabase project, apply migration, set env vars, Vercel deploy, DNS for os.pgsmith.com, OAuth redirect URI additions). Tracks A2-A6 unlock once that ships.
 
 ## Stack
 - **Framework:** Next.js 15 App Router, React 19, TypeScript, Tailwind v4 (via `@import "tailwindcss"`)
 - **Package manager:** pnpm
-- **Runtime:** Node 22+ (uses `node:sqlite`)
-- **Local state:**
-  - `~/.pg-os/tokens.json` — OAuth refresh/access tokens (file-backed, 0600, atomic writes)
-  - `~/.pg-os/ships.db` — node:sqlite ship log
-  - `~/.pg-os/queue/*.md` — approval queue markdown files (Claude Code writes these per `~/.claude/CLAUDE.md` rule)
-- **Remote state:** Hero's Chronicle Supabase (`ystqevehdgoonhpjmgis.supabase.co`) for habits + journal. Uses `HC_SUPABASE_SERVICE_ROLE_KEY` server-side, bypasses RLS (single-user app).
-- **OAuth:** Google Calendar, Spotify, Whoop — all redirect to `127.0.0.1:3030`. Do not change.
-- **Design tokens:** CSS custom properties per Laputa variant, `data-variant` on `<html>` driven by `ModeProvider` (auto-switches by clock hour).
+- **Runtime:** Node 22+ (uses `node:sqlite` for fallback)
+- **Cloud state (when configured):** Dedicated PG OS Supabase project — `ships`, `queue_items`, `oauth_tokens` (encrypted), `proposals_log`, `decisions_log`, `trust_categories`, `agent_runs`, `push_subscriptions`, `mode_state`. Uses `PGOS_SUPABASE_SERVICE_ROLE_KEY` server-side. RLS off (single-user, gated by middleware).
+- **Local state (always present, source of truth for some):**
+  - `~/.pg-os/queue/*.md` — Claude Code's queue-write rule writes here; mirrored to Supabase on next OS read
+  - `~/.claude/self-improvement/data/*.json` — agents write here; mirrored to proposals_log + trust_categories on PG action
+  - `~/.pg-os/ships.db` — sqlite fallback if Supabase env not set
+  - `~/.pg-os/tokens.json` — token fallback if Supabase env not set
+- **Remote state (HC):** `ystqevehdgoonhpjmgis.supabase.co` continues to host habits + journal only. PG OS does NOT migrate this.
+- **OAuth:** Google Calendar, Spotify, Whoop — redirect URIs are env-driven. Local: `127.0.0.1:3030`. Production: `os.pgsmith.com` (or whatever domain). Each OAuth provider can have BOTH registered.
+- **Auth (deployed):** Single-user shared-secret cookie via `src/middleware.ts`. Visit `?key=<PGOS_SHARED_SECRET>` once per device, cookie persists 90d. Dev mode (no env) is unblocked.
+- **Encryption:** OAuth access/refresh tokens are AES-256-GCM encrypted with `TOKEN_ENC_KEY` (32 bytes base64) before Supabase write.
+- **AI co-pilot:** `@anthropic-ai/sdk` streaming with prompt caching. Uses `ANTHROPIC_API_KEY`. Default model: `claude-sonnet-4-6`.
+- **Design tokens:** CSS custom properties per Laputa variant, `data-variant` on `<html>` driven by `ModeProvider`. Brand mode is a parallel `data-brand` attribute that overrides `--accent-2` only.
 
 ## Key Files
 ```
