@@ -63,19 +63,14 @@ export function ClaudeAgents() {
         body: JSON.stringify({ agent: name }),
       });
       const j = await res.json();
-      if (j.autoLaunched) {
-        setFeedback(`Launched ${name} in Ghostty`);
-      } else if (j.command) {
-        try {
-          await navigator.clipboard.writeText(j.command);
-          setFeedback(`Command copied: ${j.command}`);
-        } catch {
-          setFeedback(`Run manually: ${j.command}`);
-        }
+      if (j.alreadyRunning) {
+        setFeedback(`${name} already running (pid ${j.pid}) — log: ${j.logFile}`);
+      } else if (j.spawned) {
+        setFeedback(`${name} started (pid ${j.pid}) — log: ${j.logFile}`);
       } else {
         setFeedback(j.error ?? "Unknown error");
       }
-      setTimeout(() => setFeedback(null), 4000);
+      setTimeout(() => setFeedback(null), 8000);
     } finally {
       setRunning(null);
     }
