@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useMode } from "../ModeProvider";
+import { type BrandMode, MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,7 +74,7 @@ function waitLabel(createdAt: number): string {
 
 // ── Ship Log Card ─────────────────────────────────────────────────────────────
 
-function ShipLogCard() {
+function ShipLogCard({ brand }: { brand: BrandMode | null }) {
   const [shipsData, setShipsData] = useState<ShipsData | null>(null);
   const [text, setText] = useState("");
   const [context, setContext] = useState("");
@@ -143,7 +145,9 @@ function ShipLogCard() {
   const streak = shipsData?.streak ?? 0;
   const velocity = shipsData?.velocity ?? 0;
   const shippedToday = shipsData?.shippedToday ?? false;
-  const recent = shipsData?.ships.slice(0, 10) ?? [];
+  const allShips = shipsData?.ships.slice(0, 30) ?? [];
+  // Filter ships by brand mode (match context field against mode's project ids)
+  const recent = applyModeFilter(allShips, brand, "context" as keyof Ship).slice(0, 10);
 
   return (
     <div className="card">
@@ -213,7 +217,7 @@ function ShipLogCard() {
 
 // ── Approval Queue Card ───────────────────────────────────────────────────────
 
-function ApprovalQueueCard() {
+function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -247,7 +251,9 @@ function ApprovalQueueCard() {
     window.alert(item.note ?? item.title);
   }, []);
 
-  const count = items.length;
+  // Filter queue by brand mode's project ids (match source field)
+  const filteredItems = applyModeFilter(items, brand, "source" as keyof QueueItem);
+  const count = filteredItems.length;
 
   return (
     <div className="card">
@@ -264,7 +270,7 @@ function ApprovalQueueCard() {
 
       {count > 0 && (
         <ul className="fl-queue">
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <li key={item.id} className="fl-qitem">
               <div className="fl-qmeta-row">
                 <span className="fl-qtitle">{item.title}</span>
@@ -300,15 +306,26 @@ function ApprovalQueueCard() {
 // ── View ──────────────────────────────────────────────────────────────────────
 
 export function FlowView() {
+  const { brand } = useMode();
+  const brandCfg = brand ? MODE_CONFIG[brand] : null;
+
   return (
     <div className="view view-flow">
       <div className="view-header">
         <h1 className="view-title">Flow</h1>
         <div className="view-sub">SHIP · DECIDE · THE TWO SPINES</div>
       </div>
+
+      {brandCfg && (
+        <div className="cm-filter-hint">
+          <span className="cm-filter-glyph">{brandCfg.glyph}</span>
+          {" "}filtered by {brandCfg.label}
+        </div>
+      )}
+
       <div className="view-grid two-col">
-        <ShipLogCard />
-        <ApprovalQueueCard />
+        <ShipLogCard brand={brand} />
+        <ApprovalQueueCard brand={brand} />
       </div>
     </div>
   );

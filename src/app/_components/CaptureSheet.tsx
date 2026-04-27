@@ -1,6 +1,8 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useVoiceCapture } from "./useVoiceCapture";
+import { useMode } from "./ModeProvider";
+import { MODE_CONFIG } from "../../lib/modes";
 
 type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal";
 
@@ -42,6 +44,13 @@ interface StatusMsg {
 }
 
 export function CaptureSheet({ onClose }: CaptureSheetProps) {
+  const { brand } = useMode();
+
+  // Default destination driven by brand mode; user can override freely
+  const brandDefaultDest: Destination | null = brand
+    ? (MODE_CONFIG[brand].captureDefault as Destination)
+    : null;
+
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [context, setContext] = useState("");
@@ -244,20 +253,21 @@ export function CaptureSheet({ onClose }: CaptureSheetProps) {
           {DESTINATIONS.map((dest) => {
             const isSending = sending === dest.id;
             const isDisabled = isEmpty || !!sending;
+            const isBrandDefault = brandDefaultDest === dest.id;
             return (
               <button
                 key={dest.id}
-                className={`cap-dest-btn${isSending ? " sending" : ""}`}
+                className={`cap-dest-btn${isSending ? " sending" : ""}${isBrandDefault ? " cm-brand-default" : ""}`}
                 onClick={() => handleSend(dest)}
                 onMouseEnter={() => setHoveredDest(dest.id)}
                 onMouseLeave={() => setHoveredDest(null)}
                 disabled={isDisabled}
-                aria-label={`Send to ${dest.label}`}
+                aria-label={`Send to ${dest.label}${isBrandDefault ? " (brand mode default)" : ""}`}
                 type="button"
               >
                 <span className="cap-dest-icon">{isSending ? "…" : dest.icon}</span>
                 <span className="cap-dest-label">{isSending ? "sending…" : dest.label}</span>
-                <span className="cap-dest-hint">{dest.hint}</span>
+                <span className="cap-dest-hint">{isBrandDefault ? "★ mode default" : dest.hint}</span>
               </button>
             );
           })}

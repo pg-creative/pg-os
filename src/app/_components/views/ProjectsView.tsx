@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { SparkleCorner, CardGlyph } from "../CardGlyph";
+import { useMode } from "../ModeProvider";
+import { MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
 
 type Glyph = "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
 
@@ -195,6 +197,7 @@ export function ProjectsView() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { brand } = useMode();
 
   useEffect(() => {
     fetch("/api/projects", { cache: "no-store" })
@@ -211,6 +214,9 @@ export function ProjectsView() {
       .finally(() => setLoading(false));
   }, []);
 
+  const filtered = applyModeFilter(projects, brand, "id");
+  const brandCfg = brand ? MODE_CONFIG[brand] : null;
+
   return (
     <div className="view view-projects">
       <div className="view-header">
@@ -218,12 +224,23 @@ export function ProjectsView() {
         <div className="view-sub">MASTER VIEW · STATE · LAUNCHERS</div>
       </div>
 
+      {brandCfg && (
+        <div className="cm-filter-hint">
+          <span className="cm-filter-glyph">{brandCfg.glyph}</span>
+          {" "}filtered by {brandCfg.label}
+        </div>
+      )}
+
       {loading && <div className="pr-loading">Loading projects…</div>}
       {error && <div className="pr-error">⚠ {error}</div>}
 
+      {!loading && !error && filtered.length === 0 && brand && (
+        <p className="cm-filter-empty">No projects in {brandCfg?.label} mode. Clear the mode filter to see all.</p>
+      )}
+
       {!loading && !error && (
         <div className="pr-grid">
-          {projects.map((project, i) => (
+          {filtered.map((project, i) => (
             <ProjectCard key={project.id} project={project} num={i + 1} />
           ))}
         </div>
