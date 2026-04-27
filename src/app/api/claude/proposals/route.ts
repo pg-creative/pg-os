@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProposals, writeProposals, getTrustState, writeTrustState, type Proposal, type TrustState } from "@/lib/claudeStore";
+import { getProposals, writeProposals, getTrustState, writeTrustState, logDecision, type Proposal, type TrustState } from "@/lib/claudeStore";
 
 export async function GET() {
   const proposals = await getProposals();
@@ -51,6 +51,21 @@ export async function POST(req: NextRequest) {
   // Remove proposal in both cases
   const next = proposals.filter((_, i) => i !== index);
   await writeProposals(next);
+
+  // Log the decision so the post-mortem loop (Track A4) can ping in 14 days.
+  // Fire-and-forget — failures shouldn't block the user.
+  logDecision({
+    kind: "proposal",
+    ref_id: proposal.description.slice(0, 64),
+    detail: {
+      proposal_type: proposal.type,
+      category: proposal.category,
+      action,
+      occurrences: proposal.occurrences,
+      source: proposal.source,
+    },
+    followup_days: action === "approve" ? 14 : undefined,
+  });
 
   return NextResponse.json({ ok: true, action, removed: proposal });
 }

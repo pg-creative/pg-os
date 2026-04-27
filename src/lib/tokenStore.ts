@@ -1,17 +1,24 @@
 /**
- * File-backed token store at ~/.pg-os/tokens.json
+ * Token store — Supabase oauth_tokens (primary, encrypted) with file-backed fallback.
  *
- * Why: iron-session cookies break in too many ways for a single-user local dashboard.
+ * Why a custom store: iron-session cookies break in too many ways for a
+ * single-user dashboard.
  *   - localhost vs 127.0.0.1 host mismatches lose the cookie silently
  *   - 3-provider token set approaches the 4KB cookie limit
  *   - Incognito / browser cookie clears wipe everything
  *   - Whoop rotates refresh tokens; concurrent refreshes race
  *
- * This store: one source of truth on disk, atomic writes, per-provider mutex.
+ * When PGOS_SUPABASE_URL is set: tokens live in Supabase, encrypted at rest with
+ * AES-256-GCM using TOKEN_ENC_KEY (32 bytes, base64). Required: TOKEN_ENC_KEY
+ * must also be set, otherwise the store falls back to file mode.
+ *
+ * When not configured: tokens live in ~/.pg-os/tokens.json (atomic writes, 0600).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
+import { db, isDbConfigured, T } from "./db";
 
 export type Provider = "google" | "spotify" | "whoop";
 
@@ -20,6 +27,7 @@ export type ProviderTokens = {
   accessToken?: string;
   expiresAt?: number; // epoch ms
   email?: string;     // google only
+  scope?: string;
   updatedAt: number;  // epoch ms
 };
 
@@ -32,11 +40,53 @@ let cache: StoreShape | null = null;
 let readPromise: Promise<StoreShape> | null = null;
 const refreshLocks: Partial<Record<Provider, Promise<ProviderTokens>>> = {};
 
+// ── Encryption ───────────────────────────────────────────────────────────────
+
+function getEncKey(): Buffer | null {
+  const raw = process.env.TOKEN_ENC_KEY;
+  if (!raw) return null;
+  try {
+    const buf = Buffer.from(raw, "base64");
+    if (buf.length !== 32) return null;
+    return buf;
+  } catch {
+    return null;
+  }
+}
+
+function encrypt(plaintext: string): string {
+  const key = getEncKey();
+  if (!key) throw new Error("TOKEN_ENC_KEY not configured (must be 32 bytes base64)");
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, ct]).toString("base64");
+}
+
+function decrypt(blob: string): string {
+  const key = getEncKey();
+  if (!key) throw new Error("TOKEN_ENC_KEY not configured");
+  const buf = Buffer.from(blob, "base64");
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const ct = buf.subarray(28);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
+}
+
+function useSupabase(): boolean {
+  return isDbConfigured() && getEncKey() !== null;
+}
+
+// ── File-backed primitives (fallback for dev) ────────────────────────────────
+
 async function ensureDir() {
   await fs.mkdir(STORE_DIR, { recursive: true, mode: 0o700 });
 }
 
-async function readStore(): Promise<StoreShape> {
+async function readFileStore(): Promise<StoreShape> {
   if (cache) return cache;
   if (readPromise) return readPromise;
   readPromise = (async () => {
@@ -59,7 +109,7 @@ async function readStore(): Promise<StoreShape> {
   }
 }
 
-async function writeStoreAtomic(next: StoreShape) {
+async function writeFileStoreAtomic(next: StoreShape) {
   await ensureDir();
   const tmp = `${STORE_PATH}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
@@ -67,23 +117,76 @@ async function writeStoreAtomic(next: StoreShape) {
   cache = next;
 }
 
+// ── Supabase primitives ──────────────────────────────────────────────────────
+
+async function readSupabase(provider: Provider): Promise<ProviderTokens | undefined> {
+  const { data, error } = await db()
+    .from(T.oauth_tokens)
+    .select("provider, access_token_enc, refresh_token_enc, expires_at, scope, email, updated_at")
+    .eq("provider", provider)
+    .maybeSingle();
+  if (error) throw new Error(`tokenStore read failed: ${error.message}`);
+  if (!data) return undefined;
+
+  const refreshToken = data.refresh_token_enc ? decrypt(data.refresh_token_enc) : "";
+  const accessToken = data.access_token_enc ? decrypt(data.access_token_enc) : undefined;
+  return {
+    refreshToken,
+    accessToken,
+    expiresAt: data.expires_at ? new Date(data.expires_at).getTime() : undefined,
+    email: data.email ?? undefined,
+    scope: data.scope ?? undefined,
+    updatedAt: new Date(data.updated_at).getTime(),
+  };
+}
+
+async function writeSupabase(provider: Provider, tokens: ProviderTokens) {
+  const row = {
+    provider,
+    access_token_enc: tokens.accessToken ? encrypt(tokens.accessToken) : "",
+    refresh_token_enc: tokens.refreshToken ? encrypt(tokens.refreshToken) : null,
+    expires_at: tokens.expiresAt ? new Date(tokens.expiresAt).toISOString() : null,
+    scope: tokens.scope ?? null,
+    email: tokens.email ?? null,
+    updated_at: new Date(tokens.updatedAt).toISOString(),
+  };
+  const { error } = await db().from(T.oauth_tokens).upsert(row, { onConflict: "provider" });
+  if (error) throw new Error(`tokenStore write failed: ${error.message}`);
+}
+
+async function deleteSupabase(provider: Provider) {
+  await db().from(T.oauth_tokens).delete().eq("provider", provider);
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
 export async function getTokens(provider: Provider): Promise<ProviderTokens | undefined> {
-  const store = await readStore();
+  if (useSupabase()) return readSupabase(provider);
+  const store = await readFileStore();
   return store[provider];
 }
 
 export async function setTokens(provider: Provider, tokens: Omit<ProviderTokens, "updatedAt">) {
-  const store = await readStore();
-  const next: StoreShape = { ...store, [provider]: { ...tokens, updatedAt: Date.now() } };
-  await writeStoreAtomic(next);
+  const full: ProviderTokens = { ...tokens, updatedAt: Date.now() };
+  if (useSupabase()) {
+    await writeSupabase(provider, full);
+    return;
+  }
+  const store = await readFileStore();
+  const next: StoreShape = { ...store, [provider]: full };
+  await writeFileStoreAtomic(next);
 }
 
 export async function clearTokens(provider: Provider) {
-  const store = await readStore();
+  if (useSupabase()) {
+    await deleteSupabase(provider);
+    return;
+  }
+  const store = await readFileStore();
   if (!store[provider]) return;
   const next: StoreShape = { ...store };
   delete next[provider];
-  await writeStoreAtomic(next);
+  await writeFileStoreAtomic(next);
 }
 
 export function isExpired(tokens: ProviderTokens | undefined, bufferMs = 30_000): boolean {
@@ -92,17 +195,12 @@ export function isExpired(tokens: ProviderTokens | undefined, bufferMs = 30_000)
   return tokens.expiresAt < Date.now() + bufferMs;
 }
 
-/**
- * Serialize concurrent refresh attempts for the same provider.
- * Matters for Whoop (rotates refresh_token — concurrent refreshes invalidate each other).
- */
 export async function withRefreshLock<T extends ProviderTokens>(
   provider: Provider,
   fn: () => Promise<T>,
 ): Promise<T> {
   const pending = refreshLocks[provider];
   if (pending) {
-    // Someone else is refreshing — wait for their result and use it.
     return (await pending) as T;
   }
   const p = (async () => {
@@ -116,10 +214,6 @@ export async function withRefreshLock<T extends ProviderTokens>(
   return p;
 }
 
-/**
- * Refresh + persist in one atomic step, with per-provider mutex.
- * Caller supplies the provider-specific refresh function.
- */
 export async function refreshAndStore(
   provider: Provider,
   refreshFn: (refreshToken: string) => Promise<{
@@ -129,7 +223,6 @@ export async function refreshAndStore(
   }>,
 ): Promise<ProviderTokens> {
   return withRefreshLock(provider, async () => {
-    // Re-read inside the lock — another request may have beaten us.
     const current = await getTokens(provider);
     if (!current?.refreshToken) throw new Error(`${provider}_not_connected`);
     if (!isExpired(current)) return current;
@@ -140,6 +233,7 @@ export async function refreshAndStore(
       accessToken: refreshed.access_token,
       expiresAt: Date.now() + refreshed.expires_in * 1000,
       email: current.email,
+      scope: current.scope,
     });
     const updated = await getTokens(provider);
     if (!updated) throw new Error(`${provider}_store_failed`);
@@ -147,15 +241,10 @@ export async function refreshAndStore(
   });
 }
 
-/**
- * Summary for diagnostics — used by /api/status endpoint.
- * Never exposes actual tokens.
- */
 export async function storeSummary() {
-  const store = await readStore();
   const out: Record<string, { connected: boolean; email?: string; expiresInMs?: number; updatedAt?: number }> = {};
   for (const p of ["google", "spotify", "whoop"] as Provider[]) {
-    const t = store[p];
+    const t = await getTokens(p);
     out[p] = t
       ? {
           connected: true,

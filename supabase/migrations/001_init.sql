@@ -54,6 +54,7 @@ create table if not exists public.oauth_tokens (
   refresh_token_enc text,
   expires_at        timestamptz,
   scope             text,
+  email             text,                     -- google only; null for others
   updated_at        timestamptz not null default now()
 );
 create trigger oauth_tokens_updated_at before update on public.oauth_tokens
@@ -77,7 +78,8 @@ create table if not exists public.proposals_log (
   action_by         text,                    -- 'pg' | 'auto-trust' | 'auto-execute'
   outcome           text,                    -- filled in by post-mortem after 14d
   outcome_at        timestamptz,
-  created_at        timestamptz not null default now()
+  created_at        timestamptz not null default now(),
+  unique (description, proposed_at)         -- natural key for the upsert mirror
 );
 create index if not exists idx_proposals_pending on public.proposals_log (proposed_at) where action is null;
 create index if not exists idx_proposals_for_postmortem on public.proposals_log (action_at) where action = 'approved' and outcome is null;

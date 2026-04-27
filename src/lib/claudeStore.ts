@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { db, isDbConfigured, T } from "./db";
 
 const SI_DIR = path.join(os.homedir(), ".claude", "self-improvement", "data");
 const FINDINGS_DIR = path.join(SI_DIR, "findings");
@@ -104,6 +105,34 @@ export async function writeProposals(proposals: Proposal[]): Promise<void> {
   const tmp = `${target}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(proposals, null, 2), { mode: 0o600 });
   await fs.rename(tmp, target);
+  // Fire-and-forget mirror to Supabase. Keeps proposals_log in sync with the
+  // file-backed source of truth that agents append to.
+  if (isDbConfigured()) {
+    mirrorProposalsToSupabase(proposals).catch((e) =>
+      console.error("claudeStore mirror failed:", e),
+    );
+  }
+}
+
+async function mirrorProposalsToSupabase(proposals: Proposal[]): Promise<void> {
+  // For each proposal still pending, upsert into proposals_log (action=null).
+  // We don't delete rows — historical proposals persist with their action.
+  const rows = proposals.map((p) => ({
+    proposal_type: p.type,
+    category: p.category,
+    description: p.description,
+    evidence: p.evidence ?? null,
+    source: p.source ?? null,
+    occurrences: p.occurrences ?? 1,
+    proposed_at: new Date(p.date).toISOString(),
+    action: null,
+  }));
+  if (rows.length === 0) return;
+  // Upsert by (description, proposed_at) — natural key for dedup
+  await db().from(T.proposals_log).upsert(rows, {
+    onConflict: "description,proposed_at",
+    ignoreDuplicates: true,
+  });
 }
 
 export async function getTrustState(): Promise<TrustState | null> {
@@ -120,6 +149,50 @@ export async function writeTrustState(state: TrustState): Promise<void> {
   const tmp = `${target}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(state, null, 2), { mode: 0o600 });
   await fs.rename(tmp, target);
+  if (isDbConfigured()) {
+    mirrorTrustToSupabase(state).catch((e) =>
+      console.error("claudeStore trust mirror failed:", e),
+    );
+  }
+}
+
+async function mirrorTrustToSupabase(state: TrustState): Promise<void> {
+  const rows = Object.entries(state.categories).map(([category, cat]) => ({
+    category,
+    approvals: cat.approvals,
+    rejections: cat.rejections,
+    threshold: cat.threshold,
+    auto_execute: cat.auto_execute,
+    history: cat.history,
+    updated_at: new Date().toISOString(),
+  }));
+  if (rows.length === 0) return;
+  await db().from(T.trust_categories).upsert(rows, { onConflict: "category" });
+}
+
+export async function logDecision(payload: {
+  kind: string;
+  ref_id?: string;
+  detail?: Record<string, unknown>;
+  taken_by?: string;
+  followup_days?: number;
+}): Promise<void> {
+  if (!isDbConfigured()) return;
+  const followupAt = payload.followup_days
+    ? new Date(Date.now() + payload.followup_days * 86_400_000).toISOString()
+    : null;
+  try {
+    await db().from(T.decisions_log).insert({
+      kind: payload.kind,
+      ref_id: payload.ref_id ?? null,
+      detail: payload.detail ?? {},
+      taken_at: new Date().toISOString(),
+      taken_by: payload.taken_by ?? "pg",
+      followup_at: followupAt,
+    });
+  } catch (e) {
+    console.error("logDecision failed:", e);
+  }
 }
 
 export async function getRecentFindings(days = 7): Promise<Signal[]> {
