@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { type BrandMode, MODE_CONFIG, nextBrandMode, prevBrandMode } from "../../lib/modes";
 
 export type Mode = "laputa-day" | "laputa-twilight" | "laputa-midnight";
 
@@ -25,13 +26,22 @@ export function greetingForHour(h: number): string {
 const VALID_MODES: Mode[] = ["laputa-day", "laputa-twilight", "laputa-midnight"];
 const KEY_MANUAL = "pg-os-laputa-manual";
 const KEY_AUTO = "pg-os-laputa-auto";
+const KEY_BRAND = "pg-os-brand-mode";
+
+const VALID_BRAND_MODES: BrandMode[] = ["alchmy", "voyager", "writer", "metrasens", "recovery"];
 
 type Ctx = {
+  // ── Laputa time-mode (existing API — unchanged) ──────────────────────────────
   mode: Mode;
   autoMode: boolean;
   greeting: string;
   setMode: (m: Mode) => void;
   setAutoMode: (on: boolean) => void;
+  // ── Brand mode (new parallel state) ─────────────────────────────────────────
+  brand: BrandMode | null;
+  setBrand: (b: BrandMode | null) => void;
+  cycleBrandForward: () => void;
+  cycleBrandBack: () => void;
 };
 
 const ModeCtx = createContext<Ctx | null>(null);
@@ -40,6 +50,7 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<Mode>("laputa-day");
   const [autoMode, setAutoModeState] = useState<boolean>(true);
   const [greeting, setGreeting] = useState<string>("afternoon,");
+  const [brand, setBrandState] = useState<BrandMode | null>(null);
 
   // Boot from localStorage, then tick once
   useEffect(() => {
@@ -56,6 +67,12 @@ export function ModeProvider({ children }: { children: ReactNode }) {
       const manual = localStorage.getItem(KEY_MANUAL) as Mode | null;
       if (manual && VALID_MODES.includes(manual)) setModeState(manual);
     }
+
+    // Restore brand mode from localStorage
+    const savedBrand = localStorage.getItem(KEY_BRAND) as BrandMode | null;
+    if (savedBrand && VALID_BRAND_MODES.includes(savedBrand)) {
+      setBrandState(savedBrand);
+    }
   }, []);
 
   // Re-check every minute so theme + greeting auto-update
@@ -69,10 +86,22 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(i);
   }, [autoMode]);
 
-  // Sync data-variant attribute
+  // Sync data-variant attribute (Laputa palette)
   useEffect(() => {
     document.documentElement.setAttribute("data-variant", mode);
   }, [mode]);
+
+  // Sync data-brand attribute + CSS accent-2 override
+  useEffect(() => {
+    if (brand) {
+      document.documentElement.setAttribute("data-brand", brand);
+      const cfg = MODE_CONFIG[brand];
+      document.documentElement.style.setProperty("--accent-2", cfg.accent);
+    } else {
+      document.documentElement.removeAttribute("data-brand");
+      document.documentElement.style.removeProperty("--accent-2");
+    }
+  }, [brand]);
 
   const setMode = (m: Mode) => {
     setModeState(m);
@@ -90,8 +119,28 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setBrand = (b: BrandMode | null) => {
+    setBrandState(b);
+    if (b) {
+      localStorage.setItem(KEY_BRAND, b);
+    } else {
+      localStorage.removeItem(KEY_BRAND);
+    }
+  };
+
+  const cycleBrandForward = () => {
+    setBrand(nextBrandMode(brand));
+  };
+
+  const cycleBrandBack = () => {
+    setBrand(prevBrandMode(brand));
+  };
+
   return (
-    <ModeCtx.Provider value={{ mode, autoMode, greeting, setMode, setAutoMode }}>
+    <ModeCtx.Provider value={{
+      mode, autoMode, greeting, setMode, setAutoMode,
+      brand, setBrand, cycleBrandForward, cycleBrandBack,
+    }}>
       {children}
     </ModeCtx.Provider>
   );

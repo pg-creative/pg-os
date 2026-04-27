@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useMode } from "../ModeProvider";
+import { MODE_CONFIG, applyHabitTagFilter } from "../../../lib/modes";
 
 interface Habit {
   id: string;
@@ -72,6 +74,7 @@ export function HabitsView() {
   const [data, setData] = useState<ApiData | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const { brand } = useMode();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -92,6 +95,27 @@ export function HabitsView() {
     fetchData();
   }, [fetchData]);
 
+  const brandCfg = brand ? MODE_CONFIG[brand] : null;
+
+  // Filter snapshot habits by brand tag before rendering.
+  // HC habit objects may have a 'tags' field not reflected in the local interface —
+  // applyHabitTagFilter's Array.isArray guard means habits without tags pass through.
+  type HabitWithTags = Habit & { tags?: string[] };
+  const filteredData: ApiData | null =
+    data && data.connected && brand
+      ? {
+          ...data,
+          snapshot: {
+            ...data.snapshot,
+            habits: applyHabitTagFilter(
+              data.snapshot.habits as HabitWithTags[],
+              brand,
+              "tags" as keyof HabitWithTags
+            ) as Habit[],
+          },
+        }
+      : data;
+
   return (
     <div className="view view-habits">
       <div className="view-header">
@@ -99,13 +123,20 @@ export function HabitsView() {
         <div className="view-sub">MORNING · EVENING · WEEKLY REVIEW</div>
       </div>
 
-      {loading && !data && <LoadingCard />}
-      {fetchError && <div className="card"><div className="card-label">ERROR</div><p>{fetchError}</p><button className="fl-btn-primary" onClick={fetchData}>Retry</button></div>}
-      {!loading && !fetchError && data && !data.connected && (
-        <SetupCard hint={data.hint} onRetry={fetchData} />
+      {brandCfg && (
+        <div className="cm-filter-hint">
+          <span className="cm-filter-glyph">{brandCfg.glyph}</span>
+          {" "}filtered by {brandCfg.label}
+        </div>
       )}
-      {!loading && !fetchError && data && data.connected && (
-        <ConnectedView snapshot={data.snapshot} week={data.week} onRefetch={fetchData} />
+
+      {loading && !filteredData && <LoadingCard />}
+      {fetchError && <div className="card"><div className="card-label">ERROR</div><p>{fetchError}</p><button className="fl-btn-primary" onClick={fetchData}>Retry</button></div>}
+      {!loading && !fetchError && filteredData && !filteredData.connected && (
+        <SetupCard hint={filteredData.hint} onRetry={fetchData} />
+      )}
+      {!loading && !fetchError && filteredData && filteredData.connected && (
+        <ConnectedView snapshot={filteredData.snapshot} week={filteredData.week} onRefetch={fetchData} />
       )}
     </div>
   );
