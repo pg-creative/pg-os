@@ -22,6 +22,7 @@ export const ACTIVE_PROJECTS: ProjectConfig[] = [
   { id: "voyager",          name: "Voyager",          path: cereb("voyager"),          sub: "GAMING · CONTENT",          glyph: "music" },
   { id: "personal-os",      name: "personal-os",      path: cereb("personal-os"),      sub: "THIS APP",                  glyph: "sun" },
   { id: "career-ops",       name: "career-ops",       path: cereb("career-ops"),       sub: "JOB SEARCH CLI",            glyph: "feather" },
+  { id: "claude-config",    name: "Claude Config",    path: path.join(HOME, ".claude"), sub: "GLOBAL CLAUDE CONFIG",     glyph: "sparkles" },
 ];
 
 export function getProject(id: string): ProjectConfig | undefined {

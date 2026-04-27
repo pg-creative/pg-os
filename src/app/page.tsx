@@ -11,6 +11,7 @@ import { HomeView } from "./_components/views/HomeView";
 import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
 import { FlowView } from "./_components/views/FlowView";
+import { ClaudeView } from "./_components/views/ClaudeView";
 
 export default function Page() {
   const { active } = useActiveTab();
@@ -42,6 +43,7 @@ export default function Page() {
         {active === "habits" && <HabitsView />}
         {active === "projects" && <ProjectsView />}
         {active === "flow" && <FlowView />}
+        {active === "claude" && <ClaudeView />}
 
         {/* HUMILITY FOOTER — always visible, per blueprint */}
         <div className="humility-footer">

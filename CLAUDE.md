@@ -3,12 +3,12 @@
 > Sub-project of [CEREBRUM](../CLAUDE.md). Personal operating system dashboard — PG's daily command center.
 
 ## What This Is
-A Next.js 15 + React 19 + Tailwind v4 personal dashboard running at `http://127.0.0.1:3030`. Ghibli anime cel-shaded aesthetic with three Laputa time-responsive palettes (Day / Twilight / Midnight). Four tabs (Home / Habits / Projects / Flow) + floating Capture FAB with voice. File-backed OAuth tokens. Wired to Hero's Chronicle Supabase for habits/journal.
+A Next.js 15 + React 19 + Tailwind v4 personal dashboard running at `http://127.0.0.1:3030`. Ghibli anime cel-shaded aesthetic with three Laputa time-responsive palettes (Day / Twilight / Midnight). Five tabs (Home / Habits / Projects / Flow / Claude) + floating Capture FAB with voice. File-backed OAuth tokens. Wired to Hero's Chronicle Supabase for habits/journal. Claude tab aggregates self-improvement signals from Claude Code transcripts, Cowork exports, and the web chat archive (FTS5).
 
 Kickoff: 2026-04-21. Current live URL (cloudflared tunnel): `https://shorts-visible-overhead-broadband.trycloudflare.com` (per-session; reset on Mac sleep).
 
 ## Current Status
-**Phases 1-7 shipped (2026-04-24).** Tab shell, OAuth hardening, location sync, mobile-first CSS, Flow tab (ships + approval queue), Projects tab + Ghostty launchers, Habits wired to HC Supabase, Capture FAB + voice, Home mode toggle, full accessibility audit implementation. See `docs/specs/os-blueprint.md` for the v1.1 blueprint and phase mapping.
+**Phases 1-8 shipped (2026-04-27).** Tab shell, OAuth hardening, location sync, mobile-first CSS, Flow tab (ships + approval queue), Projects tab + Ghostty launchers, Habits wired to HC Supabase, Capture FAB + voice, Home mode toggle, full accessibility audit implementation. **Phase 8 (Claude tab):** 3-source self-improvement observatory — overview / proposals / trust state / agent health / signals / skills+rules / archive search. Approve+dismiss writes back to `~/.claude/self-improvement/data/`. Run-agent launches Ghostty. See `docs/specs/os-blueprint.md` for the v1.1 blueprint and phase mapping.
 
 ## Stack
 - **Framework:** Next.js 15 App Router, React 19, TypeScript, Tailwind v4 (via `@import "tailwindcss"`)
@@ -27,7 +27,7 @@ Kickoff: 2026-04-21. Current live URL (cloudflared tunnel): `https://shorts-visi
 src/app/
 ├── layout.tsx                 ← ModeProvider + TabProvider
 ├── page.tsx                   ← Topbar + TabBar + active view routing
-├── globals.css                ← 1845 lines: theme tokens, layout, views, a11y foundation, Tier 1 polish
+├── globals.css                ← ~2150 lines: theme tokens, layout, views, a11y foundation, Tier 1 polish, Claude view styles
 ├── _components/
 │   ├── ModeProvider.tsx       ← Laputa Day/Twilight/Midnight auto-switch
 │   ├── useActiveTab.tsx       ← tab state + view transitions
@@ -37,7 +37,8 @@ src/app/
 │   ├── useVoiceCapture.tsx    ← Web Speech API wrapper
 │   ├── HomeModeToggle.tsx     ← home mode on/off pill
 │   ├── LocationLive.tsx       ← Geolocation + reverse geocode + weather
-│   └── views/                 ← HomeView, HabitsView, ProjectsView, FlowView
+│   └── views/                 ← HomeView, HabitsView, ProjectsView, FlowView, ClaudeView
+│       └── claude/            ← Overview, Proposals, Trust, Agents, Signals, Skills, Archive
 ├── api/
 │   ├── auth/{google,spotify,whoop}/{route,callback} ← OAuth flows
 │   ├── calendar/events        ← Google Calendar events
@@ -50,7 +51,9 @@ src/app/
 │   ├── launch                 ← AppleScript → Ghostty launcher
 │   ├── capture                ← route capture to ship/queue/essay/linkedin/yuriko/hc-journal
 │   ├── habits                 ← HC habits + journal read/write
-│   └── status                 ← OAuth connection diagnostics
+│   ├── status                 ← OAuth connection diagnostics
+│   └── claude/                ← Claude tab data — overview, proposals, trust, signals,
+│                                 agents, skills, archive (FTS5), run-agent
 └── lib/
     ├── session.ts             ← iron-session helper (legacy, mostly unused now)
     ├── tokenStore.ts          ← file-backed token store (~/.pg-os/tokens.json)
@@ -61,11 +64,17 @@ src/app/
     ├── queueStore.ts          ← markdown frontmatter parser for queue
     ├── projectState.ts        ← git + MEMORY.md + queue per-project
     ├── launcher.ts            ← AppleScript to Ghostty via System Events
-    ├── projects.ts            ← canonical list of active projects
+    ├── projects.ts            ← canonical list of active projects (incl. claude-config)
     ├── capture.ts             ← capture destination router
     ├── habits.ts              ← HC Supabase reads/writes
-    └── hcSupabase.ts          ← HC service-role client
+    ├── hcSupabase.ts          ← HC service-role client
+    ├── claudeStore.ts         ← self-improvement file reader (proposals, trust, findings, stats)
+    ├── agentHealth.ts         ← parses review-log.md for agent last-run + status
+    └── claudeArchive.ts       ← node:sqlite read of claude-web-history archive.db
 ```
+
+## Cowork Signal Bridge
+`scripts/export-cowork-signals.py` — manual-run Python parser. Reads markdown exports from `~/.pg-os/claude/cowork-exports/` and writes signals to `~/.pg-os/claude/cowork-signals.jsonl` using the same correction/confirmation patterns as the Claude Code transcript parser. The Claude tab merges these into the 7-day window.
 
 ## Env Vars (.env.local — gitignored)
 Required:
