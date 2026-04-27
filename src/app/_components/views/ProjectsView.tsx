@@ -78,7 +78,7 @@ function ProjectCard({ project, num }: { project: Project; num: number }) {
   const [contextOpen, setContextOpen] = useState(false);
   const [contextText, setContextText] = useState<string | null>(null);
 
-  const showToast = (message: string, variant: ToastState["variant"]) => {
+  const showToast = (message: string, variant: NonNullable<ToastState>["variant"]) => {
     setToast({ message, variant });
     setTimeout(() => setToast(null), 3000);
   };

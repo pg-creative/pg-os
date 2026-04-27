@@ -62,11 +62,11 @@ export async function assembleCopilotContext(): Promise<CopilotContext> {
   let recentShipTexts: string[] = [];
 
   try {
-    const ships = listShips(5);
+    const ships = await listShips(5);
     shipCount = ships.length;
-    shipStreak = currentStreak();
-    shipVelocity = velocityPerWeek();
-    shippedTodayBool = shippedToday();
+    shipStreak = await currentStreak();
+    shipVelocity = await velocityPerWeek();
+    shippedTodayBool = await shippedToday();
     recentShipTexts = ships.map((s) => `  - ${s.text}${s.context ? ` [${s.context}]` : ""}`);
   } catch {
     // ship log unavailable — non-fatal

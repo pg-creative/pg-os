@@ -203,7 +203,7 @@ export async function getWeekSummary(): Promise<{
 
   // Ships from local SQLite (reuse shipLog.ts — inline to avoid circular import)
   const { shipsInLastDays } = await import("./shipLog");
-  const shipsThisWeek = shipsInLastDays(7).length;
+  const shipsThisWeek = (await shipsInLastDays(7)).length;
 
   return { shipsThisWeek, habitsCompletedThisWeek, daysJournaled, avgMood };
 }

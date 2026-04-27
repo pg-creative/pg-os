@@ -33,7 +33,8 @@ export const sessionOptions: SessionOptions = {
 };
 
 export async function getSession() {
-  if (!sessionOptions.password || sessionOptions.password.length < 32) {
+  const password = sessionOptions.password;
+  if (!password || (typeof password === "string" && password.length < 32)) {
     throw new Error("SESSION_PASSWORD must be set (32+ chars). See .env.local.example");
   }
   const store = await cookies();

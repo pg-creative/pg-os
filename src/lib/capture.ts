@@ -56,7 +56,7 @@ export async function routeCapture(
 ): Promise<RouteResult> {
   try {
     if (destination === "ship") {
-      const ship = addShip(text.trim(), meta?.source ?? null);
+      const ship = await addShip(text.trim(), meta?.source ?? null);
       return { ok: true, destination, detail: `ship #${ship.id}` };
     }
     if (destination === "queue") {
