@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyHabitTagFilter } from "../../../lib/modes";
+import { RitualGate } from "../Ritual/RitualGate";
 
 interface Habit {
   id: string;
@@ -122,6 +123,8 @@ export function HabitsView() {
         <h1 className="view-title">Habits</h1>
         <div className="view-sub">MORNING · EVENING · WEEKLY REVIEW</div>
       </div>
+
+      <RitualGate />
 
       {brandCfg && (
         <div className="cm-filter-hint">
