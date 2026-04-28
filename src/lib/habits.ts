@@ -475,3 +475,94 @@ const TIER_LADDER: Tier[] = ["F", "D", "C", "B", "A", "S", "SSS"];
 function tierIndex(t: Tier): number {
   return TIER_LADDER.indexOf(t);
 }
+
+// ─── Habit Editor CRUD ────────────────────────────────────────────────────────
+
+export type AttributeRow = { id: string; name: string };
+
+/** Fetch the 6 HC attributes for use in the habit editor UI. */
+export async function getAttributes(): Promise<AttributeRow[]> {
+  const c = hcClient();
+  if (!c) throw new Error("hc_not_connected");
+  const { data, error } = await c.from("attributes").select("id, name").order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as AttributeRow[];
+}
+
+export type CreateHabitInput = {
+  name: string;
+  attribute_id: string;
+  frequency: "daily" | "weekly";
+  weekly_target: number;
+  xp_per_completion: number;
+  description?: string | null;
+  target_value?: number | null;
+  target_unit?: string | null;
+};
+
+/** Insert a new habit row for PG's user_id. */
+export async function createHabit(input: CreateHabitInput): Promise<{ id: string }> {
+  const c = hcClient();
+  if (!c) throw new Error("hc_not_connected");
+  const userId = await getUserId();
+  if (!userId) throw new Error("user_id_not_resolved");
+
+  const { data, error } = await c.from("habits").insert({
+    user_id: userId,
+    name: input.name,
+    attribute_id: input.attribute_id,
+    frequency: input.frequency,
+    weekly_target: input.weekly_target,
+    xp_per_completion: input.xp_per_completion,
+    description: input.description ?? null,
+    target_value: input.target_value ?? null,
+    target_unit: input.target_unit ?? null,
+    is_active: true,
+  }).select("id").single();
+
+  if (error) throw error;
+  return { id: data.id as string };
+}
+
+export type UpdateHabitInput = Partial<CreateHabitInput>;
+
+/** Update mutable fields on an existing habit. */
+export async function updateHabit(habitId: string, input: UpdateHabitInput): Promise<void> {
+  const c = hcClient();
+  if (!c) throw new Error("hc_not_connected");
+  const userId = await getUserId();
+  if (!userId) throw new Error("user_id_not_resolved");
+
+  // Build a clean update payload — only include keys that were provided.
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.attribute_id !== undefined) patch.attribute_id = input.attribute_id;
+  if (input.frequency !== undefined) patch.frequency = input.frequency;
+  if (input.weekly_target !== undefined) patch.weekly_target = input.weekly_target;
+  if (input.xp_per_completion !== undefined) patch.xp_per_completion = input.xp_per_completion;
+  if ("description" in input) patch.description = input.description ?? null;
+  if ("target_value" in input) patch.target_value = input.target_value ?? null;
+  if ("target_unit" in input) patch.target_unit = input.target_unit ?? null;
+
+  const { error } = await c.from("habits")
+    .update(patch)
+    .eq("id", habitId)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}
+
+/** Soft-archive a habit by setting is_active = false. */
+export async function archiveHabit(habitId: string): Promise<void> {
+  const c = hcClient();
+  if (!c) throw new Error("hc_not_connected");
+  const userId = await getUserId();
+  if (!userId) throw new Error("user_id_not_resolved");
+
+  const { error } = await c.from("habits")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", habitId)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}

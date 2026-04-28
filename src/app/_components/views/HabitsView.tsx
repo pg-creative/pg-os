@@ -7,6 +7,8 @@ import { SeasonTierCard } from "../Habits/SeasonTierCard";
 import { AnchorRow } from "../Habits/AnchorRow";
 import { WeeklyGrid } from "../Habits/WeeklyGrid";
 import { RankUpModal } from "../Habits/RankUpModal";
+import { HabitEditorDrawer } from "../Habits/HabitEditorDrawer";
+import { NewHabitButton } from "../Habits/HabitEditorButton";
 import type { HabitCardResult } from "../Habits/HabitCard";
 import type { Habit, SeasonStatus, Tier } from "../Habits/types";
 
@@ -76,6 +78,10 @@ export function HabitsView() {
   const lastTierRef = useRef<Tier | null>(null);
   const { brand } = useMode();
 
+  // Habit editor drawer state
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setFetchError(null);
@@ -119,11 +125,27 @@ export function HabitsView() {
         }
       : data;
 
+  function openNewHabit() {
+    setEditingHabit(null);
+    setEditorOpen(true);
+  }
+
+  function openEditHabit(habit: Habit) {
+    setEditingHabit(habit);
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    setEditorOpen(false);
+    setEditingHabit(null);
+  }
+
   return (
     <div className="view view-habits">
       <div className="view-header">
         <h1 className="view-title">Habits</h1>
         <div className="view-sub">SEASON · ANCHORS · WEEKLY</div>
+        <NewHabitButton onClick={openNewHabit} />
       </div>
 
       {brandCfg && (
@@ -144,6 +166,7 @@ export function HabitsView() {
           week={filteredData.week}
           season={filteredData.season}
           onRefetch={fetchData}
+          onEditHabit={openEditHabit}
         />
       )}
 
@@ -151,6 +174,14 @@ export function HabitsView() {
 
       {rankUp && (
         <RankUpModal from={rankUp.from} to={rankUp.to} onDone={() => setRankUp(null)} />
+      )}
+
+      {editorOpen && (
+        <HabitEditorDrawer
+          habit={editingHabit}
+          onClose={closeEditor}
+          onSaved={fetchData}
+        />
       )}
     </div>
   );
@@ -188,12 +219,15 @@ function ConnectedView({
   week,
   season,
   onRefetch,
+  onEditHabit,
 }: {
   snapshot: Snapshot;
   week: Week | null;
   season: SeasonStatus | null;
   onRefetch: () => void;
+  onEditHabit: (habit: Habit) => void;
 }) {
+  void onEditHabit; // available for future per-card edit buttons; wired through here
   const mirrorPrompt = MIRROR_PROMPTS[new Date().getDay() % MIRROR_PROMPTS.length];
 
   // Bucket: anchors = no weekly_target (treated as daily). Weekly = has weekly_target.
