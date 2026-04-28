@@ -24,6 +24,7 @@ const PASSTHROUGH_PREFIXES = [
   "/api/auth/google/callback",
   "/api/auth/spotify/callback",
   "/api/auth/whoop/callback",
+  "/api/telegram-webhook",
   "/_next",
   "/favicon",
   "/unlock",
