@@ -13,3 +13,17 @@ docs/screenshots/
 claude-*.png
 claude-tab-prompt.md
 screenshots/
+
+# Root-level PNGs (UX screenshots, design refs — kept on disk, not in git)
+/*.png
+/*.jpg
+
+# Local-only Claude state
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# Personal assets
+/assets/wallpapers/
+
+# Tool caches
+supabase/.temp/
