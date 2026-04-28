@@ -26,19 +26,12 @@ export function TabProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setActive = (t: Tab) => {
-    const apply = () => {
-      setActiveState(t);
-      try { localStorage.setItem(KEY, t); } catch { /* quota */ }
-    };
-    // Tier 1: View Transitions API for cinematic tab swap (native, no deps)
-    const doc = typeof document !== "undefined"
-      ? (document as Document & { startViewTransition?: (cb: () => void) => void })
-      : null;
-    if (doc?.startViewTransition) {
-      doc.startViewTransition(() => apply());
-    } else {
-      apply();
-    }
+    // Always commit the state synchronously. View Transitions API was wrapping
+    // the state update inside a callback that didn't always commit — clicks
+    // looked dead on mobile. The CSS underline transition + Tier 1 polish
+    // animations elsewhere already give the cinematic feel without VT.
+    setActiveState(t);
+    try { localStorage.setItem(KEY, t); } catch { /* quota / privacy mode */ }
   };
 
   return <TabCtx.Provider value={{ active, setActive }}>{children}</TabCtx.Provider>;

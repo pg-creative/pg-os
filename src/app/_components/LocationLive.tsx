@@ -30,28 +30,24 @@ export function LocationLive() {
     );
   }
 
-  if (loc.status === "denied") {
+  if (loc.status === "denied" || loc.status === "error" || (loc.status !== "ok" && !loc.city)) {
+    // Soft empty state — the home view shouldn't be dominated by a giant red
+    // error when permission is denied or geolocation just isn't available.
     return (
       <>
         <div style={{ flex: 1 }} />
-        <div className="loc-city">Location <em>off</em></div>
-        <div className="loc-meta">BROWSER PERMISSION DENIED</div>
-        <div className="loc-coords">
-          <span>Enable in site settings to see your location.</span>
-          <button className="loc-refresh" onClick={() => loc.refresh({ force: true })}>retry</button>
+        <div className="loc-city" style={{ opacity: 0.6 }}>Location off</div>
+        <div className="loc-meta" style={{ opacity: 0.55 }}>
+          {loc.status === "denied" ? "tap retry to enable" : "tap retry to locate"}
         </div>
-      </>
-    );
-  }
-
-  if (loc.status === "error" || (loc.status !== "ok" && !loc.city)) {
-    return (
-      <>
-        <div style={{ flex: 1 }} />
-        <div className="loc-city">Location <em>error</em></div>
-        <div className="loc-meta">{loc.error ?? "UNKNOWN"}</div>
         <div className="loc-coords">
-          <button className="loc-refresh" onClick={() => loc.refresh({ force: true })}>retry</button>
+          <button
+            className="loc-refresh"
+            onClick={() => loc.refresh({ force: true })}
+            style={{ marginLeft: "auto" }}
+          >
+            retry
+          </button>
         </div>
       </>
     );
