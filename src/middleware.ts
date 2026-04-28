@@ -25,6 +25,10 @@ const PASSTHROUGH_PREFIXES = [
   "/api/auth/spotify/callback",
   "/api/auth/whoop/callback",
   "/api/telegram-webhook",
+  // Headless agent runners POST run records here; route enforces its own
+  // X-PGOS-Internal-Secret header check.
+  "/api/agent-runs",
+  "/api/telegram-events",
   // Cron routes self-authenticate via Authorization: Bearer <CRON_SECRET>.
   // Vercel cron jobs don't carry a user cookie, so let them through to the
   // route handler — it will return 401 on its own if the bearer is wrong/missing.

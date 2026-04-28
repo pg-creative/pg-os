@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ClaudeActivity } from "./claude/ClaudeActivity";
 import { ClaudeOverview } from "./claude/ClaudeOverview";
 import { ClaudeProposals } from "./claude/ClaudeProposals";
 import { ClaudeTrust } from "./claude/ClaudeTrust";
@@ -9,6 +10,7 @@ import { ClaudeSkills } from "./claude/ClaudeSkills";
 import { ClaudeArchive } from "./claude/ClaudeArchive";
 
 const SECTIONS = [
+  { id: "cl-activity", label: "ACTIVITY" },
   { id: "cl-overview", label: "OVERVIEW" },
   { id: "cl-proposals", label: "PROPOSALS" },
   { id: "cl-trust", label: "TRUST" },
@@ -77,6 +79,7 @@ export function ClaudeView() {
       </nav>
 
       <div className="cl-stack">
+        <ClaudeActivity />
         <ClaudeOverview />
         <ClaudeProposals />
         <ClaudeTrust />

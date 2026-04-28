@@ -15,7 +15,14 @@ export type QueueItem = {
   note?: string;
   resolved_at?: number | null;
   decision?: string | null;
+  decided_at?: string | null;
+  decided_via?: string | null;
 };
+
+// Decisions that mean the item is fully resolved and should disappear from active lists.
+// "details_requested" is intentionally NOT here — that's an info-only action that keeps
+// the item visible until PG actually approves or defers.
+const TERMINAL_DECISIONS = new Set(["approved", "deferred", "dismissed", "rejected"]);
 
 // ── Filesystem helpers (filesystem stays source of truth for Claude Code's rule)
 
@@ -48,7 +55,7 @@ function parseFrontmatter(raw: string): { meta: Record<string, string | string[]
   return { meta, body };
 }
 
-async function listFsQueue(): Promise<QueueItem[]> {
+async function listFsQueue(opts: { includeResolved?: boolean } = {}): Promise<QueueItem[]> {
   await ensureDir();
   const files = await fs.readdir(QUEUE_DIR).catch(() => []);
   const mdFiles = files.filter((f) => f.endsWith(".md"));
@@ -59,6 +66,11 @@ async function listFsQueue(): Promise<QueueItem[]> {
       const raw = await fs.readFile(full, "utf8");
       const stat = await fs.stat(full);
       const { meta, body } = parseFrontmatter(raw);
+      const decision = (meta.decision as string | undefined) ?? null;
+      // Skip items whose decision means they're done — Telegram-side approve/defer writes
+      // these to frontmatter, and we want the FS list to honor that the same way Supabase
+      // honors `resolved_at IS NULL`. Activity stream passes includeResolved:true.
+      if (!opts.includeResolved && decision && TERMINAL_DECISIONS.has(decision)) continue;
       items.push({
         id: file.replace(/\.md$/, ""),
         title: (meta.title as string) ?? file.replace(/\.md$/, ""),
@@ -68,10 +80,50 @@ async function listFsQueue(): Promise<QueueItem[]> {
         updated_at: stat.mtimeMs,
         note: body.trim() || undefined,
         resolved_at: null,
+        decision,
+        decided_at: (meta.decided_at as string | undefined) ?? null,
+        decided_via: (meta.decided_via as string | undefined) ?? null,
       });
     } catch { /* skip unreadable */ }
   }
   return items;
+}
+
+export async function listAllQueueItems(): Promise<QueueItem[]> {
+  // Used by the activity stream — includes items the user already resolved so
+  // history is visible. Filesystem is source of truth, supabase fills in any
+  // gaps (e.g. items resolved on a different machine).
+  const fsItems = await listFsQueue({ includeResolved: true });
+  if (!isDbConfigured()) return fsItems.sort((a, b) => a.created_at - b.created_at);
+  const sb = await listSupabaseAll();
+  const byId = new Map<string, QueueItem>();
+  for (const i of sb) byId.set(i.id, i);
+  for (const i of fsItems) byId.set(i.id, i);
+  return Array.from(byId.values()).sort((a, b) => a.created_at - b.created_at);
+}
+
+async function listSupabaseAll(): Promise<QueueItem[]> {
+  if (!isDbConfigured()) return [];
+  try {
+    const { data, error } = await db()
+      .from(T.queue_items)
+      .select("id, title, source, options, note, created_at, updated_at, resolved_at, decision");
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      title: r.title,
+      source: r.source ?? undefined,
+      options: Array.isArray(r.options) ? r.options : undefined,
+      note: r.note ?? undefined,
+      created_at: new Date(r.created_at).getTime(),
+      updated_at: new Date(r.updated_at).getTime(),
+      resolved_at: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
+      decision: r.decision ?? null,
+    }));
+  } catch (e) {
+    console.error("queueStore listSupabaseAll failed:", e);
+    return [];
+  }
 }
 
 // ── Supabase mirror (writes called as fire-and-forget; reads merged into list)

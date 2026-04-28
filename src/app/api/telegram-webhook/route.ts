@@ -21,13 +21,63 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import { recordTelegramEvent } from "@/lib/agentRunsStore";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
 const ALLOWED_CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? "";
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
+const QUEUE_DIR = path.join(os.homedir(), ".pg-os", "queue");
+
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
+
+// Mutate a queue-file's frontmatter in place — sets decision/decided_at/decided_via.
+// Returns the body of the file (for "Details" replies) and whether the write succeeded.
+// Path traversal is blocked: queueId is sanitized and the resolved path must stay
+// under QUEUE_DIR.
+async function updateQueueDecision(
+  queueId: string,
+  decision: string,
+  via: string,
+): Promise<{ ok: boolean; body?: string; title?: string }> {
+  const safeId = queueId.replace(/[^a-zA-Z0-9._-]/g, "-");
+  if (!safeId || safeId.startsWith(".")) return { ok: false };
+  const filePath = path.join(QUEUE_DIR, `${safeId}.md`);
+  if (!filePath.startsWith(QUEUE_DIR + path.sep)) return { ok: false };
+
+  let raw: string;
+  try {
+    raw = await fs.readFile(filePath, "utf8");
+  } catch {
+    return { ok: false };
+  }
+  if (!raw.startsWith("---\n")) return { ok: false };
+  const end = raw.indexOf("\n---\n", 4);
+  if (end === -1) return { ok: false };
+
+  const head = raw.slice(4, end);
+  const body = raw.slice(end + 5);
+
+  // Drop any prior decision lines so re-taps overwrite cleanly.
+  const headLines = head.split("\n").filter((l) => {
+    const trimmed = l.trim();
+    return !/^(decision|decided_at|decided_via)\s*:/i.test(trimmed);
+  });
+  const titleMatch = head.match(/^title:\s*"?([^"\n]+)"?/m);
+  const title = titleMatch ? titleMatch[1].trim() : safeId;
+
+  headLines.push(`decision: ${decision}`);
+  headLines.push(`decided_at: ${new Date().toISOString()}`);
+  headLines.push(`decided_via: ${via}`);
+
+  const newRaw = `---\n${headLines.join("\n")}\n---\n${body}`;
+  await fs.writeFile(filePath, newRaw, { mode: 0o600 });
+  return { ok: true, body: body.trim(), title };
+}
 
 // CLAUDIA's voice persona — cached via Anthropic prompt caching (90% cost reduction on reuse)
 const CLAUDIA_PERSONA = `You are CLAUDIA — Pat's personal AI bot living in his Telegram.
@@ -143,6 +193,73 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // New format: morning-briefing per-action-item buttons. callback_data is
+    // "brief:<queueId>:<action>" where action ∈ {approve, defer, details}.
+    if (data?.startsWith("brief:")) {
+      const parts = data.split(":");
+      if (parts.length !== 3) {
+        await answerCallbackQuery(callbackId, "malformed");
+        return NextResponse.json({ ok: true });
+      }
+      const [, queueId, action] = parts;
+      const decisionMap: Record<string, string> = {
+        approve: "approved",
+        defer: "deferred",
+        details: "details_requested",
+      };
+      const decision = decisionMap[action];
+      if (!decision) {
+        await answerCallbackQuery(callbackId, "unknown action");
+        return NextResponse.json({ ok: true });
+      }
+
+      // Log the inbound tap into the activity stream. Fire-and-forget — never
+      // block the user's button press on a Supabase write.
+      void recordTelegramEvent({
+        direction: "in",
+        kind: "callback",
+        ref_kind: "queue_item",
+        ref_id: queueId,
+        chat_id: chatId,
+        message_id: cq.message?.message_id,
+        payload: { action, decision, callback_data: data },
+      });
+
+      const result = await updateQueueDecision(queueId, decision, "telegram");
+      if (!result.ok) {
+        await answerCallbackQuery(callbackId, "queue file not found");
+        await sendMessage(chatId, `_Couldn't find queue file \`${queueId}\` — it may have already been resolved._`);
+        return NextResponse.json({ ok: true });
+      }
+
+      let replyText = "";
+      if (action === "approve") {
+        replyText = `✅ *Approved.*\n\n_${result.title ?? queueId}_\n\nDecision captured. Action stays manual for v1 — see TODO_AUTO_EXECUTION.md for what could auto-run later.`;
+        await sendMessage(chatId, replyText);
+        await answerCallbackQuery(callbackId, "approved");
+      } else if (action === "defer") {
+        replyText = `⏭️ *Deferred 1 day.*\n\n_${result.title ?? queueId}_\n\nWon't re-emit in tomorrow's brief.`;
+        await sendMessage(chatId, replyText);
+        await answerCallbackQuery(callbackId, "deferred");
+      } else if (action === "details") {
+        const detail = (result.body || "_(no additional context in queue file)_").slice(0, 3500);
+        replyText = `📋 *Details — ${result.title ?? queueId}*\n\n${detail}`;
+        await sendMessage(chatId, replyText);
+        await answerCallbackQuery(callbackId, "details sent");
+      }
+      // Log the bot's outbound reply so the activity-stream thread is complete.
+      void recordTelegramEvent({
+        direction: "out",
+        kind: "reply",
+        ref_kind: "queue_item",
+        ref_id: queueId,
+        chat_id: chatId,
+        payload: { text: replyText, action },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    // Legacy format: bare action strings used by older scanner buttons.
     let ack = "received";
     if (data === "approve") {
       ack = "approved";

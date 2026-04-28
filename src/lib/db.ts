@@ -41,4 +41,5 @@ export const T = {
   agent_runs: "agent_runs",
   push_subscriptions: "push_subscriptions",
   mode_state: "mode_state",
+  telegram_events: "telegram_events",
 } as const;
