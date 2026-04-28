@@ -28,7 +28,14 @@ export interface SeasonStatus {
   xp_earned: number;
   xp_target: number;
   xp_percent: number;
+  /** Live tier derived from xp_percent — can move down if pace slows. */
   tier: Tier;
+  /**
+   * Ratchet floor: highest tier ever reached this season. Once you hit C,
+   * C is locked even if pace slips. UI shows floor as the displayed letter
+   * with a small "currently pacing X" subtitle when current < floor.
+   */
+  tier_floor: Tier;
   tier_progress: number;
   coins: number;
 }

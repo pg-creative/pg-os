@@ -3297,9 +3297,34 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
 .ht-tier-bg {
   position: absolute; inset: 0;
   background:
-    radial-gradient(circle at 12% 18%, rgba(232,155,111,0.18), transparent 55%),
-    radial-gradient(circle at 88% 78%, rgba(127,175,223,0.12), transparent 55%);
+    radial-gradient(circle at 14% 16%, rgba(232,155,111,0.16), transparent 58%),
+    radial-gradient(circle at 86% 80%, rgba(127,175,223,0.10), transparent 58%);
   pointer-events: none;
+}
+
+/* Ghibli floating sparkles — finer than the home FAB sparks. */
+.ht-tier-sparkles {
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.ht-tier-sparkle {
+  position: absolute;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: rgba(240, 196, 133, 0.85);
+  box-shadow: 0 0 6px rgba(240, 196, 133, 0.7);
+  animation: ht-tier-drift 14s linear infinite;
+}
+.ht-tier-sparkle:nth-child(1) { top: 18%; left: 10%; animation-delay: 0s; }
+.ht-tier-sparkle:nth-child(2) { top: 60%; left: 22%; animation-delay: 3.5s; }
+.ht-tier-sparkle:nth-child(3) { top: 35%; left: 70%; animation-delay: 7s; }
+.ht-tier-sparkle:nth-child(4) { top: 75%; left: 82%; animation-delay: 10.5s; }
+@keyframes ht-tier-drift {
+  0%   { transform: translate(0, 0); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translate(30px, -20px); opacity: 0.8; }
+  90%  { opacity: 0.4; }
+  100% { transform: translate(60px, -40px); opacity: 0; }
 }
 
 .ht-tier-head {
@@ -3364,15 +3389,20 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
   animation: ht-tier-pulse 2.4s ease-in-out infinite;
 }
 .tier-sss .ht-tier-letter {
-  background: var(--ht-rainbow);
+  /* Ghibli aurora — greens, violets, golds. Replaces rainbow for SSS. */
+  background: linear-gradient(135deg, #5fa874 0%, #6b9a92 25%, #b89bd4 50%, #f0c478 75%, #5fa874 100%);
   background-size: 220% 220%;
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
   text-shadow: none;
-  filter: drop-shadow(0 0 12px rgba(240,196,133,0.55)) drop-shadow(0 0 24px rgba(180,200,255,0.35));
-  animation: ht-tier-rainbow 6s linear infinite, ht-tier-pulse 2.0s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px rgba(240, 196, 133, 0.5)) drop-shadow(0 0 28px rgba(143, 189, 138, 0.3));
+  animation: ht-tier-aurora 8s linear infinite, ht-tier-pulse 2.0s ease-in-out infinite;
 }
 .tier-sss .ht-tier-letter-shadow { display: none; }
+@keyframes ht-tier-aurora {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
+}
 
 @keyframes ht-tier-pulse {
   0%, 100% { transform: scale(1); }
@@ -3465,6 +3495,30 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
     radial-gradient(circle at 80% 30%, rgba(143,189,138,0.18), transparent 55%),
     radial-gradient(circle at 60% 80%, rgba(127,175,223,0.20), transparent 55%),
     radial-gradient(circle at 30% 75%, rgba(184,155,212,0.18), transparent 55%);
+}
+
+/* Ratchet subtitle — appears below the card when current pace < locked floor */
+.ht-tier-ratchet {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.03);
+  font-family: var(--mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.ht-tier-ratchet-locked {
+  color: var(--ht-gold-warm);
+  font-weight: 600;
+}
+.ht-tier-ratchet-current {
+  color: var(--muted);
 }
 
 /* ── Rank-up ceremony ── */
@@ -3561,12 +3615,28 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
   animation: ht-rankup-to 4.2s ease forwards;
 }
 .ht-rankup-letters.tier-sss .ht-rankup-to {
-  background: var(--ht-rainbow);
+  /* SSS ceremony — Ghibli aurora to match the season card */
+  background: linear-gradient(135deg, #5fa874 0%, #6b9a92 25%, #b89bd4 50%, #f0c478 75%, #5fa874 100%);
   background-size: 220% 220%;
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
   text-shadow: none;
-  animation: ht-rankup-to 4.2s ease forwards, ht-tier-rainbow 4s linear infinite;
+  animation: ht-rankup-to 4.2s ease forwards, ht-tier-aurora 6s linear infinite;
+}
+.ht-rankup-foot {
+  font-family: var(--serif), serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--fg-dim);
+  margin-top: -8px;
+  letter-spacing: 0.02em;
+  animation: ht-rankup-foot 4.2s ease forwards;
+}
+@keyframes ht-rankup-foot {
+  0%, 50% { opacity: 0; transform: translateY(6px); }
+  62%     { opacity: 1; transform: translateY(0); }
+  85%     { opacity: 1; transform: translateY(0); }
+  100%    { opacity: 0; transform: translateY(-2px); }
 }
 @keyframes ht-rankup-to {
   0%, 30%  { transform: scale(0.4); opacity: 0; }

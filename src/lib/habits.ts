@@ -34,7 +34,10 @@ export type SeasonStatus = {
   xp_earned: number;
   xp_target: number;
   xp_percent: number;
+  /** Live tier — can move down as pace slips. */
   tier: Tier;
+  /** Ratchet floor: highest tier ever reached this season. */
+  tier_floor: Tier;
   /** % progress toward NEXT tier (0–100). At SSS, always 100. */
   tier_progress: number;
   coins: number;
@@ -344,7 +347,7 @@ export async function getSeasonStatus(): Promise<SeasonStatus | null> {
 
   // 1) profile season fields
   const { data: profile } = await c.from("profiles")
-    .select("season_length_days, season_started_at, season_coins")
+    .select("season_length_days, season_started_at, season_coins, season_tier_floor")
     .eq("id", userId)
     .maybeSingle();
 
@@ -353,6 +356,7 @@ export async function getSeasonStatus(): Promise<SeasonStatus | null> {
   const lengthDays: number = profile.season_length_days ?? 66;
   const startedAt: string = profile.season_started_at;
   const coins: number = profile.season_coins ?? 0;
+  const persistedFloor: Tier = (profile.season_tier_floor ?? "F") as Tier;
 
   // Compute season window
   const startDate = new Date(startedAt);
@@ -424,6 +428,7 @@ export async function getSeasonStatus(): Promise<SeasonStatus | null> {
       xp_target: 0,
       xp_percent: 0,
       tier: "F",
+      tier_floor: persistedFloor,
       tier_progress: 0,
       coins,
     };
@@ -435,6 +440,18 @@ export async function getSeasonStatus(): Promise<SeasonStatus | null> {
   const tierProgress = tier === "SSS"
     ? 100
     : Math.max(0, Math.min(100, ((xpPercent - lower) / range) * 100));
+
+  // Ratchet: floor is max(persisted, current). If current beats persisted,
+  // bump the persisted floor — fire-and-forget so the read path stays fast.
+  const tier_floor = tierIndex(tier) > tierIndex(persistedFloor) ? tier : persistedFloor;
+  if (tier_floor !== persistedFloor) {
+    void c.from("profiles")
+      .update({ season_tier_floor: tier_floor })
+      .eq("id", userId)
+      .then(({ error }) => {
+        if (error) console.warn("[habits] tier_floor persist failed:", error.message);
+      });
+  }
 
   // Avoid unused-var lints when --noUnusedLocals is on
   void todayDate;
@@ -448,7 +465,13 @@ export async function getSeasonStatus(): Promise<SeasonStatus | null> {
     xp_target: Math.round(xpTarget),
     xp_percent: +xpPercent.toFixed(1),
     tier,
+    tier_floor,
     tier_progress: +tierProgress.toFixed(1),
     coins,
   };
+}
+
+const TIER_LADDER: Tier[] = ["F", "D", "C", "B", "A", "S", "SSS"];
+function tierIndex(t: Tier): number {
+  return TIER_LADDER.indexOf(t);
 }

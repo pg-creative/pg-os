@@ -36,6 +36,7 @@ const SEED: SeasonStatus = {
   xp_target: 14000,
   xp_percent: 58.5,
   tier: "C",
+  tier_floor: "B",
   tier_progress: 87,
   coins: 0,
 };

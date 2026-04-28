@@ -28,12 +28,13 @@ export function RankUpModal({
         ))}
       </div>
       <div className="ht-rankup-content">
-        <span className="ht-rankup-eyebrow">RANK UP</span>
+        <span className="ht-rankup-eyebrow">Rank achieved</span>
         <div className={`ht-rankup-letters tier-${to.toLowerCase()}`}>
           <span className="ht-rankup-from">{from}</span>
           <span className="ht-rankup-arrow">→</span>
           <span className="ht-rankup-to">{to}</span>
         </div>
+        <span className="ht-rankup-foot">a new chapter begins</span>
         <button
           type="button"
           className="ht-rankup-dismiss"
