@@ -4,7 +4,7 @@ import { useVoiceCapture } from "./useVoiceCapture";
 import { useMode } from "./ModeProvider";
 import { MODE_CONFIG } from "../../lib/modes";
 
-type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal";
+type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal" | "todo";
 
 interface CaptureSheetProps {
   onClose: () => void;
@@ -22,6 +22,7 @@ interface DestConfig {
 const DESTINATIONS: DestConfig[] = [
   { id: "ship",       label: "Ship",       icon: "🪶", hint: "Adds to ship log",        showTitle: false, showContext: true  },
   { id: "queue",      label: "Queue",      icon: "🧭", hint: "Drops into queue",         showTitle: false, showContext: true  },
+  { id: "todo",       label: "Todo",       icon: "☑",  hint: "Creates a task",          showTitle: false, showContext: true  },
   { id: "hc-journal", label: "HC Journal", icon: "📖", hint: "Writes to Hero's journal", showTitle: false, showContext: false },
   { id: "essay",      label: "Essay",      icon: "✍",  hint: "Starts an essay draft",   showTitle: true,  showContext: false },
   { id: "linkedin",   label: "LinkedIn",   icon: "💼", hint: "Drafts a LinkedIn post",   showTitle: true,  showContext: false },

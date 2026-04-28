@@ -5,6 +5,7 @@ import { addShip } from "./shipLog";
 import { addQueueItem } from "./queueStore";
 import { upsertJournal } from "./habits";
 import { connected as hcConnected } from "./hcSupabase";
+import { createTask } from "./tasks";
 
 export type CaptureDestination =
   | "ship"
@@ -12,7 +13,8 @@ export type CaptureDestination =
   | "essay"
   | "linkedin"
   | "yuriko"
-  | "hc-journal";
+  | "hc-journal"
+  | "todo";
 
 const HOME = os.homedir();
 const DEST_DIRS: Record<"essay" | "linkedin" | "yuriko", string> = {
@@ -68,6 +70,15 @@ export async function routeCapture(
       const title = meta?.title ?? text.split("\n")[0].slice(0, 80);
       const file = await writeMarkdown(DEST_DIRS[destination], title, text);
       return { ok: true, destination, detail: file };
+    }
+    if (destination === "todo") {
+      const title = text.split("\n")[0].slice(0, 200);
+      const task = await createTask({
+        title,
+        project_id: meta?.source ?? null,
+        source: "capture-fab",
+      });
+      return { ok: true, destination, detail: `task/${task.id}` };
     }
     if (destination === "hc-journal") {
       if (!hcConnected()) {
