@@ -3,17 +3,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyHabitTagFilter } from "../../../lib/modes";
 import { RitualGate } from "../Ritual/RitualGate";
-
-interface Habit {
-  id: string;
-  name: string;
-  description: string | null;
-  frequency: "daily" | "weekdays" | "weekends" | "weekly" | "custom";
-  attribute_id: string | null;
-  xp_per_completion: number;
-  completed: boolean;
-  completion_notes: string | null;
-}
+import { SeasonTierCard } from "../Habits/SeasonTierCard";
+import { AnchorRow } from "../Habits/AnchorRow";
+import { WeeklyGrid } from "../Habits/WeeklyGrid";
+import { RankUpModal } from "../Habits/RankUpModal";
+import type { HabitCardResult } from "../Habits/HabitCard";
+import type { Habit, SeasonStatus, Tier } from "../Habits/types";
 
 interface JournalEntry {
   entry_date: string;
@@ -42,7 +37,7 @@ interface Week {
 
 type ApiData =
   | { connected: false; hint: string; status: { connected: false; url: string | null; hasKey: boolean } }
-  | { connected: true; snapshot: Snapshot; week: Week | null };
+  | { connected: true; snapshot: Snapshot; week: Week | null; season: SeasonStatus | null };
 
 const MIRROR_PROMPTS = [
   "Are you being who you said you wanted to be this week?",
@@ -54,7 +49,6 @@ const MIRROR_PROMPTS = [
   "Plurality without a ship is just noise.",
 ];
 
-// mood button: [emoji, label, hcEnergyLevel (1-10)]
 const MOOD_OPTS: [string, string, number][] = [
   ["😞", "rough", 2],
   ["😕", "low", 4],
@@ -71,10 +65,15 @@ function todayLocal(): string {
   return `${y}-${m}-${day}`;
 }
 
+const TIER_ORDER: Tier[] = ["F", "D", "C", "B", "A", "S", "SSS"];
+const tierIdx = (t: Tier) => TIER_ORDER.indexOf(t);
+
 export function HabitsView() {
   const [data, setData] = useState<ApiData | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [rankUp, setRankUp] = useState<{ from: Tier; to: Tier } | null>(null);
+  const lastTierRef = useRef<Tier | null>(null);
   const { brand } = useMode();
 
   const fetchData = useCallback(async () => {
@@ -85,6 +84,12 @@ export function HabitsView() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);
+      if (json.connected && json.season) {
+        if (lastTierRef.current && tierIdx(json.season.tier) > tierIdx(lastTierRef.current)) {
+          setRankUp({ from: lastTierRef.current, to: json.season.tier });
+        }
+        lastTierRef.current = json.season.tier;
+      }
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -98,9 +103,6 @@ export function HabitsView() {
 
   const brandCfg = brand ? MODE_CONFIG[brand] : null;
 
-  // Filter snapshot habits by brand tag before rendering.
-  // HC habit objects may have a 'tags' field not reflected in the local interface —
-  // applyHabitTagFilter's Array.isArray guard means habits without tags pass through.
   type HabitWithTags = Habit & { tags?: string[] };
   const filteredData: ApiData | null =
     data && data.connected && brand
@@ -121,10 +123,8 @@ export function HabitsView() {
     <div className="view view-habits">
       <div className="view-header">
         <h1 className="view-title">Habits</h1>
-        <div className="view-sub">MORNING · EVENING · WEEKLY REVIEW</div>
+        <div className="view-sub">SEASON · ANCHORS · WEEKLY</div>
       </div>
-
-      <RitualGate />
 
       {brandCfg && (
         <div className="cm-filter-hint">
@@ -139,7 +139,18 @@ export function HabitsView() {
         <SetupCard hint={filteredData.hint} onRetry={fetchData} />
       )}
       {!loading && !fetchError && filteredData && filteredData.connected && (
-        <ConnectedView snapshot={filteredData.snapshot} week={filteredData.week} onRefetch={fetchData} />
+        <ConnectedView
+          snapshot={filteredData.snapshot}
+          week={filteredData.week}
+          season={filteredData.season}
+          onRefetch={fetchData}
+        />
+      )}
+
+      <RitualGate />
+
+      {rankUp && (
+        <RankUpModal from={rankUp.from} to={rankUp.to} onDone={() => setRankUp(null)} />
       )}
     </div>
   );
@@ -175,111 +186,70 @@ function LoadingCard() {
 function ConnectedView({
   snapshot,
   week,
+  season,
   onRefetch,
 }: {
   snapshot: Snapshot;
   week: Week | null;
+  season: SeasonStatus | null;
   onRefetch: () => void;
 }) {
   const mirrorPrompt = MIRROR_PROMPTS[new Date().getDay() % MIRROR_PROMPTS.length];
 
-  return (
-    <div className="hb-layout">
-      <div className="hb-col-left">
-        <HabitsCard snapshot={snapshot} onRefetch={onRefetch} />
-      </div>
-      <div className="hb-col-right">
-        <JournalCard snapshot={snapshot} onRefetch={onRefetch} />
-        <WeekCard week={week} mirrorPrompt={mirrorPrompt} />
-      </div>
-    </div>
+  // Bucket: anchors = no weekly_target (treated as daily). Weekly = has weekly_target.
+  const anchors = snapshot.habits.filter((h) => !h.weekly_target);
+  const weekly = snapshot.habits.filter((h) => !!h.weekly_target);
+
+  const onComplete = useCallback(
+    async (habit: Habit, actualValue: number | null): Promise<HabitCardResult | void> => {
+      try {
+        const res = await fetch("/api/habits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "complete",
+            habitId: habit.id,
+            actualValue,
+            date: snapshot.date,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json.ok) throw new Error("complete failed");
+        // Fire refetch but compute the burst from the local data we know.
+        const baseXP = habit.xp_per_completion;
+        let mult = 1.0;
+        if (habit.target_value && habit.target_value > 0 && actualValue != null) {
+          mult = Math.min(1.5, Math.max(1.0, actualValue / habit.target_value));
+        }
+        const earned = Math.round(baseXP * mult);
+        const bonus = mult > 1.0;
+        // Trigger refresh after a tick so the +XP burst gets to render.
+        setTimeout(onRefetch, 100);
+        return { ok: true, earnedXP: earned, bonus };
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("habit complete failed:", e);
+        return { ok: false, earnedXP: 0, bonus: false };
+      }
+    },
+    [snapshot.date, onRefetch],
   );
-}
-
-function HabitsCard({
-  snapshot,
-  onRefetch,
-}: {
-  snapshot: Snapshot;
-  onRefetch: () => void;
-}) {
-  const { habits, completedToday, totalToday, streak7DayPct } = snapshot;
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
-  const [toggleErrors, setToggleErrors] = useState<Record<string, string>>({});
-
-  const effectiveCompleted = (h: Habit) =>
-    h.id in overrides ? overrides[h.id] : h.completed;
-
-  const effectiveCount =
-    habits.reduce((sum, h) => sum + (effectiveCompleted(h) ? 1 : 0), 0);
-
-  const pct = totalToday > 0 ? (effectiveCount / totalToday) * 100 : 0;
-  const allDone = totalToday > 0 && effectiveCount === totalToday;
-
-  async function toggle(h: Habit) {
-    const newVal = !effectiveCompleted(h);
-    setOverrides((prev) => ({ ...prev, [h.id]: newVal }));
-    setToggleErrors((prev) => { const n = { ...prev }; delete n[h.id]; return n; });
-
-    try {
-      const res = await fetch("/api/habits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "toggle", habitId: h.id, date: snapshot.date }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json.ok) throw new Error("toggle failed");
-      setOverrides((prev) => ({ ...prev, [h.id]: json.completed }));
-    } catch (e) {
-      setOverrides((prev) => ({ ...prev, [h.id]: h.completed }));
-      setToggleErrors((prev) => ({
-        ...prev,
-        [h.id]: e instanceof Error ? e.message : "Failed",
-      }));
-    }
-  }
 
   return (
-    <div className="card">
-      <div className="card-label hb-card-header">
-        <span>01 // TODAY · HABITS</span>
-        <span className={`hb-count-chip ${allDone ? "done" : ""}`}>
-          {effectiveCount} / {totalToday}
-        </span>
-      </div>
+    <div className="ht-layout">
+      {season && <SeasonTierCard season={season} />}
 
-      {totalToday === 0 ? (
-        <p className="hb-empty">No habits configured in HC yet.</p>
-      ) : (
-        <>
-          <div className="hb-progress">
-            <div className="hb-progress-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <ul className="hb-list">
-            {habits.map((h) => {
-              const done = effectiveCompleted(h);
-              return (
-                <li key={h.id} className={`hb-item${done ? " done" : ""}`}>
-                  <button
-                    className={`hb-check${done ? " done" : ""}`}
-                    onClick={() => toggle(h)}
-                    aria-label={`${done ? "Uncheck" : "Check"} ${h.name}`}
-                  />
-                  <span className="hb-name">{h.name}</span>
-                  <span className="hb-xp">+{h.xp_per_completion} XP</span>
-                  {toggleErrors[h.id] && (
-                    <span className="hb-toggle-error">{toggleErrors[h.id]}</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-          <div className="hb-streak">
-            7-day consistency · <strong>{Math.round(streak7DayPct)}%</strong>
-          </div>
-        </>
+      {anchors.length === 0 && weekly.length === 0 && (
+        <div className="card"><div className="card-label">01 // TODAY · HABITS</div><p className="hb-empty">No habits configured in HC yet.</p></div>
       )}
+
+      {anchors.length > 0 && <AnchorRow habits={anchors} onComplete={onComplete} />}
+
+      {weekly.length > 0 && <WeeklyGrid habits={weekly} onComplete={onComplete} />}
+
+      <JournalCard snapshot={snapshot} onRefetch={onRefetch} />
+      <WeekCard week={week} mirrorPrompt={mirrorPrompt} />
     </div>
   );
 }
@@ -324,7 +294,6 @@ function JournalCard({ snapshot }: { snapshot: Snapshot; onRefetch: () => void }
     [snapshot.date]
   );
 
-  // Debounced text save
   function handleTextChange(val: string) {
     setText(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -333,7 +302,6 @@ function JournalCard({ snapshot }: { snapshot: Snapshot; onRefetch: () => void }
     }, 800);
   }
 
-  // Immediate save on blur
   function handleBlur() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     saveJournal(text, moodIdx);
@@ -342,7 +310,6 @@ function JournalCard({ snapshot }: { snapshot: Snapshot; onRefetch: () => void }
   function handleMoodClick(idx: number) {
     const next = moodIdx === idx ? null : idx;
     setMoodIdx(next);
-    // Immediate save on mood change
     saveJournal(text, next);
   }
 

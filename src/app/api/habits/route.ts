@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connected, status as hcStatus } from "@/lib/hcSupabase";
-import { getDaySnapshot, toggleCompletion, upsertJournal, getWeekSummary } from "@/lib/habits";
+import {
+  getDaySnapshot,
+  toggleCompletion,
+  upsertJournal,
+  getWeekSummary,
+  getSeasonStatus,
+  recordCompletion,
+} from "@/lib/habits";
 
 export async function GET(req: NextRequest) {
   if (!connected()) {
@@ -8,8 +15,12 @@ export async function GET(req: NextRequest) {
   }
   const date = req.nextUrl.searchParams.get("date") ?? undefined;
   try {
-    const [snapshot, week] = await Promise.all([getDaySnapshot(date), getWeekSummary()]);
-    return NextResponse.json({ connected: true, snapshot, week });
+    const [snapshot, week, season] = await Promise.all([
+      getDaySnapshot(date),
+      getWeekSummary(),
+      getSeasonStatus(),
+    ]);
+    return NextResponse.json({ connected: true, snapshot, week, season });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
     return NextResponse.json({ connected: true, error: msg }, { status: 500 });
@@ -27,7 +38,24 @@ export async function POST(req: NextRequest) {
       const { habitId, date, notes } = body;
       if (!habitId) return NextResponse.json({ error: "habitId_required" }, { status: 400 });
       const res = await toggleCompletion(habitId, date, notes);
-      return NextResponse.json({ ok: true, ...res });
+      const [snapshot, season] = await Promise.all([
+        getDaySnapshot(date),
+        getSeasonStatus(),
+      ]);
+      return NextResponse.json({ ok: true, ...res, snapshot, season });
+    }
+    if (action === "complete") {
+      // Insert (or update existing) completion with optional actual_value.
+      const { habitId, actualValue, date } = body as {
+        habitId?: string; actualValue?: number | null; date?: string;
+      };
+      if (!habitId) return NextResponse.json({ error: "habitId_required" }, { status: 400 });
+      await recordCompletion(habitId, typeof actualValue === "number" ? actualValue : null, date);
+      const [snapshot, season] = await Promise.all([
+        getDaySnapshot(date),
+        getSeasonStatus(),
+      ]);
+      return NextResponse.json({ ok: true, snapshot, season });
     }
     if (action === "journal") {
       const { date, text, energyLevel } = body;

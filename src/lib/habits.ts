@@ -11,11 +11,33 @@ export type Habit = {
   frequency: "daily" | "weekdays" | "weekends" | "weekly" | "custom";
   attribute_id: string | null;
   xp_per_completion: number;
+  target_value?: number | null;
+  target_unit?: string | null;
+  weekly_target?: number | null;
 };
 
 export type HabitWithCompletion = Habit & {
   completed: boolean;
   completion_notes: string | null;
+  actual_value?: number | null;
+  /** number of completions in the current ISO week (Mon-Sun) — used for weekly habits */
+  weekly_completions?: number;
+};
+
+export type Tier = "F" | "D" | "C" | "B" | "A" | "S" | "SSS";
+
+export type SeasonStatus = {
+  length_days: number;
+  started_at: string;
+  days_elapsed: number;
+  days_remaining: number;
+  xp_earned: number;
+  xp_target: number;
+  xp_percent: number;
+  tier: Tier;
+  /** % progress toward NEXT tier (0–100). At SSS, always 100. */
+  tier_progress: number;
+  coins: number;
 };
 
 export type JournalEntry = {
@@ -41,6 +63,29 @@ const today = (): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+/** Mon-anchored ISO week start for a given YYYY-MM-DD (local). */
+function isoWeekStart(d: string): string {
+  const [y, m, day] = d.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, day ?? 1);
+  // Mon=1..Sun=7; subtract (dow-1) days
+  const dow = dt.getDay() === 0 ? 7 : dt.getDay();
+  dt.setDate(dt.getDate() - (dow - 1));
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+function daysBetween(fromIso: string, toIso: string): number {
+  const a = new Date(fromIso);
+  const b = new Date(toIso);
+  return Math.max(0, Math.floor((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+/** Bonus multiplier for actual vs target. Capped at 1.5x, floored at 1.0x. */
+function xpMultiplier(actual: number | null | undefined, target: number | null | undefined): number {
+  if (!target || target <= 0) return 1.0;
+  if (actual == null) return 1.0;
+  return Math.min(1.5, Math.max(1.0, actual / target));
+}
+
 export async function getDaySnapshot(date?: string): Promise<DaySnapshot | null> {
   const c = hcClient();
   if (!c) return null;
@@ -48,16 +93,24 @@ export async function getDaySnapshot(date?: string): Promise<DaySnapshot | null>
   if (!userId) return null;
   const d = date ?? today();
 
-  const [habitsRes, completionsRes, journalRes, streakRows] = await Promise.all([
+  // Compute ISO-week start (Mon) to bound weekly completions
+  const weekStart = isoWeekStart(d);
+
+  const [habitsRes, completionsRes, weekCompletionsRes, journalRes, streakRows] = await Promise.all([
     c.from("habits")
-      .select("id, name, description, frequency, attribute_id, xp_per_completion")
+      .select("id, name, description, frequency, attribute_id, xp_per_completion, target_value, target_unit, weekly_target")
       .eq("user_id", userId)
       .eq("is_active", true)
       .order("created_at", { ascending: true }),
     c.from("habit_completions")
-      .select("habit_id, notes")
+      .select("habit_id, notes, actual_value")
       .eq("user_id", userId)
       .eq("completed_date", d),
+    c.from("habit_completions")
+      .select("habit_id, completed_date")
+      .eq("user_id", userId)
+      .gte("completed_date", weekStart)
+      .lte("completed_date", d),
     c.from("journal_entries")
       .select("entry_date, raw_text, cleaned_text, sentiment_score, energy_level, tags")
       .eq("user_id", userId)
@@ -71,13 +124,27 @@ export async function getDaySnapshot(date?: string): Promise<DaySnapshot | null>
   ]);
 
   if (habitsRes.error) throw habitsRes.error;
-  const completedIds = new Set((completionsRes.data ?? []).map((r: { habit_id: string }) => r.habit_id));
-  const notesByHabit = new Map((completionsRes.data ?? []).map((r: { habit_id: string; notes: string | null }) => [r.habit_id, r.notes]));
+  const completionRows = (completionsRes.data ?? []) as Array<{ habit_id: string; notes: string | null; actual_value: number | null }>;
+  const completedIds = new Set(completionRows.map((r) => r.habit_id));
+  const notesByHabit = new Map(completionRows.map((r) => [r.habit_id, r.notes]));
+  const actualByHabit = new Map(completionRows.map((r) => [r.habit_id, r.actual_value]));
+
+  // Count distinct dates per habit in the current ISO week (so two completions
+  // on the same day still count as 1).
+  const weekRows = (weekCompletionsRes.data ?? []) as Array<{ habit_id: string; completed_date: string }>;
+  const weekDistinct = new Map<string, Set<string>>();
+  for (const row of weekRows) {
+    let s = weekDistinct.get(row.habit_id);
+    if (!s) { s = new Set(); weekDistinct.set(row.habit_id, s); }
+    s.add(row.completed_date);
+  }
 
   const habits: HabitWithCompletion[] = (habitsRes.data ?? []).map((h: Habit) => ({
     ...h,
     completed: completedIds.has(h.id),
     completion_notes: notesByHabit.get(h.id) ?? null,
+    actual_value: actualByHabit.get(h.id) ?? null,
+    weekly_completions: weekDistinct.get(h.id)?.size ?? 0,
   }));
 
   const totalToday = habits.length;
@@ -206,4 +273,182 @@ export async function getWeekSummary(): Promise<{
   const shipsThisWeek = (await shipsInLastDays(7)).length;
 
   return { shipsThisWeek, habitsCompletedThisWeek, daysJournaled, avgMood };
+}
+
+/**
+ * Record a habit completion with optional actual_value (for quantified habits).
+ * If a completion for the day already exists, updates the actual_value rather
+ * than creating a duplicate. Returns the inserted/updated row id.
+ */
+export async function recordCompletion(
+  habitId: string,
+  actualValue?: number | null,
+  date?: string,
+): Promise<{ ok: true; id: string }> {
+  const c = hcClient();
+  if (!c) throw new Error("hc_not_connected");
+  const userId = await getUserId();
+  if (!userId) throw new Error("user_id_not_resolved");
+  const d = date ?? today();
+
+  const { data: existing } = await c.from("habit_completions")
+    .select("id")
+    .eq("habit_id", habitId)
+    .eq("user_id", userId)
+    .eq("completed_date", d)
+    .maybeSingle();
+
+  if (existing) {
+    const { data, error } = await c.from("habit_completions")
+      .update({ actual_value: actualValue ?? null })
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, id: data.id as string };
+  }
+
+  const { data, error } = await c.from("habit_completions")
+    .insert({
+      habit_id: habitId,
+      user_id: userId,
+      completed_date: d,
+      actual_value: actualValue ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { ok: true, id: data.id as string };
+}
+
+/** Tier thresholds (xp_percent → letter). */
+function pctToTier(pct: number): { tier: Tier; lower: number; upper: number } {
+  if (pct >= 100) return { tier: "SSS", lower: 100, upper: 150 };
+  if (pct >= 90) return { tier: "S", lower: 90, upper: 100 };
+  if (pct >= 80) return { tier: "A", lower: 80, upper: 90 };
+  if (pct >= 70) return { tier: "B", lower: 70, upper: 80 };
+  if (pct >= 60) return { tier: "C", lower: 60, upper: 70 };
+  if (pct >= 50) return { tier: "D", lower: 50, upper: 60 };
+  return { tier: "F", lower: 0, upper: 50 };
+}
+
+/**
+ * Compute current season XP, target, tier, and progress.
+ * Returns null if HC isn't connected or the season profile fields are missing.
+ */
+export async function getSeasonStatus(): Promise<SeasonStatus | null> {
+  const c = hcClient();
+  if (!c) return null;
+  const userId = await getUserId();
+  if (!userId) return null;
+
+  // 1) profile season fields
+  const { data: profile } = await c.from("profiles")
+    .select("season_length_days, season_started_at, season_coins")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profile || !profile.season_started_at) return null;
+
+  const lengthDays: number = profile.season_length_days ?? 66;
+  const startedAt: string = profile.season_started_at;
+  const coins: number = profile.season_coins ?? 0;
+
+  // Compute season window
+  const startDate = new Date(startedAt);
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + lengthDays);
+  const todayStr = today();
+  const todayDate = new Date(todayStr);
+  const daysElapsed = Math.min(lengthDays, daysBetween(startedAt, todayStr) + 1);
+  const daysRemaining = Math.max(0, lengthDays - daysElapsed);
+  const endIso = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+
+  // 2) all habits (for target computation) + all completions in the season
+  const [habitsRes, completionsRes] = await Promise.all([
+    c.from("habits")
+      .select("id, frequency, xp_per_completion, target_value, weekly_target")
+      .eq("user_id", userId)
+      .eq("is_active", true),
+    c.from("habit_completions")
+      .select("habit_id, actual_value, completed_date")
+      .eq("user_id", userId)
+      .gte("completed_date", startedAt)
+      .lte("completed_date", endIso),
+  ]);
+
+  type HabitRow = {
+    id: string;
+    frequency: string;
+    xp_per_completion: number | null;
+    target_value: number | null;
+    weekly_target: number | null;
+  };
+  type CompletionRow = { habit_id: string; actual_value: number | null; completed_date: string };
+
+  const habits = (habitsRes.data ?? []) as HabitRow[];
+  const completions = (completionsRes.data ?? []) as CompletionRow[];
+
+  // Index target_value by habit
+  const habitById = new Map(habits.map((h) => [h.id, h]));
+
+  // 3) xp_earned: sum base * multiplier per completion
+  let xpEarned = 0;
+  for (const cmp of completions) {
+    const h = habitById.get(cmp.habit_id);
+    if (!h) continue;
+    const base = h.xp_per_completion ?? 0;
+    const mult = xpMultiplier(cmp.actual_value, h.target_value);
+    xpEarned += base * mult;
+  }
+
+  // 4) xp_target: per-habit expected occurrences * base xp
+  // Daily expected = lengthDays. Weekly expected = ceil(lengthDays/7) * weekly_target.
+  const weeksInSeason = Math.ceil(lengthDays / 7);
+  let xpTarget = 0;
+  for (const h of habits) {
+    const base = h.xp_per_completion ?? 0;
+    const expected = h.weekly_target && h.weekly_target > 0
+      ? weeksInSeason * h.weekly_target
+      : lengthDays; // daily fallback
+    xpTarget += base * expected;
+  }
+
+  if (xpTarget <= 0) {
+    return {
+      length_days: lengthDays,
+      started_at: startedAt,
+      days_elapsed: daysElapsed,
+      days_remaining: daysRemaining,
+      xp_earned: 0,
+      xp_target: 0,
+      xp_percent: 0,
+      tier: "F",
+      tier_progress: 0,
+      coins,
+    };
+  }
+
+  const xpPercent = (xpEarned / xpTarget) * 100;
+  const { tier, lower, upper } = pctToTier(xpPercent);
+  const range = upper - lower;
+  const tierProgress = tier === "SSS"
+    ? 100
+    : Math.max(0, Math.min(100, ((xpPercent - lower) / range) * 100));
+
+  // Avoid unused-var lints when --noUnusedLocals is on
+  void todayDate;
+
+  return {
+    length_days: lengthDays,
+    started_at: startedAt,
+    days_elapsed: daysElapsed,
+    days_remaining: daysRemaining,
+    xp_earned: Math.round(xpEarned),
+    xp_target: Math.round(xpTarget),
+    xp_percent: +xpPercent.toFixed(1),
+    tier,
+    tier_progress: +tierProgress.toFixed(1),
+    coins,
+  };
 }
