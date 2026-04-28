@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { SparkleCorner, CardGlyph } from "../CardGlyph";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
+import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
+import { subscribeTable } from "../../../lib/realtime";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeConfig } from "../../api/realtime/config/route";
 import { TasksRegion } from "../Tasks/TasksRegion";
 
 type Glyph = "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
@@ -200,7 +204,7 @@ export function ProjectsView() {
   const [error, setError] = useState<string | null>(null);
   const { brand } = useMode();
 
-  useEffect(() => {
+  const fetchProjects = useCallback(() => {
     fetch("/api/projects", { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -214,6 +218,48 @@ export function ProjectsView() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  // ── Realtime: subscribe to PG OS `tasks` table ────────────────────────────
+  useEffect(() => {
+    let channel: RealtimeChannel | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let destroyed = false;
+
+    async function setupRealtime() {
+      try {
+        const res = await fetch("/api/realtime/config");
+        if (!res.ok) return;
+        const cfg: RealtimeConfig = await res.json();
+        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return; // graceful no-op
+
+        const client = await createBrowserSupabaseClient(cfg.pgosUrl, cfg.pgosPublishableKey);
+        if (!client || destroyed) return;
+
+        supabaseClient = client;
+        channel = subscribeTable({
+          client,
+          channelName: "tasks-realtime",
+          table: "tasks",
+          onchange: () => { fetchProjects(); },
+        });
+      } catch {
+        // Realtime is best-effort — never surface errors to the user.
+      }
+    }
+
+    void setupRealtime();
+
+    return () => {
+      destroyed = true;
+      if (supabaseClient && channel) {
+        supabaseClient.removeChannel(channel);
+      }
+    };
+  }, [fetchProjects]);
 
   const filtered = applyModeFilter(projects, brand, "id");
   const brandCfg = brand ? MODE_CONFIG[brand] : null;

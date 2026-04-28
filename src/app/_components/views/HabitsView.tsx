@@ -2,6 +2,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyHabitTagFilter } from "../../../lib/modes";
+import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
+import { subscribeMultipleTables } from "../../../lib/realtime";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeConfig } from "../../api/realtime/config/route";
 import { RitualGate } from "../Ritual/RitualGate";
 import { SeasonTierCard } from "../Habits/SeasonTierCard";
 import { AnchorRow } from "../Habits/AnchorRow";
@@ -105,6 +109,47 @@ export function HabitsView() {
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // ── Realtime: subscribe to HC habits + habit_completions ─────────────────
+  useEffect(() => {
+    let channel: RealtimeChannel | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let destroyed = false;
+
+    async function setupRealtime() {
+      try {
+        const res = await fetch("/api/realtime/config");
+        if (!res.ok) return;
+        const cfg: RealtimeConfig = await res.json();
+        if (!cfg.hcUrl || !cfg.hcPublishableKey) return; // graceful no-op
+
+        const client = await createBrowserSupabaseClient(cfg.hcUrl, cfg.hcPublishableKey);
+        if (!client || destroyed) return;
+
+        supabaseClient = client;
+        channel = subscribeMultipleTables({
+          client,
+          channelName: "habits-realtime",
+          tables: [
+            { table: "habits" },
+            { table: "habit_completions" },
+          ],
+          onchange: () => { void fetchData(); },
+        });
+      } catch {
+        // Realtime is best-effort — never surface errors to the user.
+      }
+    }
+
+    void setupRealtime();
+
+    return () => {
+      destroyed = true;
+      if (supabaseClient && channel) {
+        supabaseClient.removeChannel(channel);
+      }
+    };
   }, [fetchData]);
 
   const brandCfg = brand ? MODE_CONFIG[brand] : null;

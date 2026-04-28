@@ -2,6 +2,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useMode } from "../ModeProvider";
 import { type BrandMode, MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
+import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
+import { subscribeMultipleTables } from "../../../lib/realtime";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeConfig } from "../../api/realtime/config/route";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +98,47 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
   }, []);
 
   useEffect(() => { fetchShips(); }, [fetchShips]);
+
+  // ── Realtime: subscribe to PG OS `ships` + `queue_items` ─────────────────
+  useEffect(() => {
+    let channel: RealtimeChannel | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let destroyed = false;
+
+    async function setupRealtime() {
+      try {
+        const res = await fetch("/api/realtime/config");
+        if (!res.ok) return;
+        const cfg: RealtimeConfig = await res.json();
+        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return; // graceful no-op
+
+        const client = await createBrowserSupabaseClient(cfg.pgosUrl, cfg.pgosPublishableKey);
+        if (!client || destroyed) return;
+
+        supabaseClient = client;
+        channel = subscribeMultipleTables({
+          client,
+          channelName: "flow-realtime",
+          tables: [
+            { table: "ships" },
+            { table: "queue_items" },
+          ],
+          onchange: () => { void fetchShips(); },
+        });
+      } catch {
+        // Realtime is best-effort — never surface errors to the user.
+      }
+    }
+
+    void setupRealtime();
+
+    return () => {
+      destroyed = true;
+      if (supabaseClient && channel) {
+        supabaseClient.removeChannel(channel);
+      }
+    };
+  }, [fetchShips]);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -236,6 +281,44 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
   }, []);
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
+
+  // ── Realtime: subscribe to PG OS `queue_items` ───────────────────────────
+  useEffect(() => {
+    let channel: RealtimeChannel | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let destroyed = false;
+
+    async function setupRealtime() {
+      try {
+        const res = await fetch("/api/realtime/config");
+        if (!res.ok) return;
+        const cfg: RealtimeConfig = await res.json();
+        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return; // graceful no-op
+
+        const client = await createBrowserSupabaseClient(cfg.pgosUrl, cfg.pgosPublishableKey);
+        if (!client || destroyed) return;
+
+        supabaseClient = client;
+        channel = subscribeMultipleTables({
+          client,
+          channelName: "queue-realtime",
+          tables: [{ table: "queue_items" }],
+          onchange: () => { void fetchQueue(); },
+        });
+      } catch {
+        // Realtime is best-effort — never surface errors to the user.
+      }
+    }
+
+    void setupRealtime();
+
+    return () => {
+      destroyed = true;
+      if (supabaseClient && channel) {
+        supabaseClient.removeChannel(channel);
+      }
+    };
+  }, [fetchQueue]);
 
   const handleDismiss = useCallback(async (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
