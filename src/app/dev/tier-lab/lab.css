@@ -980,24 +980,35 @@
   font-size: 9px;
 }
 
-/* Pace overlay (psychology=pace) — visually softens the letter */
-.tl-stage[data-psych="pace"] .v-octo-letter,
-.tl-stage[data-psych="pace"] .v-p5-letter,
-.tl-stage[data-psych="pace"] .v-p5-letter-shadow,
-.tl-stage[data-psych="pace"] .v-ghibli-letter {
-  opacity: 0.18;
-  filter: blur(2px);
-  transition: opacity 320ms ease, filter 320ms ease;
+/* Pace overlay (psychology=pace) — fade the entire variant card content,
+   keep the chassis frame; pace text overlays the empty box. We target each
+   variant's known wrapper classes directly because the variants use <section>
+   with aria-label, not [role=region], and Tailwind/Next CSS-modules can mangle
+   attribute selectors in production. */
+.tl-stage[data-psych="pace"] .v-octo-card *,
+.tl-stage[data-psych="pace"] .v-p5-card *,
+.tl-stage[data-psych="pace"] .v-ghibli-card * {
+  opacity: 0 !important;
+  transition: opacity 220ms ease;
+}
+.tl-stage[data-psych="pace"] .v-octo-card,
+.tl-stage[data-psych="pace"] .v-p5-card,
+.tl-stage[data-psych="pace"] .v-ghibli-card {
+  position: relative;
 }
 .tl-pace-overlay {
   position: absolute;
-  inset: 60px 24px auto 24px;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
   pointer-events: none;
   text-align: center;
+  padding: 24px;
+  visibility: visible !important;
+  z-index: 2;
 }
 .tl-pace-line {
   font-family: var(--mono), monospace;

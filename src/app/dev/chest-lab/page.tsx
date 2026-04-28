@@ -184,7 +184,15 @@ export default function ChestLabPage() {
         </div>
       )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(260px, 320px) 1fr", gap: 24, alignItems: "start" }}>
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 24,
+          alignItems: "start",
+        }}
+        className="cl-grid"
+      >
         <SoulBeingCard
           state={a.state ?? {}}
           name={a.name}
