@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { SparkleCorner, CardGlyph } from "../CardGlyph";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
+import { TasksRegion } from "../Tasks/TasksRegion";
 
 type Glyph = "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
 
@@ -245,6 +246,9 @@ export function ProjectsView() {
           ))}
         </div>
       )}
+
+      {/* Tasks layer — full cross-project list below project cards */}
+      <TasksRegion />
     </div>
   );
 }
