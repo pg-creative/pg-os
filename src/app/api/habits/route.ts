@@ -8,6 +8,7 @@ import {
   getSeasonStatus,
   recordCompletion,
 } from "@/lib/habits";
+import { awardCoinsForCompletion } from "@/lib/chests";
 
 export async function GET(req: NextRequest) {
   if (!connected()) {
@@ -51,6 +52,15 @@ export async function POST(req: NextRequest) {
       };
       if (!habitId) return NextResponse.json({ error: "habitId_required" }, { status: 400 });
       await recordCompletion(habitId, typeof actualValue === "number" ? actualValue : null, date);
+      // Phase 3: mint coins from this completion's effective XP. Best-effort.
+      const habit = (await getDaySnapshot(date))?.habits.find((h) => h.id === habitId);
+      if (habit) {
+        const base = habit.xp_per_completion ?? 0;
+        const mult = habit.target_value && habit.target_value > 0 && typeof actualValue === "number"
+          ? Math.min(1.5, Math.max(1.0, actualValue / habit.target_value))
+          : 1.0;
+        await awardCoinsForCompletion(Math.round(base * mult));
+      }
       const [snapshot, season] = await Promise.all([
         getDaySnapshot(date),
         getSeasonStatus(),
