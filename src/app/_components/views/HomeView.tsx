@@ -7,11 +7,13 @@ import { VitalsLive } from "../VitalsLive";
 import { Greeting } from "../ModeSwitcher";
 import { LocationLive } from "../LocationLive";
 import { PostMortemBanner } from "../PostMortemBanner";
+import { PushSetupCard } from "../PushSetupCard";
 
 export function HomeView() {
   return (
     <>
       <PostMortemBanner />
+      <PushSetupCard />
       {/* SESSION BANNER — full-width, time-responsive hero image */}
       <div className="card session">
         <SparkleCorner delayed variant="plus" />

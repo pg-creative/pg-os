@@ -29,6 +29,9 @@ const PASSTHROUGH_PREFIXES = [
   // X-PGOS-Internal-Secret header check.
   "/api/agent-runs",
   "/api/telegram-events",
+  // Digest endpoints — called by the morning-briefing agent (headless curl).
+  // Each route enforces X-PGOS-Internal-Secret at the handler level.
+  "/api/digest/",
   // Cron routes self-authenticate via Authorization: Bearer <CRON_SECRET>.
   // Vercel cron jobs don't carry a user cookie, so let them through to the
   // route handler — it will return 401 on its own if the bearer is wrong/missing.
