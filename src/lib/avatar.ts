@@ -138,7 +138,7 @@ export async function setSoulBeingName(name: string): Promise<void> {
   if (!c) throw new Error("hc_not_connected");
   const userId = await getUserId();
   if (!userId) throw new Error("user_id_not_resolved");
-  const trimmed = name.trim().slice(0, 48);
+  const trimmed = name.trim().slice(0, 32);
   await c.from("profiles").update({ soul_being_name: trimmed || null }).eq("id", userId);
 }
 
