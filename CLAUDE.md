@@ -8,6 +8,8 @@ A Next.js 15 + React 19 + Tailwind v4 personal dashboard running at `http://127.
 Kickoff: 2026-04-21. Current live URL (cloudflared tunnel): `https://shorts-visible-overhead-broadband.trycloudflare.com` (per-session; reset on Mac sleep).
 
 ## Current Status
+**Activity Stream shipped (2026-04-29).** PG OS now canonical surface for all agent activity (replacing Notion over time). Migration 006 added agent_runs.summary/body_md/notion_url/model/brief_date + queue_items.run_id FK + telegram_events table. Claude tab gets ACTIVITY sub-section: clickable timeline joining agent_runs ⨯ queue_items ⨯ decisions_log ⨯ telegram_events with inline expand. Runners wire in via `agent-runner.sh` `notify_pgos_run` (auto for `run_agent` users; manual for the 3 bespoke ones: morning-briefing, session-review, enrich-review).
+
 **Phases 1-8 + Recursive Fox tracks A/B/C/D shipped (2026-04-27).** Tab shell, OAuth hardening, mobile-first CSS, Flow tab, Projects tab, Habits wired to HC Supabase, Capture FAB, Home mode, accessibility audit. Phase 8 = Claude tab (self-improvement observatory). **Recursive Fox** then layered on:
 - **Track A (foundation):** Supabase backend + dedicated PG OS project, encrypted tokenStore, queueStore mirror (filesystem still source of truth for Claude Code's queue rule), claudeStore mirror to proposals_log + decisions_log, single-user middleware + unlock page, sqlite fallback when env not set.
 - **Track B (AI co-pilot):** ⌘J slide-in panel, Anthropic streaming with prompt caching, 9 tools (read_ships/queue/calendar/vitals/signals/archive + propose_action/add_ship/add_queue_item).
