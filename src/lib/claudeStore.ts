@@ -91,11 +91,34 @@ async function readJsonlLines<T>(filePath: string): Promise<T[]> {
 }
 
 export async function getProposals(): Promise<Proposal[]> {
+  // Local file first (laptop dev). Fall back to Supabase mirror (Vercel prod).
   try {
     const raw = await fs.readFile(path.join(SI_DIR, "pending-proposals.json"), "utf8");
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Proposal[]) : [];
+    if (Array.isArray(parsed)) return parsed as Proposal[];
   } catch {
+    /* fall through to supabase */
+  }
+  if (!isDbConfigured()) return [];
+  try {
+    const { data, error } = await db()
+      .from(T.proposals_log)
+      .select("proposal_type, category, description, evidence, source, occurrences, proposed_at, action")
+      .is("action", null) // only pending
+      .order("proposed_at", { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      type: r.proposal_type,
+      category: r.category,
+      description: r.description,
+      evidence: r.evidence ?? undefined,
+      source: r.source ?? undefined,
+      occurrences: r.occurrences ?? 1,
+      date: r.proposed_at,
+    })) as Proposal[];
+  } catch (e) {
+    console.error("getProposals supabase fallback failed:", e);
     return [];
   }
 }
@@ -136,10 +159,33 @@ async function mirrorProposalsToSupabase(proposals: Proposal[]): Promise<void> {
 }
 
 export async function getTrustState(): Promise<TrustState | null> {
+  // Local file first. Fall back to Supabase mirror.
   try {
     const raw = await fs.readFile(path.join(SI_DIR, "trust-state.json"), "utf8");
     return JSON.parse(raw) as TrustState;
   } catch {
+    /* fall through to supabase */
+  }
+  if (!isDbConfigured()) return null;
+  try {
+    const { data, error } = await db()
+      .from(T.trust_categories)
+      .select("category, approvals, rejections, threshold, auto_execute, history");
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    const categories: TrustState["categories"] = {};
+    for (const row of data) {
+      categories[row.category] = {
+        approvals: row.approvals ?? 0,
+        rejections: row.rejections ?? 0,
+        threshold: row.threshold ?? 5,
+        auto_execute: row.auto_execute ?? false,
+        history: (row.history ?? []) as TrustState["categories"][string]["history"],
+      };
+    }
+    return { categories, last_updated: new Date().toISOString() };
+  } catch (e) {
+    console.error("getTrustState supabase fallback failed:", e);
     return null;
   }
 }

@@ -27,7 +27,14 @@ const TERMINAL_DECISIONS = new Set(["approved", "deferred", "dismissed", "reject
 // ── Filesystem helpers (filesystem stays source of truth for Claude Code's rule)
 
 async function ensureDir() {
-  await fs.mkdir(QUEUE_DIR, { recursive: true, mode: 0o700 });
+  // Tolerant of read-only filesystems (e.g. Vercel serverless). The reads in
+  // listFsQueue already use .catch(() => []) so a missing dir falls through
+  // to an empty list — only writes need the dir to exist.
+  try {
+    await fs.mkdir(QUEUE_DIR, { recursive: true, mode: 0o700 });
+  } catch {
+    /* read-only fs or permission denied — non-fatal for reads */
+  }
 }
 
 function parseFrontmatter(raw: string): { meta: Record<string, string | string[]>; body: string } {

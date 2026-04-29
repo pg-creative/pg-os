@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { listAgentRuns, type AgentRun } from "./agentRunsStore";
+import { isDbConfigured } from "./db";
 
 const AGENTS_DIR = path.join(os.homedir(), ".claude", "agents");
 const SI_DIR = path.join(os.homedir(), ".claude", "self-improvement", "data");
@@ -172,21 +174,68 @@ function mentionsAgent(body: string, name: string): boolean {
   return re.test(body);
 }
 
+/** Map status strings from agent_runs.status to our 4-tier UI status. */
+function normalizeRunStatus(s: string | null | undefined): "ok" | "error" | "timeout" | "unknown" {
+  if (!s) return "unknown";
+  const lower = s.toLowerCase();
+  if (lower === "ok" || lower === "success" || lower === "completed") return "ok";
+  if (lower === "timeout") return "timeout";
+  if (lower === "error" || lower === "failed" || lower === "fail") return "error";
+  return "unknown";
+}
+
+/** Latest agent_runs row per agent name, indexed by name. Empty map if Supabase unavailable. */
+async function latestRunsByAgent(): Promise<Map<string, AgentRun>> {
+  if (!isDbConfigured()) return new Map();
+  const runs = await listAgentRuns({ days: 30, limit: 500 });
+  const out = new Map<string, AgentRun>();
+  for (const r of runs) {
+    const existing = out.get(r.agent);
+    if (!existing || new Date(r.started_at) > new Date(existing.started_at)) {
+      out.set(r.agent, r);
+    }
+  }
+  return out;
+}
+
 export async function getAgentHealth(): Promise<AgentHealth[]> {
-  const reviewLog = await fs.readFile(path.join(SI_DIR, "review-log.md"), "utf8").catch(() => "");
-  const auditLog = await fs.readFile(path.join(SI_DIR, "weekly-audit-log.md"), "utf8").catch(() => "");
-  const memLog = await fs.readFile(path.join(SI_DIR, "memory-hygiene-log.md"), "utf8").catch(() => "");
+  // Prefer Supabase agent_runs (works on Vercel). Fall back to local logs (dev).
+  const supabaseRuns = await latestRunsByAgent();
+
+  // Local logs read in parallel — only used if Supabase has no entry for an agent.
+  // .catch(() => "") makes these no-op on serverless where the files don't exist.
+  const [reviewLog, auditLog, memLog] = await Promise.all([
+    fs.readFile(path.join(SI_DIR, "review-log.md"), "utf8").catch(() => ""),
+    fs.readFile(path.join(SI_DIR, "weekly-audit-log.md"), "utf8").catch(() => ""),
+    fs.readFile(path.join(SI_DIR, "memory-hygiene-log.md"), "utf8").catch(() => ""),
+  ]);
 
   const out: AgentHealth[] = [];
   for (const name of Object.keys(META)) {
     const { description, model } = await readDefinitionFile(name);
     const meta = META[name];
 
-    let log = reviewLog;
-    if (name === "weekly-meta-audit") log = auditLog || reviewLog;
-    if (name === "memory-hygiene") log = memLog || reviewLog;
+    let lastRun: string | null = null;
+    let status: AgentHealth["lastStatus"] = "unknown";
+    let error: string | undefined;
 
-    const { lastRun, status, error } = findAgentMentions(log, name);
+    const sbRun = supabaseRuns.get(name);
+    if (sbRun) {
+      lastRun = sbRun.started_at;
+      status = normalizeRunStatus(sbRun.status);
+      if (status === "error" || status === "timeout") {
+        error = sbRun.summary ?? sbRun.log_excerpt ?? sbRun.status ?? undefined;
+      }
+    } else {
+      // Fall back to local logs (dev environment)
+      let log = reviewLog;
+      if (name === "weekly-meta-audit") log = auditLog || reviewLog;
+      if (name === "memory-hygiene") log = memLog || reviewLog;
+      const fsResult = findAgentMentions(log, name);
+      lastRun = fsResult.lastRun;
+      status = fsResult.status;
+      error = fsResult.error;
+    }
 
     out.push({
       name,
