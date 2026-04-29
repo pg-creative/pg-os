@@ -36,6 +36,10 @@ const PASSTHROUGH_PREFIXES = [
   // Vercel cron jobs don't carry a user cookie, so let them through to the
   // route handler — it will return 401 on its own if the bearer is wrong/missing.
   "/api/cron/",
+  // Service worker must be reachable unauthenticated so navigator.serviceWorker
+  // .register('/sw.js') succeeds before the user has a cookie. The SW itself
+  // contains no secrets — just push notification handlers.
+  "/sw.js",
   "/_next",
   "/favicon",
   "/unlock",
