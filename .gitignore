@@ -27,3 +27,4 @@ screenshots/
 
 # Tool caches
 supabase/.temp/
+.vercel
