@@ -325,3 +325,212 @@
     animation: none !important;
   }
 }
+
+/* ---------- Inline name affordance (SoulBeingCard) ---------- */
+
+.avNameUnnamed {
+  font-size: 16px;
+  font-style: italic;
+  color: var(--fg-2, #b8a78a);
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed rgba(218, 165, 90, 0.28);
+  padding: 2px 6px;
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 32px;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.avNameUnnamed:hover,
+.avNameUnnamed:focus-visible {
+  color: var(--fg, #f5e9d6);
+  border-bottom-color: rgba(218, 165, 90, 0.6);
+  outline: none;
+}
+
+.avNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.avNameText {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--fg, #f5e9d6);
+  user-select: none;
+  cursor: default;
+}
+
+.avNameEditBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--fg-2, #b8a78a);
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 140ms ease, background 140ms ease;
+  flex-shrink: 0;
+}
+
+.avNameEditBtn:hover,
+.avNameEditBtn:focus-visible {
+  opacity: 1;
+  background: rgba(218, 165, 90, 0.12);
+  outline: none;
+}
+
+/* ---------- NamingSheet ---------- */
+
+.avNamingSheet {
+  /* Override generic sheet padding for the naming variant */
+  padding: 28px 24px 32px;
+}
+
+.avNamingHeadline {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--serif, Georgia, serif);
+  margin: 0 0 10px;
+  color: var(--fg, #f5e9d6);
+}
+
+.avNamingSubhead {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg-2, #b8a78a);
+  margin: 0 0 22px;
+  font-family: var(--serif, Georgia, serif);
+}
+
+.avNamingInputWrap {
+  margin: 0 0 20px;
+}
+
+.avNamingInput {
+  display: block;
+  width: 100%;
+  font-size: 20px;
+  font-family: var(--serif, Georgia, serif);
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(218, 165, 90, 0.3);
+  border-radius: 10px;
+  color: var(--fg, #f5e9d6);
+  padding: 12px 14px;
+  box-sizing: border-box;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.avNamingInput::placeholder {
+  color: rgba(184, 167, 138, 0.5);
+  font-style: italic;
+}
+
+.avNamingInput:focus {
+  outline: none;
+  border-color: rgba(240, 181, 87, 0.65);
+  box-shadow: 0 0 0 3px rgba(240, 181, 87, 0.12);
+}
+
+.avNamingInput:disabled {
+  opacity: 0.6;
+}
+
+.avNamingError {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #f0906a;
+  font-style: italic;
+}
+
+.avNamingActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.avNamingSave {
+  width: 100%;
+  padding: 13px 20px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #f0b557 0%, #d4893a 100%);
+  color: #1a0e04;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 48px;
+  transition: filter 140ms ease, opacity 140ms ease;
+}
+
+.avNamingSave:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.avNamingSave:focus-visible {
+  outline: 2px solid var(--accent-2, #f0b557);
+  outline-offset: 2px;
+}
+
+.avNamingSave:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.avNamingSkip {
+  width: 100%;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(184, 167, 138, 0.2);
+  background: transparent;
+  color: var(--fg-2, #b8a78a);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 44px;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.avNamingSkip:hover:not(:disabled) {
+  border-color: rgba(184, 167, 138, 0.45);
+  color: var(--fg, #f5e9d6);
+}
+
+.avNamingSkip:focus-visible {
+  outline: 2px solid var(--accent-2, #f0b557);
+  outline-offset: 2px;
+}
+
+/* ---------- Rename link inside CustomizeSheet ---------- */
+
+.avRenameLink {
+  display: block;
+  margin: -4px 0 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: rgba(240, 181, 87, 0.75);
+  font: inherit;
+  font-size: 13px;
+  font-style: italic;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(240, 181, 87, 0.35);
+  text-underline-offset: 3px;
+  transition: color 140ms ease;
+}
+
+.avRenameLink:hover,
+.avRenameLink:focus-visible {
+  color: rgba(240, 181, 87, 1);
+  outline: none;
+}

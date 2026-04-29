@@ -9,13 +9,14 @@ interface CustomizeSheetProps {
   catalog: Cosmetic[];
   onClose: () => void;
   onEquip: (slot: CosmeticSlot, key: string | null) => Promise<void>;
+  onRename?: () => void;
 }
 
 /**
  * Bottom-sheet customizer. Shows ALL cosmetics, grouped by slot. Owned
  * items are tappable. Locked items are dimmed with "earn from a chest" hint.
  */
-export function CustomizeSheet({ state, catalog, onClose, onEquip }: CustomizeSheetProps) {
+export function CustomizeSheet({ state, catalog, onClose, onEquip, onRename }: CustomizeSheetProps) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -53,6 +54,16 @@ export function CustomizeSheet({ state, catalog, onClose, onEquip }: CustomizeSh
       <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <h2 className={styles.sheetTitle}>Customize your soul-being</h2>
         <p className={styles.sheetSubtitle}>Earn cosmetics from chests, then slot them here.</p>
+
+        {onRename && (
+          <button
+            type="button"
+            className={styles.avRenameLink}
+            onClick={() => { onClose(); setTimeout(onRename, 60); }}
+          >
+            Rename your soul-being
+          </button>
+        )}
 
         {slots.map((slot) => {
           const items = catalog.filter((c) => c.slot === slot);
