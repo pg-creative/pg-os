@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useIsCloud } from "../../useIsCloud";
 
 type OverviewData = {
   proposalCount: number;
@@ -31,6 +32,7 @@ export function ClaudeOverview() {
   const [data, setData] = useState<OverviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
+  const isCloud = useIsCloud();
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -151,9 +153,16 @@ export function ClaudeOverview() {
       </div>
 
       <div className="cl-overview-actions">
-        <button className="cl-btn cl-btn-primary" onClick={launchClaude} disabled={launching}>
-          {launching ? "Opening…" : "Open Claude Code →"}
-        </button>
+        {isCloud ? (
+          <span className="cl-laptop-only-hint">
+            Open <strong>Claude Code</strong> from your laptop —{" "}
+            <code>pgos</code> in terminal opens dev server + browser.
+          </span>
+        ) : (
+          <button className="cl-btn cl-btn-primary" onClick={launchClaude} disabled={launching}>
+            {launching ? "Opening…" : "Open Claude Code →"}
+          </button>
+        )}
       </div>
     </section>
   );

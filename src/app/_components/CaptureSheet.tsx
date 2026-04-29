@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useVoiceCapture } from "./useVoiceCapture";
 import { useMode } from "./ModeProvider";
+import { useIsCloud } from "./useIsCloud";
 import { MODE_CONFIG } from "../../lib/modes";
 
 type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal" | "todo";
@@ -44,8 +45,16 @@ interface StatusMsg {
   type: "success" | "error";
 }
 
+// Destinations that write to the local laptop filesystem and aren't usable
+// from cloud (Vercel) deployments. The capture sheet hides these in cloud mode.
+const LAPTOP_ONLY_DESTINATIONS: Destination[] = ["essay"];
+
 export function CaptureSheet({ onClose }: CaptureSheetProps) {
   const { brand } = useMode();
+  const isCloud = useIsCloud();
+  const visibleDestinations = isCloud
+    ? DESTINATIONS.filter((d) => !LAPTOP_ONLY_DESTINATIONS.includes(d.id))
+    : DESTINATIONS;
 
   // Default destination driven by brand mode; user can override freely
   const brandDefaultDest: Destination | null = brand
@@ -251,7 +260,7 @@ export function CaptureSheet({ onClose }: CaptureSheetProps) {
 
         {/* Destination grid */}
         <div className="cap-dest-grid">
-          {DESTINATIONS.map((dest) => {
+          {visibleDestinations.map((dest) => {
             const isSending = sending === dest.id;
             const isDisabled = isEmpty || !!sending;
             const isBrandDefault = brandDefaultDest === dest.id;

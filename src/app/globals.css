@@ -2120,6 +2120,49 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
   border-radius:6px; border-left:2px solid var(--accent);
 }
 
+/* ── Cloud-mode indicators ──────────────────────────────────
+   Surface where laptop-only actions are gated when running on
+   the deployed (Vercel) URL. */
+.ver-cloud{
+  margin-left:6px;
+  padding:1px 6px;
+  font-size:9px; letter-spacing:0.18em;
+  border-radius:999px;
+  background:rgba(127,175,223,0.14);
+  color:var(--accent-2);
+  border:1px solid rgba(127,175,223,0.32);
+}
+.ver-local{
+  margin-left:6px;
+  padding:1px 6px;
+  font-size:9px; letter-spacing:0.18em;
+  border-radius:999px;
+  background:rgba(143,189,138,0.12);
+  color:rgba(143,189,138,0.85);
+  border:1px solid rgba(143,189,138,0.30);
+}
+.cl-agent-laptop-only{
+  font-family:var(--mono),monospace;
+  font-size:10px; letter-spacing:0.12em;
+  color:var(--muted);
+  font-style:italic;
+  opacity:0.75;
+}
+.cl-laptop-only-hint{
+  font-family:var(--serif),serif;
+  font-size:13px; font-style:italic;
+  color:var(--fg-dim);
+  line-height:1.5;
+}
+.cl-laptop-only-hint code{
+  font-family:var(--mono),monospace;
+  font-style:normal;
+  background:rgba(255,255,255,0.06);
+  padding:1px 6px;
+  border-radius:4px;
+  font-size:11.5px;
+}
+
 /* ── Signals ──────────────────────────────────────────────── */
 .cl-signal-chart{
   display:grid; grid-template-columns:repeat(7,1fr); gap:8px;

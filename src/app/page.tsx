@@ -9,6 +9,7 @@ import { CaptureFAB } from "./_components/CaptureFAB";
 import { BrandModePicker } from "./_components/BrandModePicker";
 import { CopilotLauncher } from "./_components/Copilot/CopilotPanel";
 import { useActiveTab } from "./_components/useActiveTab";
+import { useIsCloud } from "./_components/useIsCloud";
 import { HomeView } from "./_components/views/HomeView";
 import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
@@ -17,6 +18,7 @@ import { ClaudeView } from "./_components/views/ClaudeView";
 
 export default function Page() {
   const { active } = useActiveTab();
+  const isCloud = useIsCloud();
   return (
     <>
       <AmbientParticles />
@@ -28,6 +30,8 @@ export default function Page() {
             <span>PG OS</span>
             <span className="ver">
               // v0.3 // <ModeLabel /> · <AutoBadge />
+              {isCloud === true && <span className="ver-cloud" title="Cloud mode — laptop-only actions are gated. Open 127.0.0.1:3030 from your Mac for full access."> · CLOUD</span>}
+              {isCloud === false && <span className="ver-local" title="Local mode — full access including subprocess spawning."> · LOCAL</span>}
             </span>
           </div>
           <div className="telemetry">

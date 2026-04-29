@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useIsCloud } from "../../useIsCloud";
 
 type AgentHealth = {
   name: string;
@@ -39,6 +40,7 @@ export function ClaudeAgents() {
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const isCloud = useIsCloud();
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -105,13 +107,19 @@ export function ClaudeAgents() {
             </div>
             <div className="cl-agent-bottom">
               <span className="cl-agent-last">last: {relDate(a.lastRun)}</span>
-              <button
-                className="cl-btn cl-btn-muted cl-btn-small"
-                onClick={() => runAgent(a.name)}
-                disabled={running === a.name}
-              >
-                {running === a.name ? "…" : "Run Now →"}
-              </button>
+              {isCloud ? (
+                <span className="cl-agent-laptop-only" title="Agent triggers spawn local Claude Code — open from your laptop at 127.0.0.1:3030 to run">
+                  laptop only
+                </span>
+              ) : (
+                <button
+                  className="cl-btn cl-btn-muted cl-btn-small"
+                  onClick={() => runAgent(a.name)}
+                  disabled={running === a.name}
+                >
+                  {running === a.name ? "…" : "Run Now →"}
+                </button>
+              )}
             </div>
             {a.lastError && (
               <p className="cl-agent-error">{a.lastError}</p>
