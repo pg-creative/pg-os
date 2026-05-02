@@ -8,6 +8,8 @@ A Next.js 15 + React 19 + Tailwind v4 personal dashboard running at `http://127.
 Kickoff: 2026-04-21. Current live URL (cloudflared tunnel): `https://shorts-visible-overhead-broadband.trycloudflare.com` (per-session; reset on Mac sleep).
 
 ## Current Status
+**Projects drill-in shipped (2026-05-02).** Master grid cards link into `/projects/[id]` route showing current state, blockers, action items, roadmap, spec docs, recent commits. Realtime via fs.watch on `.git/logs/HEAD`, `.git/index`, and project MEMORY.md files, debounced 250ms through SSE at `/api/projects/events`. Both grid and detail page update without reload — committing in another terminal updates the open dashboard inside ~1.5s. URL-synced tab state (`?tab=…` deep links + browser back/forward). Next 16 `allowedDevOrigins` config added so 127.0.0.1 hydrates correctly (cloudflared phone tunnel restored). Projects view writes BLOCKERS / ACTION ITEMS / ROADMAP from MEMORY.md headers — populate per-project memory to fill the columns.
+
 **Activity Stream shipped (2026-04-29).** PG OS now canonical surface for all agent activity (replacing Notion over time). Migration 006 added agent_runs.summary/body_md/notion_url/model/brief_date + queue_items.run_id FK + telegram_events table. Claude tab gets ACTIVITY sub-section: clickable timeline joining agent_runs ⨯ queue_items ⨯ decisions_log ⨯ telegram_events with inline expand. Runners wire in via `agent-runner.sh` `notify_pgos_run` (auto for `run_agent` users; manual for the 3 bespoke ones: morning-briefing, session-review, enrich-review).
 
 **Phases 1-8 + Recursive Fox tracks A/B/C/D shipped (2026-04-27).** Tab shell, OAuth hardening, mobile-first CSS, Flow tab, Projects tab, Habits wired to HC Supabase, Capture FAB, Home mode, accessibility audit. Phase 8 = Claude tab (self-improvement observatory). **Recursive Fox** then layered on:
@@ -52,6 +54,7 @@ src/app/
 │   ├── LocationLive.tsx       ← Geolocation + reverse geocode + weather
 │   └── views/                 ← HomeView, HabitsView, ProjectsView, FlowView, ClaudeView
 │       └── claude/            ← Overview, Proposals, Trust, Agents, Signals, Skills, Archive
+├── projects/[id]/page.tsx     ← Project drill-in (hero + sections + commits)
 ├── api/
 │   ├── auth/{google,spotify,whoop}/{route,callback} ← OAuth flows
 │   ├── calendar/events        ← Google Calendar events
@@ -61,6 +64,8 @@ src/app/
 │   ├── ships                  ← ship log GET + POST
 │   ├── queue                  ← approval queue GET/POST/DELETE
 │   ├── projects               ← project state (git + memory + queue)
+│   ├── projects/[id]          ← per-project detail (sections + commits + branches)
+│   ├── projects/events        ← SSE channel; fs.watch on .git/logs/HEAD per project
 │   ├── launch                 ← AppleScript → Ghostty launcher
 │   ├── capture                ← route capture to ship/queue/essay/linkedin/yuriko/hc-journal
 │   ├── habits                 ← HC habits + journal read/write
