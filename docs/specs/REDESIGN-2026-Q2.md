@@ -441,10 +441,10 @@ A: 11500   S: 14000   SSS: 18000
 ## 3. Roadmap (3 weeks, 3 sessions/week)
 
 ### Week 01 — *Unlock: Bookends*
-- [ ] T-01 Empty State pass *(1)*
-- [ ] T-02 Sound v0 *(1)*
-- [ ] T-10 Morning Briefing *(2)* — start, finish next week if needed
-- **Outcome:** the day has a front door.
+- [x] T-01 Empty State pass *(1)* — `6949c47` · 2026-05-02
+- [x] T-02 Sound v0 *(1)* — `e4f3260` · 2026-05-02
+- [x] T-10 Morning Briefing *(2)* — `f3c51d5` · 2026-05-02 · screens in `docs/screenshots/redesign-2026-q2/w01/`
+- **Outcome:** the day has a front door. ✓
 
 ### Week 02 — *Unlock: Command*
 - [ ] T-04 ⌘K Palette *(2)*
