@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ModeProvider } from "./_components/ModeProvider";
 import { TabProvider } from "./_components/useActiveTab";
+import { SoundProvider } from "./_components/SoundProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -32,7 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ModeProvider>
-          <TabProvider>{children}</TabProvider>
+          <SoundProvider>
+            <TabProvider>{children}</TabProvider>
+          </SoundProvider>
         </ModeProvider>
       </body>
     </html>

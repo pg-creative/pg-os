@@ -46,19 +46,48 @@ const PASSTHROUGH_PREFIXES = [
   "/manifest.json",
 ];
 
-export function middleware(req: NextRequest) {
-  const secret = process.env.PGOS_SHARED_SECRET;
-  if (!secret) return NextResponse.next();
+function briefingCookieName(d: Date): string {
+  return `pg-os-briefing-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
 
+/**
+ * Returns a redirect response to /briefing if the morning gate fires:
+ *   pathname === "/", local hour ∈ [6, 10), and no per-day briefing cookie.
+ * Returns null otherwise. Caller decides authentication state.
+ */
+function maybeMorningRedirect(req: NextRequest): NextResponse | null {
+  const { pathname } = req.nextUrl;
+  if (pathname !== "/") return null;
+  const now = new Date();
+  const hour = now.getHours();
+  if (hour < 6 || hour >= 10) return null;
+  const cookieName = briefingCookieName(now);
+  if (req.cookies.get(cookieName)) return null;
+  const briefingUrl = req.nextUrl.clone();
+  briefingUrl.pathname = "/briefing";
+  briefingUrl.search = "";
+  return NextResponse.redirect(briefingUrl);
+}
+
+export function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
+  // OAuth callbacks + static assets always pass through, regardless of auth.
   if (PASSTHROUGH_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+
+  const secret = process.env.PGOS_SHARED_SECRET;
+
+  // Dev mode (no secret) — fire morning redirect, then pass everything else.
+  if (!secret) {
+    const redirect = maybeMorningRedirect(req);
+    if (redirect) return redirect;
     return NextResponse.next();
   }
 
   const keyParam = searchParams.get("key");
   if (keyParam && keyParam === secret) {
-    // Set cookie, redirect to clean URL
     const cleanUrl = req.nextUrl.clone();
     cleanUrl.searchParams.delete("key");
     const res = NextResponse.redirect(cleanUrl);
@@ -73,7 +102,12 @@ export function middleware(req: NextRequest) {
   }
 
   const cookie = req.cookies.get(COOKIE_NAME)?.value;
-  if (cookie === secret) return NextResponse.next();
+  if (cookie === secret) {
+    // Authed — fire morning redirect on root, otherwise pass through.
+    const redirect = maybeMorningRedirect(req);
+    if (redirect) return redirect;
+    return NextResponse.next();
+  }
 
   // Not authenticated. Send to /unlock with a hint to use ?key=
   const unlock = req.nextUrl.clone();

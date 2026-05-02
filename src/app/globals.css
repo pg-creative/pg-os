@@ -4846,3 +4846,190 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
 @media (prefers-reduced-motion:reduce){
   .sound-toggle{transition:none;}
 }
+
+/* --- T-10 · Briefing shell ---
+ * Full-bleed Ghibli doorway for /briefing (and later /evening).
+ * Uses palette tokens (--accent, --accent-2, --bg) so it adapts to
+ * Howl's / Totoro / Mononoke without hard-coded colors. */
+.briefing-shell{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:32px clamp(20px, 5vw, 64px);
+  background:
+    radial-gradient(ellipse at 22% 28%, color-mix(in srgb, var(--accent-2) 18%, transparent) 0%, transparent 55%),
+    radial-gradient(ellipse at 78% 80%, color-mix(in srgb, var(--accent) 14%, transparent) 0%, transparent 60%),
+    var(--bg);
+  z-index:90;
+  overflow:hidden;
+}
+.briefing-glow{
+  position:absolute;
+  inset:-20% -10% auto -10%;
+  height:60%;
+  background:radial-gradient(ellipse at center top, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 70%);
+  filter:blur(40px);
+  pointer-events:none;
+  opacity:0.85;
+}
+.briefing-content{
+  position:relative;
+  z-index:1;
+  width:100%;
+  max-width:640px;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+.briefing-greeting{
+  font-family:'Cormorant Garamond', 'EB Garamond', serif;
+  font-weight:500;
+  font-size:clamp(40px, 6vw, 64px);
+  line-height:1.05;
+  letter-spacing:-0.01em;
+  color:var(--fg);
+  margin:0;
+}
+.briefing-greeting.briefing-loading{
+  color:var(--fg-2);
+  font-size:clamp(32px, 4vw, 44px);
+  letter-spacing:0.4em;
+}
+.briefing-subline{
+  font-family:'JetBrains Mono', 'Space Mono', monospace;
+  font-size:11px;
+  letter-spacing:0.18em;
+  text-transform:uppercase;
+  color:var(--fg-2);
+  margin:0;
+}
+.briefing-narration{
+  font-family:'EB Garamond', 'Cormorant Garamond', serif;
+  font-size:clamp(17px, 1.6vw, 19px);
+  line-height:1.7;
+  color:var(--fg);
+}
+.briefing-narration p{
+  margin:0 0 14px 0;
+}
+.briefing-narration p:last-child{
+  margin-bottom:0;
+}
+.briefing-narration em{
+  font-style:italic;
+  color:var(--accent-2);
+  font-weight:500;
+}
+.briefing-actions{
+  list-style:none;
+  margin:6px 0 0 0;
+  padding:0 0 0 14px;
+  border-left:1px solid color-mix(in srgb, var(--accent-2) 40%, transparent);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.briefing-action{
+  font-family:'JetBrains Mono', 'Space Mono', monospace;
+  font-size:11px;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:var(--fg-2);
+}
+.briefing-action-link{
+  color:var(--fg);
+  text-decoration:underline;
+  text-decoration-style:dashed;
+  text-decoration-color:color-mix(in srgb, var(--accent-2) 60%, transparent);
+  text-underline-offset:4px;
+  transition:color 0.15s, text-decoration-color 0.15s;
+}
+.briefing-action-link:hover{
+  color:var(--accent-2);
+  text-decoration-color:var(--accent-2);
+}
+.briefing-action-label{
+  color:var(--fg-2);
+}
+.briefing-cta-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+  flex-wrap:wrap;
+}
+.briefing-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 18px;
+  border:1px solid var(--ink-3);
+  background:transparent;
+  color:var(--fg);
+  font-family:'JetBrains Mono', 'Space Mono', monospace;
+  font-size:11px;
+  letter-spacing:0.16em;
+  text-transform:uppercase;
+  border-radius:999px;
+  cursor:pointer;
+  transition:border-color 0.15s, color 0.15s, background 0.15s, transform 0.15s;
+}
+.briefing-btn:hover{
+  border-color:var(--accent-2);
+  color:var(--accent-2);
+}
+.briefing-btn:focus-visible{
+  outline:2px solid var(--accent-2);
+  outline-offset:2px;
+}
+.briefing-btn:active{
+  transform:translateY(1px);
+}
+.briefing-btn[disabled]{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+.briefing-btn.primary{
+  border-color:var(--accent-2);
+  color:var(--bg);
+  background:color-mix(in srgb, var(--accent-2) 80%, var(--fg));
+}
+.briefing-btn.primary:hover{
+  background:var(--accent-2);
+  color:var(--bg);
+}
+.briefing-btn.ghost{
+  color:var(--fg-2);
+}
+.briefing-kbd{
+  font-family:'JetBrains Mono', monospace;
+  font-size:10px;
+  letter-spacing:0.05em;
+  padding:2px 6px;
+  border:1px solid currentColor;
+  border-radius:3px;
+  opacity:0.65;
+}
+.briefing-fallback-note{
+  font-family:'JetBrains Mono', monospace;
+  font-size:10px;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  color:var(--fg-2);
+  margin:14px 0 0 0;
+}
+.briefing-fallback-note em{
+  font-style:italic;
+  color:var(--accent-2);
+}
+@media (max-width: 680px){
+  .briefing-shell{padding:24px 20px;}
+  .briefing-cta-row{flex-direction:column; align-items:stretch;}
+  .briefing-btn{justify-content:center;}
+}
+@media (prefers-reduced-motion:reduce){
+  .briefing-btn{transition:none;}
+  .briefing-action-link{transition:none;}
+}

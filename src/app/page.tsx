@@ -8,7 +8,7 @@ import { TabBar } from "./_components/TabBar";
 import { CaptureFAB } from "./_components/CaptureFAB";
 import { BrandModePicker } from "./_components/BrandModePicker";
 import { CopilotLauncher } from "./_components/Copilot/CopilotPanel";
-import { SoundProvider, SoundToggle } from "./_components/SoundProvider";
+import { SoundToggle } from "./_components/SoundProvider";
 import { useActiveTab } from "./_components/useActiveTab";
 import { useIsCloud } from "./_components/useIsCloud";
 import { HomeView } from "./_components/views/HomeView";
@@ -21,7 +21,7 @@ export default function Page() {
   const { active } = useActiveTab();
   const isCloud = useIsCloud();
   return (
-    <SoundProvider>
+    <>
       <AmbientParticles />
       <div className="shell">
         {/* TOP BAR */}
@@ -63,6 +63,6 @@ export default function Page() {
       <ModeSwitcher />
       <CaptureFAB />
       <CopilotLauncher />
-    </SoundProvider>
+    </>
   );
 }
