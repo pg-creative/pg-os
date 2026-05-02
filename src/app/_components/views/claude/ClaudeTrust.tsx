@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { TrustToggle } from "../../Claude/TrustToggle";
+import { EmptyState } from "../../EmptyState";
 
 type TrustCategory = {
   approvals: number;
@@ -54,7 +55,12 @@ export function ClaudeTrust() {
       {error && <span className="flow-error">{error}</span>}
 
       {!error && cats.length === 0 && (
-        <p className="cl-empty">No trust state yet. The session-review agent will seed this on first run.</p>
+        <EmptyState
+          verb="Seed"
+          explanation="Claude hasn't seen <em>enough</em> sessions to model your trust map yet."
+          glyph="○"
+          variant="small"
+        />
       )}
 
       {cats.length > 0 && (

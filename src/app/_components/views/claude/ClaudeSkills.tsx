@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState } from "../../EmptyState";
 
 type TopSkill = { name: string; count: number };
 type Rule = { file: string; title: string };
@@ -43,7 +44,14 @@ export function ClaudeSkills() {
       <div className="cl-skills-grid">
         <div className="cl-skills-col">
           <h3 className="cl-col-head">Top Skills</h3>
-          {data && data.topSkills.length === 0 && <p className="cl-empty-small">No skill events yet.</p>}
+          {data && data.topSkills.length === 0 && (
+            <EmptyState
+              verb="Invoke"
+              explanation="No skill has fired in the <em>recent</em> window."
+              glyph="○"
+              variant="small"
+            />
+          )}
           <ul className="cl-skill-rank">
             {data?.topSkills.map((s) => (
               <li key={s.name} className="cl-skill-item">
@@ -59,7 +67,14 @@ export function ClaudeSkills() {
 
         <div className="cl-skills-col">
           <h3 className="cl-col-head">Active Rules</h3>
-          {data && data.rules.length === 0 && <p className="cl-empty-small">No rules in ~/.claude/rules/.</p>}
+          {data && data.rules.length === 0 && (
+            <EmptyState
+              verb="Write"
+              explanation="Drop a rule into <em>~/.claude/rules/</em> to teach Claude a new constraint."
+              glyph="○"
+              variant="small"
+            />
+          )}
           <ul className="cl-rule-list">
             {data?.rules.map((r) => (
               <li key={r.file} className="cl-rule-item">

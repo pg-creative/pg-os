@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { EmptyState } from "../../EmptyState";
 
 type ArchiveStats = {
   totalConversations: number;
@@ -86,10 +87,12 @@ export function ClaudeArchive() {
           <span>06 // ARCHIVE</span>
           <span className="cl-tag-muted">missing</span>
         </div>
-        <p className="cl-empty">
-          Web chat archive not found at <code>~/CEREBRUM/claude-web-history/db/archive.db</code>.
-          Run <code>node scripts/ingest.mjs</code> in <code>claude-web-history/</code> to set it up.
-        </p>
+        <EmptyState
+          verb="Ingest"
+          explanation="The web chat archive isn't <em>indexed</em> yet — run the ingest script to build it."
+          glyph="○"
+          variant="small"
+        />
       </section>
     );
   }
@@ -145,7 +148,12 @@ export function ClaudeArchive() {
       </ul>
 
       {items.length === 0 && !searching && (
-        <p className="cl-empty-small">No conversations match.</p>
+        <EmptyState
+          verb="Search"
+          explanation="Nothing matches that <em>query</em> — try fewer or different keywords."
+          glyph="○"
+          variant="small"
+        />
       )}
     </section>
   );

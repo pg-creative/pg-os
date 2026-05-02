@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState } from "../../EmptyState";
 
 type Proposal = {
   type: string;
@@ -66,7 +67,12 @@ export function ClaudeProposals() {
       {error && <span className="flow-error">{error}</span>}
 
       {!loading && proposals.length === 0 && (
-        <p className="cl-empty">No pending proposals — the system is running clean. ✓</p>
+        <EmptyState
+          verb="Clean"
+          explanation="Nothing waiting on you — the queue is <em>empty</em>."
+          glyph="○"
+          variant="small"
+        />
       )}
 
       {proposals.length > 0 && (

@@ -4724,3 +4724,83 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
   z-index:50;
   box-shadow:0 6px 24px rgba(0,0,0,0.4);
 }
+
+/* === Redesign 2026-Q2 === */
+
+/* --- T-01 · EmptyState ---
+ * Verb-first empty states. One italic-accent word per explanation.
+ * Dark variant only (the OS is always dark). */
+.empty-state{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:10px;
+  padding:24px 20px;
+  border:1px solid var(--ink-3);
+  border-radius:6px;
+  background:var(--card);
+  max-width:540px;
+}
+.empty-state-small{
+  padding:14px 16px;
+  gap:6px;
+  max-width:none;
+}
+.empty-state-glyph{
+  font-size:18px;
+  line-height:1;
+  color:var(--accent-2);
+  opacity:0.85;
+}
+.empty-state-small .empty-state-glyph{
+  font-size:14px;
+}
+.empty-state-verb{
+  margin:0;
+  font-family:var(--serif),Georgia,serif;
+  font-weight:500;
+  font-size:18px;
+  letter-spacing:0;
+  color:var(--fg);
+}
+.empty-state-small .empty-state-verb{
+  font-size:14px;
+}
+.empty-state-explanation{
+  margin:0;
+  font-family:var(--sans),system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.55;
+  color:var(--fg-2);
+}
+.empty-state-explanation em{
+  font-style:italic;
+  color:var(--accent-2);
+  font-weight:500;
+}
+.empty-state-cta{
+  margin-top:6px;
+  padding:7px 14px;
+  background:transparent;
+  border:1px solid var(--ink-3);
+  border-radius:3px;
+  font-family:var(--mono),monospace;
+  font-size:11px;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  color:var(--fg);
+  cursor:pointer;
+  transition:border-color 0.15s, background 0.15s;
+}
+.empty-state-cta:hover{
+  border-color:var(--accent-2);
+  background:var(--ink-2);
+}
+.empty-state-cta:focus-visible{
+  outline:2px solid var(--accent-2);
+  outline-offset:2px;
+}
+@media (prefers-reduced-motion:reduce){
+  .empty-state-cta{transition:none;}
+}
+

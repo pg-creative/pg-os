@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useIsCloud } from "../../useIsCloud";
+import { EmptyState } from "../../EmptyState";
 
 type OverviewData = {
   proposalCount: number;
@@ -70,7 +71,16 @@ export function ClaudeOverview() {
   }, []);
 
   if (error) return <div className="card cl-card"><span className="flow-error">{error}</span></div>;
-  if (!data) return <div className="card cl-card cl-loading">Loading overview…</div>;
+  if (!data) return (
+    <div className="card cl-card">
+      <EmptyState
+        verb="Reading"
+        explanation="Pulling the last <em>seven</em> days of signals from disk."
+        glyph="◐"
+        variant="small"
+      />
+    </div>
+  );
 
   const totalSignals = data.recentCorrections + data.recentConfirmations;
   const corrPct = totalSignals ? (data.recentCorrections / totalSignals) * 100 : 0;
