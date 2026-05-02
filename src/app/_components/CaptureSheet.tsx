@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useVoiceCapture } from "./useVoiceCapture";
 import { useMode } from "./ModeProvider";
 import { useIsCloud } from "./useIsCloud";
+import { useSound } from "./SoundProvider";
 import { MODE_CONFIG } from "../../lib/modes";
 
 type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal" | "todo";
@@ -71,6 +72,7 @@ export function CaptureSheet({ onClose }: CaptureSheetProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const voice = useVoiceCapture();
+  const { play } = useSound();
 
   // Sync voice transcript into textarea
   useEffect(() => {
@@ -160,6 +162,7 @@ export function CaptureSheet({ onClose }: CaptureSheetProps) {
       const data = await res.json();
 
       if (data.ok) {
+        play(dest.id === "ship" ? "ship" : "capture");
         showStatus({ text: `✓ ${data.detail ?? `Sent to ${dest.label}`}`, type: "success" });
         setText("");
         setTitle("");
@@ -173,7 +176,7 @@ export function CaptureSheet({ onClose }: CaptureSheetProps) {
     } finally {
       setSending(null);
     }
-  }, [text, title, context, sending, voice, showStatus]);
+  }, [text, title, context, sending, voice, showStatus, play]);
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);

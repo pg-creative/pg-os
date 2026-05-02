@@ -4804,3 +4804,45 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
   .empty-state-cta{transition:none;}
 }
 
+/* --- T-02 · Sound toggle pill ---
+ * Lives in the topbar telemetry block.  Mono-cap mini-pill matching
+ * BrandModePicker / HomeModeToggle. */
+.sound-toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  background:transparent;
+  border:1px solid var(--ink-3);
+  border-radius:999px;
+  font-family:var(--mono),monospace;
+  font-size:10px;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  color:var(--fg-2);
+  cursor:pointer;
+  transition:border-color 0.15s, color 0.15s, background 0.15s;
+}
+.sound-toggle:hover{
+  border-color:var(--accent-2);
+  color:var(--fg);
+}
+.sound-toggle.on{
+  border-color:var(--accent-2);
+  color:var(--accent-2);
+  background:color-mix(in srgb, var(--accent-2) 8%, transparent);
+}
+.sound-toggle:focus-visible{
+  outline:2px solid var(--accent-2);
+  outline-offset:2px;
+}
+.sound-toggle-icon{
+  font-size:12px;
+  line-height:1;
+}
+.sound-toggle-label{
+  font-size:9px;
+}
+@media (prefers-reduced-motion:reduce){
+  .sound-toggle{transition:none;}
+}
