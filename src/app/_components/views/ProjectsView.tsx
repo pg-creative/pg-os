@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { SparkleCorner, CardGlyph } from "../CardGlyph";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
@@ -25,6 +26,8 @@ interface Project {
   memorySnippet: string | null;
   queueCount: number;
   daysUntilDeadline: number | null;
+  topBlocker: string | null;
+  topActions: { id: string; title: string }[];
 }
 
 interface LaunchResult {
@@ -88,7 +91,9 @@ function ProjectCard({ project, num }: { project: Project; num: number }) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleLaunch = useCallback(async () => {
+  const handleLaunch = useCallback(async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     setLaunching(true);
     try {
       const res = await fetch("/api/launch", {
@@ -118,7 +123,7 @@ function ProjectCard({ project, num }: { project: Project; num: number }) {
   const pad = String(num).padStart(2, "0");
 
   return (
-    <div className="card pr-card">
+    <Link href={`/projects/${project.id}`} className="card pr-card pr-card-link" prefetch={false}>
       <SparkleCorner />
 
       {/* Header row */}
@@ -161,26 +166,49 @@ function ProjectCard({ project, num }: { project: Project; num: number }) {
         </div>
       )}
 
-      {/* Memory snippet */}
-      {project.memorySnippet && (
+      {/* Top blocker (queue item awaiting decision) */}
+      {project.topBlocker && (
+        <div className="pr-blocker">
+          <span className="pr-blocker-label">BLOCKED ·</span> {project.topBlocker}
+        </div>
+      )}
+
+      {/* Top action items (open tasks) */}
+      {project.topActions.length > 0 && (
+        <ul className="pr-actions">
+          {project.topActions.map((a) => (
+            <li key={a.id} className="pr-action">
+              <span className="pr-action-dot">›</span> {a.title}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Memory snippet (fallback signal when no actions) */}
+      {project.memorySnippet && project.topActions.length === 0 && !project.topBlocker && (
         <div className="pr-memory">{project.memorySnippet}</div>
       )}
 
-      {/* Launch button */}
-      <button
-        className="pr-launch"
-        onClick={handleLaunch}
-        disabled={launching}
-      >
-        {launching ? "LAUNCHING…" : "LAUNCH SESSION →"}
-      </button>
+      {/* Footer: open arrow + launch button */}
+      <div className="pr-footer">
+        <span className="pr-open-hint">OPEN →</span>
+        <button
+          className="pr-launch"
+          onClick={handleLaunch}
+          disabled={launching}
+          type="button"
+        >
+          {launching ? "LAUNCHING…" : "LAUNCH SESSION →"}
+        </button>
+      </div>
 
       {/* Context preview (shown after clipboard copy) */}
       {contextText && (
-        <div className="pr-context-preview">
+        <div className="pr-context-preview" onClick={(e) => e.stopPropagation()}>
           <button
             className="pr-context-toggle"
-            onClick={() => setContextOpen((v) => !v)}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setContextOpen((v) => !v); }}
+            type="button"
           >
             {contextOpen ? "▾ HIDE CONTEXT" : "▸ SHOW CONTEXT"}
           </button>
@@ -194,7 +222,7 @@ function ProjectCard({ project, num }: { project: Project; num: number }) {
       {toast && (
         <div className={`pr-toast pr-toast-${toast.variant}`}>{toast.message}</div>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -258,6 +286,40 @@ export function ProjectsView() {
       if (supabaseClient && channel) {
         supabaseClient.removeChannel(channel);
       }
+    };
+  }, [fetchProjects]);
+
+  // ── Local-only: SSE stream that emits `refresh` on git/memory changes ─────
+  // In dev the Node server can fs.watch each project's .git/logs/HEAD and
+  // .git/index. The stream returns 501 in cloud — silently skipped.
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let cancelled = false;
+    let backoffMs = 2000;
+
+    const connect = () => {
+      if (cancelled) return;
+      try {
+        es = new EventSource("/api/projects/events");
+        es.addEventListener("refresh", () => fetchProjects());
+        es.onopen = () => { backoffMs = 2000; };
+        es.onerror = () => {
+          es?.close();
+          es = null;
+          if (cancelled) return;
+          // Re-attempt with capped backoff (covers transient hot-reload disconnects)
+          setTimeout(connect, Math.min(backoffMs, 30_000));
+          backoffMs = Math.min(backoffMs * 2, 30_000);
+        };
+      } catch {
+        /* EventSource unavailable — silently skip */
+      }
+    };
+
+    connect();
+    return () => {
+      cancelled = true;
+      es?.close();
     };
   }, [fetchProjects]);
 
