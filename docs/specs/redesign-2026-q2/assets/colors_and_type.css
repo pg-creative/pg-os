@@ -1,0 +1,303 @@
+/* ========================================================================
+   PG OS · Colors & Type Tokens
+   Multi-mode design system — 3 variants share layout/spacing/motion,
+   only palette + display serif change via [data-variant] on :root.
+   ======================================================================== */
+
+/* ── Fonts (Google Fonts — import or link separately in HTML) ───────────── */
+/* @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,500&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap'); */
+
+/* ========================================================================
+   1. SHARED TOKENS (spacing, radius, shadow, motion)
+   These DO NOT vary between modes.
+   ======================================================================== */
+:root {
+  /* Spacing (8pt-ish scale) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 44px;
+
+  /* Radius */
+  --radius-sm: 4px;     /* inputs, tiny chips */
+  --radius-md: 7px;     /* day tabs, buttons, inline badges */
+  --radius-lg: 10px;    /* cards (primary) */
+  --radius-pill: 999px;
+
+  /* Shadows & blur */
+  --shadow-card: 0 0 30px rgba(0,0,0,0.15);
+  --shadow-accent: 0 0 12px var(--accent);
+  --shadow-switcher: 0 12px 40px rgba(0,0,0,0.4);
+  --backdrop-blur: blur(12px);
+
+  /* Card metrics */
+  --card-gutter: 14px;
+  --card-pad: 20px 22px;
+  --card-inner-gap: 16px;
+
+  /* Tracking presets */
+  --track-mono-lg: 0.18em;
+  --track-mono-md: 0.14em;
+  --track-body: -0.005em;
+  --track-serif: -0.01em;
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 0.2s;
+  --dur-med: 0.5s;
+  --dur-mode: 0.6s;
+}
+
+/* ========================================================================
+   2. PER-MODE TOKENS (palette, serif, hero, mono)
+   ======================================================================== */
+
+/* ── Howl's Golden Hour (default) ───────────────────────────────────────── */
+:root,
+:root[data-variant="howls"] {
+  --bg-0:        #0D0806;            /* app bg */
+  --bg-1:        #1A120C;            /* elevated surface */
+  --bg-2:        #22180F;            /* deeper surface / swatch fill */
+  --fg:          #F4E8D1;            /* primary text */
+  --fg-dim:      #C9B391;            /* secondary text */
+  --muted:       #8B7355;            /* tertiary, labels */
+  --accent:      #D6A367;            /* primary action, amber gold */
+  --accent-2:    #E89B6F;            /* warning / coral emphasis */
+  --accent-3:    #6B8CAE;            /* rare cool info accent */
+  --panel:       rgba(38,26,18,0.55);
+  --panel-solid: #201610;
+  --border:      rgba(214,163,103,0.20);
+  --border-soft: rgba(214,163,103,0.10);
+  --success:     #7FB069;
+  --danger:      #D0594B;
+
+  --serif: "Cormorant Garamond", "Cormorant", Georgia, serif;
+  --body:  "Inter", system-ui, -apple-system, sans-serif;
+  --mono:  "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  --hero-url: url("assets/hero-howls.png");
+  --mode-label: "HOWL'S GOLDEN HOUR";
+}
+
+/* ── Totoro Dusk ────────────────────────────────────────────────────────── */
+:root[data-variant="totoro"] {
+  --bg-0:        #070A08;
+  --bg-1:        #0F1410;
+  --bg-2:        #151C17;
+  --fg:          #E8EDE3;
+  --fg-dim:      #BDC7B4;
+  --muted:       #7A8A78;
+  --accent:      #E0B552;            /* firefly amber */
+  --accent-2:    #D57A5F;            /* lantern coral */
+  --accent-3:    #73A58E;            /* mossy teal */
+  --panel:       rgba(16,26,20,0.55);
+  --panel-solid: #101A14;
+  --border:      rgba(224,181,82,0.17);
+  --border-soft: rgba(224,181,82,0.08);
+  --success:     #8FBD7A;
+  --danger:      #C76A5A;
+
+  --serif: "EB Garamond", Georgia, serif;
+  --mono:  "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  --hero-url: url("assets/hero-totoro.png");
+  --mode-label: "TOTORO DUSK";
+}
+
+/* ── Mononoke Forest ────────────────────────────────────────────────────── */
+:root[data-variant="mononoke"] {
+  --bg-0:        #060908;
+  --bg-1:        #0D1311;
+  --bg-2:        #121A17;
+  --fg:          #EFE8DA;
+  --fg-dim:      #C1B89F;
+  --muted:       #6F867F;
+  --accent:      #C9A560;            /* spirit gold */
+  --accent-2:    #B8564F;            /* kodama red */
+  --accent-3:    #87A89A;            /* jade stone */
+  --panel:       rgba(14,22,20,0.58);
+  --panel-solid: #0E1614;
+  --border:      rgba(201,165,96,0.19);
+  --border-soft: rgba(201,165,96,0.09);
+  --success:     #86B08A;
+  --danger:      #B8564F;
+
+  --serif: "Playfair Display", Georgia, serif;
+  --mono:  "Space Mono", "SF Mono", Menlo, monospace;
+
+  --hero-url: url("assets/hero-mononoke.png");
+  --mode-label: "MONONOKE FOREST";
+}
+
+/* ========================================================================
+   3. SEMANTIC TYPE CLASSES
+   Use these directly — they bind to the per-mode --serif / --body / --mono.
+   ======================================================================== */
+
+/* Display serif — for greetings, city names, "Now Playing", titles */
+.t-display-xl {           /* greeting: "Good afternoon, Patrick." */
+  font-family: var(--serif);
+  font-size: 44px; line-height: 1.1;
+  font-weight: 500; letter-spacing: var(--track-serif);
+}
+.t-display-lg {           /* big statistic numerals: "8,347" */
+  font-family: var(--serif);
+  font-size: 38px; line-height: 1.0;
+  font-weight: 500; letter-spacing: var(--track-serif);
+}
+.t-display-md {           /* location city */
+  font-family: var(--serif);
+  font-size: 34px; line-height: 1.1;
+  font-weight: 500; font-style: italic;
+  letter-spacing: var(--track-serif);
+}
+.t-display-sm {           /* card titles: "Tuesday, April 21" */
+  font-family: var(--serif);
+  font-size: 28px; line-height: 1.2;
+  font-weight: 500;
+}
+.t-clock {                /* running time display */
+  font-family: var(--serif);
+  font-size: 54px; line-height: 1.0;
+  font-weight: 500;
+}
+.t-title-lg {             /* track title */
+  font-family: var(--serif);
+  font-size: 24px; line-height: 1.15;
+  font-weight: 500;
+}
+.t-title-md {             /* operator, project name */
+  font-family: var(--serif);
+  font-size: 22px; line-height: 1.15;
+  font-weight: 500;
+}
+.t-title-sm {             /* vitals sub-value */
+  font-family: var(--serif);
+  font-size: 20px; line-height: 1.25;
+  font-weight: 500;
+}
+
+/* Italic accent flourish — apply to ONE word per display heading */
+.t-accent {
+  font-style: italic;
+  color: var(--accent);
+}
+
+/* Body (Inter) */
+.t-body    { font-family: var(--body); font-size: 14px;  line-height: 1.45; font-weight: 400; letter-spacing: var(--track-body); }
+.t-body-sm { font-family: var(--body); font-size: 13px;  line-height: 1.35; font-weight: 400; }
+.t-body-xs { font-family: var(--body); font-size: 12px;  line-height: 1.35; font-weight: 400; }
+
+/* Mono telemetry (always UPPERCASE, wide-tracked) */
+.t-mono-lg {              /* card label: "04 // CALENDAR" */
+  font-family: var(--mono);
+  font-size: 10px; line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: var(--track-mono-lg);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.t-mono-md {              /* metadata: "UTC -05:00 · CDT" */
+  font-family: var(--mono);
+  font-size: 10px; line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: var(--track-mono-md);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.t-mono-sm {              /* topbar telemetry band */
+  font-family: var(--mono);
+  font-size: 9.5px; line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: var(--track-mono-lg);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Mixed serif-figure + mono-unit (e.g. "68 bpm") */
+.t-figure { font-family: var(--serif); font-weight: 500; letter-spacing: var(--track-serif); }
+.t-figure small {
+  font-family: var(--mono); font-size: 0.55em; font-weight: 500;
+  letter-spacing: var(--track-mono-lg); text-transform: uppercase;
+  color: var(--muted); margin-left: 0.3em;
+}
+
+/* ========================================================================
+   4. GENERIC ELEMENT DEFAULTS
+   ======================================================================== */
+html, body {
+  background: var(--bg-0);
+  color: var(--fg);
+  font-family: var(--body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: var(--track-body);
+}
+
+h1 { font-family: var(--serif); font-size: 44px; font-weight: 500; line-height: 1.1; letter-spacing: var(--track-serif); }
+h2 { font-family: var(--serif); font-size: 28px; font-weight: 500; line-height: 1.2;  }
+h3 { font-family: var(--serif); font-size: 22px; font-weight: 500; line-height: 1.15; }
+h4 { font-family: var(--serif); font-size: 20px; font-weight: 500; line-height: 1.25; }
+p  { font-family: var(--body);  font-size: 14px; line-height: 1.5; color: var(--fg-dim); }
+code, kbd, pre {
+  font-family: var(--mono); font-size: 12px;
+  letter-spacing: 0.06em; color: var(--fg-dim);
+}
+
+em { font-style: italic; color: var(--accent); }
+
+/* ------------ shared bits used by cards ------------ */
+.card-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.card-label .tag {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--fg-dim);
+}
+.card-label .tag.live {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.card-label .tag.live::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: pg-pulse 2s ease-in-out infinite;
+}
+
+/* ========================================================================
+   5. ANIMATIONS
+   ======================================================================== */
+@keyframes pg-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+@keyframes pg-blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+@keyframes pg-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
