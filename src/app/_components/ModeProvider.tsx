@@ -2,18 +2,18 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { type BrandMode, MODE_CONFIG, nextBrandMode, prevBrandMode } from "../../lib/modes";
 
-export type Mode = "laputa-day" | "laputa-twilight" | "laputa-midnight";
+export type Mode = "howls" | "totoro" | "mononoke";
 
 export const MODE_LABELS: Record<Mode, string> = {
-  "laputa-day": "LAPUTA DAY",
-  "laputa-twilight": "LAPUTA TWILIGHT",
-  "laputa-midnight": "LAPUTA MIDNIGHT",
+  "howls": "HOWL'S GOLDEN HOUR",
+  "totoro": "TOTORO DUSK",
+  "mononoke": "MONONOKE FOREST",
 };
 
 function modeForHour(h: number): Mode {
-  if (h >= 6 && h < 18) return "laputa-day";
-  if (h >= 18 && h < 21) return "laputa-twilight";
-  return "laputa-midnight";
+  if (h >= 6 && h < 18) return "howls";
+  if (h >= 18 && h < 21) return "totoro";
+  return "mononoke";
 }
 
 export function greetingForHour(h: number): string {
@@ -23,10 +23,23 @@ export function greetingForHour(h: number): string {
   return "night,";
 }
 
-const VALID_MODES: Mode[] = ["laputa-day", "laputa-twilight", "laputa-midnight"];
+const VALID_MODES: Mode[] = ["howls", "totoro", "mononoke"];
 const KEY_MANUAL = "pg-os-laputa-manual";
 const KEY_AUTO = "pg-os-laputa-auto";
 const KEY_BRAND = "pg-os-brand-mode";
+
+// Backward-compat: map legacy "laputa-*" localStorage values to the new palette ids.
+const LEGACY_MAP: Record<string, Mode> = {
+  "laputa-day": "howls",
+  "laputa-twilight": "totoro",
+  "laputa-midnight": "mononoke",
+};
+function migrateMode(raw: string | null): Mode | null {
+  if (!raw) return null;
+  if ((VALID_MODES as string[]).includes(raw)) return raw as Mode;
+  if (raw in LEGACY_MAP) return LEGACY_MAP[raw];
+  return null;
+}
 
 const VALID_BRAND_MODES: BrandMode[] = ["alchmy", "voyager", "writer", "metrasens", "recovery"];
 
@@ -47,7 +60,7 @@ type Ctx = {
 const ModeCtx = createContext<Ctx | null>(null);
 
 export function ModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<Mode>("laputa-day");
+  const [mode, setModeState] = useState<Mode>("howls");
   const [autoMode, setAutoModeState] = useState<boolean>(true);
   const [greeting, setGreeting] = useState<string>("afternoon,");
   const [brand, setBrandState] = useState<BrandMode | null>(null);
@@ -64,8 +77,11 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     if (auto) {
       setModeState(modeForHour(h));
     } else {
-      const manual = localStorage.getItem(KEY_MANUAL) as Mode | null;
-      if (manual && VALID_MODES.includes(manual)) setModeState(manual);
+      const migrated = migrateMode(localStorage.getItem(KEY_MANUAL));
+      if (migrated) {
+        setModeState(migrated);
+        localStorage.setItem(KEY_MANUAL, migrated);
+      }
     }
 
     // Restore brand mode from localStorage

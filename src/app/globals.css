@@ -1,47 +1,76 @@
 @import "tailwindcss";
 
-/* ── LAPUTA DAY (6am–6pm) · powder blue base, powder blue accent ───────── */
-:root[data-variant="laputa-day"] {
-  --bg-0:#E8F0F7; --bg-1:#DEE7F2; --bg-2:#CED9E6;
-  --fg:#2A3744; --fg-dim:#4E5C6B; --muted:#5E6F82;
-  --accent:#5A87B8; --accent-2:#E89B6F; --accent-3:#89A5C2;
-  --panel:rgba(255,255,255,0.62); --panel-solid:#EEF4FA;
-  --border:rgba(90,135,184,0.30); --border-soft:rgba(60,80,100,0.10);
-  --success:#7FA477; --danger:#C6593F;
-  --serif:"Playfair Display",serif; --body:"Inter",sans-serif; --mono:"JetBrains Mono",monospace;
-  --hero-0:url("/hero-laputa.png");
+/* === Palette tokens (rebrand 2026-Q2 — Howl's / Totoro / Mononoke) ===== */
+/* Three Ghibli-aligned dark-warm palettes. All variants share spacing,    */
+/* radius, motion. Per-variant: bg/fg/accent + serif + hero painting.      */
+
+/* ── Howl's Golden Hour (6am–6pm — warm amber, deep blue accents) ─────── */
+:root[data-variant="howls"] {
+  --bg-0:#0D0806; --bg-1:#1A120C; --bg-2:#22180F;
+  --fg:#F4E8D1; --fg-dim:#C9B391; --muted:#8B7355;
+  --accent:#D6A367; --accent-2:#E89B6F; --accent-3:#6B8CAE;
+  --panel:rgba(38,26,18,0.55); --panel-solid:#201610;
+  --border:rgba(214,163,103,0.20); --border-soft:rgba(214,163,103,0.10);
+  --success:#7FB069; --danger:#D0594B;
+  --serif:"Cormorant Garamond","Cormorant",Georgia,serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  --hero-0:url("/hero-howls.png");
   --hero-url:var(--hero-0);
-  --avatar-text:#FFFFFF;
-  --particle-1:#5A87B8; --particle-2:#FFFFFF; --particle-3:#B8CDE0;
-  --banner-gradient: linear-gradient(100deg, rgba(238,244,250,0.85) 0%, rgba(238,244,250,0.55) 35%, rgba(238,244,250,0.08) 70%, rgba(238,244,250,0) 100%);
+  --avatar-text:#1A120C;
+  --particle-1:#D6A367; --particle-2:#F4E8D1; --particle-3:#E89B6F;
+  --banner-gradient: linear-gradient(100deg, rgba(32,22,16,0.88) 0%, rgba(32,22,16,0.55) 35%, rgba(32,22,16,0.10) 70%, rgba(32,22,16,0) 100%);
 }
-:root[data-variant="laputa-twilight"] {
-  --bg-0:#1F3252; --bg-1:#17294A; --bg-2:#122240;
-  --fg:#E2EAF5; --fg-dim:#BAC9DB; --muted:#8CA0B8;
-  --accent:#7FAFDF; --accent-2:#E8A77A; --accent-3:#B3C8DF;
-  --panel:rgba(23,41,74,0.55); --panel-solid:#15253F;
-  --border:rgba(127,175,223,0.35); --border-soft:rgba(168,186,204,0.12);
-  --success:#8FBD8A; --danger:#E89173;
-  --serif:"Playfair Display",serif; --body:"Inter",sans-serif; --mono:"JetBrains Mono",monospace;
-  --hero-0:url("/hero-laputa-twilight.png");
+/* ── Totoro Dusk (6pm–9pm — firefly amber over mossy green) ───────────── */
+:root[data-variant="totoro"] {
+  --bg-0:#070A08; --bg-1:#0F1410; --bg-2:#151C17;
+  --fg:#E8EDE3; --fg-dim:#BDC7B4; --muted:#7A8A78;
+  --accent:#E0B552; --accent-2:#D57A5F; --accent-3:#73A58E;
+  --panel:rgba(16,26,20,0.55); --panel-solid:#101A14;
+  --border:rgba(224,181,82,0.17); --border-soft:rgba(224,181,82,0.08);
+  --success:#8FBD7A; --danger:#C76A5A;
+  --serif:"EB Garamond",Georgia,serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  --hero-0:url("/hero-totoro.png");
   --hero-url:var(--hero-0);
-  --avatar-text:#0F1D30;
-  --particle-1:#7FAFDF; --particle-2:#F5E1C8; --particle-3:#E8A77A;
-  --banner-gradient: linear-gradient(100deg, rgba(21,37,63,0.88) 0%, rgba(21,37,63,0.55) 35%, rgba(21,37,63,0.10) 70%, rgba(21,37,63,0) 100%);
+  --avatar-text:#0F1410;
+  --particle-1:#E0B552; --particle-2:#BDC7B4; --particle-3:#D57A5F;
+  --banner-gradient: linear-gradient(100deg, rgba(15,20,16,0.90) 0%, rgba(15,20,16,0.55) 35%, rgba(15,20,16,0.10) 70%, rgba(15,20,16,0) 100%);
 }
-:root[data-variant="laputa-midnight"] {
-  --bg-0:#091433; --bg-1:#0F1D45; --bg-2:#15275A;
-  --fg:#DDE6F7; --fg-dim:#A8BBE0; --muted:#7F95C0;
-  --accent:#4A6EDF; --accent-2:#F0B888; --accent-3:#7A92D4;
-  --panel:rgba(15,29,69,0.60); --panel-solid:#0C1A40;
-  --border:rgba(74,110,223,0.38); --border-soft:rgba(143,162,204,0.13);
-  --success:#7FB0E0; --danger:#E89173;
-  --serif:"Playfair Display",serif; --body:"Inter",sans-serif; --mono:"JetBrains Mono",monospace;
-  --hero-0:url("/hero-laputa-night.png");
+/* ── Mononoke Forest (9pm–6am — kodama red, jade stone, spirit gold) ──── */
+:root[data-variant="mononoke"] {
+  --bg-0:#060908; --bg-1:#0D1311; --bg-2:#121A17;
+  --fg:#EFE8DA; --fg-dim:#C1B89F; --muted:#6F867F;
+  --accent:#C9A560; --accent-2:#B8564F; --accent-3:#87A89A;
+  --panel:rgba(14,22,20,0.58); --panel-solid:#0E1614;
+  --border:rgba(201,165,96,0.19); --border-soft:rgba(201,165,96,0.09);
+  --success:#86B08A; --danger:#B8564F;
+  --serif:"Playfair Display",Georgia,serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"Space Mono","SF Mono",Menlo,monospace;
+  --hero-0:url("/hero-mononoke.png");
   --hero-url:var(--hero-0);
-  --avatar-text:#FFFFFF;
-  --particle-1:#4A6EDF; --particle-2:#F5F1E0; --particle-3:#7A92D4;
-  --banner-gradient: linear-gradient(100deg, rgba(12,26,64,0.90) 0%, rgba(12,26,64,0.55) 35%, rgba(12,26,64,0.10) 70%, rgba(12,26,64,0) 100%);
+  --avatar-text:#0E1614;
+  --particle-1:#C9A560; --particle-2:#C1B89F; --particle-3:#B8564F;
+  --banner-gradient: linear-gradient(100deg, rgba(14,22,20,0.92) 0%, rgba(14,22,20,0.55) 35%, rgba(14,22,20,0.10) 70%, rgba(14,22,20,0) 100%);
+}
+/* Default until ModeProvider mounts (matches howls — warm gold daytime) */
+:root { color-scheme: dark; }
+:root:not([data-variant]) {
+  --bg-0:#0D0806; --bg-1:#1A120C; --bg-2:#22180F;
+  --fg:#F4E8D1; --fg-dim:#C9B391; --muted:#8B7355;
+  --accent:#D6A367; --accent-2:#E89B6F; --accent-3:#6B8CAE;
+  --panel:rgba(38,26,18,0.55); --panel-solid:#201610;
+  --border:rgba(214,163,103,0.20); --border-soft:rgba(214,163,103,0.10);
+  --success:#7FB069; --danger:#D0594B;
+  --serif:"Cormorant Garamond",Georgia,serif;
+  --body:"Inter",system-ui,sans-serif;
+  --mono:"JetBrains Mono",Menlo,monospace;
+  --hero-0:url("/hero-howls.png"); --hero-url:var(--hero-0);
+  --avatar-text:#1A120C;
+  --particle-1:#D6A367; --particle-2:#F4E8D1; --particle-3:#E89B6F;
+  --banner-gradient: linear-gradient(100deg, rgba(32,22,16,0.88) 0%, rgba(32,22,16,0.55) 35%, rgba(32,22,16,0.10) 70%, rgba(32,22,16,0) 100%);
 }
 :root { transition: background 0.6s ease, color 0.6s ease; }
 .card, .day, .inbox-av, .np-controls .btn { transition: background 0.6s ease, border-color 0.6s ease, color 0.6s ease; }
@@ -267,9 +296,9 @@ body{
 .switcher .chip.active{background:var(--fg);color:var(--bg-0);border-color:var(--fg)}
 .switcher .chip.active .swatch{border-color:var(--bg-0)}
 .switcher .swatch{width:10px;height:10px;border-radius:50%;border:1px solid var(--border-soft)}
-.switcher .swatch.laputa-day{background:linear-gradient(135deg,#E8F0F7,#5A87B8)}
-.switcher .swatch.laputa-twilight{background:linear-gradient(135deg,#1F3252,#7FAFDF)}
-.switcher .swatch.laputa-midnight{background:linear-gradient(135deg,#091433,#4A6EDF)}
+.switcher .swatch.howls{background:linear-gradient(135deg,#1A120C,#D6A367)}
+.switcher .swatch.totoro{background:linear-gradient(135deg,#0F1410,#E0B552)}
+.switcher .swatch.mononoke{background:linear-gradient(135deg,#0D1311,#C9A560)}
 .switcher .chip.auto-toggle{font-weight:500;background:rgba(90,135,184,0.15);color:var(--accent);border-color:var(--border)}
 .switcher .chip.auto-toggle.active{background:var(--accent);color:var(--avatar-text);border-color:var(--accent);box-shadow:0 0 12px rgba(74,110,223,0.3)}
 .switcher .label{font-family:var(--mono),monospace;font-size:9.5px;letter-spacing:0.2em;color:var(--muted);padding:0 4px;text-transform:uppercase}
@@ -1848,26 +1877,26 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
    ═══════════════════════════════════════════════════════════ */
 
 /* Jewel tone tokens per palette (resolve through CSS vars) */
-:root[data-variant="laputa-day"] {
-  --cl-gold:#C8923B; --cl-gold-soft:rgba(200,146,59,0.15);
-  --cl-emerald:#5E9A6B; --cl-emerald-soft:rgba(94,154,107,0.15);
-  --cl-sapphire:#5A87B8; --cl-sapphire-soft:rgba(90,135,184,0.15);
-  --cl-coral:#D17A4A; --cl-coral-soft:rgba(209,122,74,0.15);
-  --cl-ruby:#C6593F; --cl-ruby-soft:rgba(198,89,63,0.15);
+:root[data-variant="howls"] {
+  --cl-gold:#D6A367; --cl-gold-soft:rgba(214,163,103,0.15);
+  --cl-emerald:#7FB069; --cl-emerald-soft:rgba(127,176,105,0.15);
+  --cl-sapphire:#6B8CAE; --cl-sapphire-soft:rgba(107,140,174,0.15);
+  --cl-coral:#E89B6F; --cl-coral-soft:rgba(232,155,111,0.15);
+  --cl-ruby:#D0594B; --cl-ruby-soft:rgba(208,89,75,0.15);
 }
-:root[data-variant="laputa-twilight"] {
-  --cl-gold:#E8B774; --cl-gold-soft:rgba(232,183,116,0.18);
-  --cl-emerald:#8FBD8A; --cl-emerald-soft:rgba(143,189,138,0.18);
-  --cl-sapphire:#7FAFDF; --cl-sapphire-soft:rgba(127,175,223,0.18);
-  --cl-coral:#E8A77A; --cl-coral-soft:rgba(232,167,122,0.18);
-  --cl-ruby:#E89173; --cl-ruby-soft:rgba(232,145,115,0.18);
+:root[data-variant="totoro"] {
+  --cl-gold:#E0B552; --cl-gold-soft:rgba(224,181,82,0.18);
+  --cl-emerald:#8FBD7A; --cl-emerald-soft:rgba(143,189,122,0.18);
+  --cl-sapphire:#73A58E; --cl-sapphire-soft:rgba(115,165,142,0.18);
+  --cl-coral:#D57A5F; --cl-coral-soft:rgba(213,122,95,0.18);
+  --cl-ruby:#C76A5A; --cl-ruby-soft:rgba(199,106,90,0.18);
 }
-:root[data-variant="laputa-midnight"] {
-  --cl-gold:#F0B888; --cl-gold-soft:rgba(240,184,136,0.18);
-  --cl-emerald:#7FB0A0; --cl-emerald-soft:rgba(127,176,160,0.18);
-  --cl-sapphire:#7A92D4; --cl-sapphire-soft:rgba(122,146,212,0.18);
-  --cl-coral:#F0B888; --cl-coral-soft:rgba(240,184,136,0.18);
-  --cl-ruby:#E89173; --cl-ruby-soft:rgba(232,145,115,0.18);
+:root[data-variant="mononoke"] {
+  --cl-gold:#C9A560; --cl-gold-soft:rgba(201,165,96,0.18);
+  --cl-emerald:#86B08A; --cl-emerald-soft:rgba(134,176,138,0.18);
+  --cl-sapphire:#87A89A; --cl-sapphire-soft:rgba(135,168,154,0.18);
+  --cl-coral:#B8564F; --cl-coral-soft:rgba(184,86,79,0.18);
+  --cl-ruby:#B8564F; --cl-ruby-soft:rgba(184,86,79,0.18);
 }
 
 .view-claude{ display:flex; flex-direction:column; gap:14px; }

@@ -2,9 +2,9 @@
 import { useMode, Mode, MODE_LABELS } from "./ModeProvider";
 
 const CHIPS: { key: Mode; label: string }[] = [
-  { key: "laputa-day", label: "Day" },
-  { key: "laputa-twilight", label: "Twilight" },
-  { key: "laputa-midnight", label: "Midnight" },
+  { key: "howls", label: "Howl's" },
+  { key: "totoro", label: "Totoro" },
+  { key: "mononoke", label: "Mononoke" },
 ];
 
 export function ModeSwitcher() {

@@ -135,15 +135,15 @@ export function useCommands(): Command[] {
   // ── Palette ───────────────────────────────────────────────────────────────
   const paletteCommands: Command[] = (
     [
-      { id: "laputa-day",       label: "Day palette"       },
-      { id: "laputa-twilight",  label: "Twilight palette"  },
-      { id: "laputa-midnight",  label: "Midnight palette"  },
-    ] as Array<{ id: "laputa-day" | "laputa-twilight" | "laputa-midnight"; label: string }>
-  ).map(({ id, label }) => ({
-    id: `palette.${id.replace("laputa-", "")}`,
+      { id: "howls",     label: "Howl's Golden Hour", keywords: ["day", "morning", "afternoon", "amber", "gold"] },
+      { id: "totoro",    label: "Totoro Dusk",        keywords: ["twilight", "dusk", "evening", "firefly"] },
+      { id: "mononoke",  label: "Mononoke Forest",    keywords: ["midnight", "night", "forest", "spirit"] },
+    ] as Array<{ id: "howls" | "totoro" | "mononoke"; label: string; keywords: string[] }>
+  ).map(({ id, label, keywords }) => ({
+    id: `palette.${id}`,
     label,
     group: "Palette",
-    keywords: ["palette", "theme", "color", id.replace("laputa-", "")],
+    keywords: ["palette", "theme", "color", id, ...keywords],
     run: () => {
       document.documentElement.dataset.variant = id;
       localStorage.setItem("pg-os-laputa-manual", id);
