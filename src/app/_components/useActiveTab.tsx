@@ -1,18 +1,19 @@
 "use client";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-export type Tab = "home" | "habits" | "projects" | "flow" | "claude";
+export type Tab = "home" | "habits" | "projects" | "flow" | "timeline" | "claude";
 
 export const TABS: { id: Tab; num: string; label: string }[] = [
   { id: "home",     num: "00", label: "HOME" },
   { id: "habits",   num: "01", label: "HABITS" },
   { id: "projects", num: "02", label: "PROJECTS" },
   { id: "flow",     num: "03", label: "FLOW" },
-  { id: "claude",   num: "04", label: "CLAUDE" },
+  { id: "timeline", num: "04", label: "TIMELINE" },
+  { id: "claude",   num: "05", label: "CLAUDE" },
 ];
 
 const KEY = "pg-os-active-tab";
-const VALID: Tab[] = ["home", "habits", "projects", "flow", "claude"];
+const VALID: Tab[] = ["home", "habits", "projects", "flow", "timeline", "claude"];
 
 type Ctx = { active: Tab; setActive: (t: Tab) => void };
 const TabCtx = createContext<Ctx | null>(null);
