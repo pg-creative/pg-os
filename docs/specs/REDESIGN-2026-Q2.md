@@ -446,11 +446,11 @@ A: 11500   S: 14000   SSS: 18000
 - [x] T-10 Morning Briefing *(2)* — `f3c51d5` · 2026-05-02 · screens in `docs/screenshots/redesign-2026-q2/w01/`
 - **Outcome:** the day has a front door. ✓
 
-### Week 02 — *Unlock: Command*
-- [ ] T-04 ⌘K Palette *(2)*
-- [ ] T-03 Pin active Chest *(1)*
-- [ ] T-05 Narrated Claude overview *(1.5)*
-- **Outcome:** hands on keyboard, eyes on signal.
+### Week 02 — *Unlock: Command* ✓ COMPLETE (2026-05-04)
+- [x] T-04 ⌘K Palette *(2)* — `4af8680` · 2026-05-04
+- [x] T-03 Pin active Chest *(1)* — `d978f01` · 2026-05-04
+- [x] T-05 Narrated Claude overview *(1.5)* — `80d6d90` · 2026-05-04 · screens in `docs/screenshots/redesign-2026-q2/w02/`
+- **Outcome:** hands on keyboard, eyes on signal. ✓
 
 ### Week 03 — *Unlock: Depth*
 - [ ] T-11 Evening Ceremony *(2)*
