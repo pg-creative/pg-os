@@ -10,6 +10,8 @@ type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-jour
 
 interface CaptureSheetProps {
   onClose: () => void;
+  /** When set via pgos:open-capture event, pre-highlights this destination */
+  initialDestination?: string;
 }
 
 interface DestConfig {
@@ -50,7 +52,7 @@ interface StatusMsg {
 // from cloud (Vercel) deployments. The capture sheet hides these in cloud mode.
 const LAPTOP_ONLY_DESTINATIONS: Destination[] = ["essay"];
 
-export function CaptureSheet({ onClose }: CaptureSheetProps) {
+export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps) {
   const { brand } = useMode();
   const isCloud = useIsCloud();
   const visibleDestinations = isCloud
@@ -67,7 +69,9 @@ export function CaptureSheet({ onClose }: CaptureSheetProps) {
   const [context, setContext] = useState("");
   const [sending, setSending] = useState<Destination | null>(null);
   const [status, setStatus] = useState<StatusMsg | null>(null);
-  const [hoveredDest, setHoveredDest] = useState<Destination | null>(null);
+  const [hoveredDest, setHoveredDest] = useState<Destination | null>(
+    (initialDestination as Destination) ?? null,
+  );
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 

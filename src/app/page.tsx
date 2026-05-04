@@ -16,10 +16,12 @@ import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
 import { FlowView } from "./_components/views/FlowView";
 import { ClaudeView } from "./_components/views/ClaudeView";
+import CommandPalette, { useCommandPaletteHotkey } from "./_components/CommandPalette";
 
 export default function Page() {
   const { active } = useActiveTab();
   const isCloud = useIsCloud();
+  useCommandPaletteHotkey();
   return (
     <>
       <AmbientParticles />
@@ -63,6 +65,7 @@ export default function Page() {
       <ModeSwitcher />
       <CaptureFAB />
       <CopilotLauncher />
+      <CommandPalette />
     </>
   );
 }

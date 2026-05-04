@@ -5,9 +5,12 @@ import { CaptureSheet } from "./CaptureSheet";
 const MAGNET_RADIUS = 120; // px — cursor distance that triggers attraction
 const MAGNET_STRENGTH = 0.32; // fraction of delta applied
 
+type CaptureOpenDetail = { destination?: string };
+
 export function CaptureFAB() {
   const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
+  const [initialDest, setInitialDest] = useState<string | undefined>(undefined);
+  const close = useCallback(() => { setOpen(false); setInitialDest(undefined); }, []);
   const btnRef = useRef<HTMLButtonElement>(null);
   const frameRef = useRef<number | null>(null);
 
@@ -21,6 +24,17 @@ export function CaptureFAB() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Command palette: pgos:open-capture event with optional destination
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<CaptureOpenDetail>).detail;
+      setInitialDest(detail?.destination);
+      setOpen(true);
+    };
+    window.addEventListener("pgos:open-capture", handler);
+    return () => window.removeEventListener("pgos:open-capture", handler);
   }, []);
 
   // Magnetic attraction — cursor-tracking that pulls the FAB toward the cursor
@@ -74,7 +88,7 @@ export function CaptureFAB() {
           <path d="M5 11a1 1 0 0 1 2 0 5 5 0 0 0 10 0 1 1 0 0 1 2 0 7 7 0 0 1-6 6.92V21a1 1 0 0 1-2 0v-3.08A7 7 0 0 1 5 11z" fill="currentColor" />
         </svg>
       </button>
-      {open && <CaptureSheet onClose={close} />}
+      {open && <CaptureSheet onClose={close} initialDestination={initialDest} />}
     </>
   );
 }

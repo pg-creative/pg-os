@@ -5033,3 +5033,422 @@ html[data-home-mode] .card{ transition:opacity 500ms ease, filter 500ms ease; }
   .briefing-btn{transition:none;}
   .briefing-action-link{transition:none;}
 }
+
+/* === Redesign 2026-Q2 — T-04 Command Palette === */
+
+@keyframes cmd-pop {
+  from { opacity: 0; transform: scale(0.96) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+.cmd-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.cmd-panel {
+  width: min(640px, 92vw);
+  margin-top: 18vh;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  animation: cmd-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmd-panel { animation: none; }
+}
+
+.cmd-panel input {
+  width: 100%;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 28px;
+  padding: 18px 20px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.cmd-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.cmd-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cmd-group-header {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding: 12px 20px 6px;
+}
+
+.cmd-option {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  padding: 8px 20px;
+  color: var(--text-1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: background 120ms;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.cmd-option:hover,
+.cmd-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent-2) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent-2);
+  color: var(--text-1);
+}
+
+.cmd-option-hint {
+  color: var(--text-3);
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.cmd-empty {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--text-3);
+  padding: 20px;
+  text-align: center;
+}
+
+@media (max-width: 680px) {
+  .cmd-panel {
+    width: 100vw;
+    height: 100vh;
+    margin-top: 0;
+    border-radius: 0;
+  }
+  .cmd-list {
+    max-height: calc(100vh - 80px);
+  }
+}
+
+/* === Redesign 2026-Q2 — T-03 Active Chest === */
+
+.pr-active-card {
+  min-height: calc(var(--pr-card-h, 320px) * 1.6);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px 32px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.pr-active-card::before {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    circle at 30% 30%,
+    color-mix(in srgb, var(--accent-2) 22%, transparent),
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pr-active-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.pr-active-card-hero {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pr-active-card-hero-left {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pr-active-card-hero-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pr-active-card-name {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pr-active-card-sub {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pr-active-card-time {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.pr-active-card-stats {
+  margin-bottom: 10px;
+}
+
+.pr-active-card-commit {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pr-active-card-blocker {
+  margin-bottom: 10px;
+}
+
+.pr-active-card-actions {
+  margin-bottom: 10px;
+}
+
+.pr-active-card-memory {
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+
+.pr-active-card-cta {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.pr-active-cta-btn {
+  flex: 1;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent-2) 14%, var(--surface-2));
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.pr-active-cta-btn:hover {
+  background: color-mix(in srgb, var(--accent-2) 28%, var(--surface-2));
+  transform: translateY(-1px);
+}
+
+.pr-active-cta-btn:active {
+  transform: translateY(0);
+}
+
+.pr-active-cta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pr-grid-compressed {
+  gap: 12px;
+}
+
+.pr-grid-compressed .pr-card,
+.pr-card-compressed {
+  padding: 14px 16px;
+  min-height: 0;
+}
+
+.pr-grid-compressed .pr-name {
+  font-size: 0.9rem;
+}
+
+.pr-grid-compressed .pr-actions,
+.pr-grid-compressed .pr-memory,
+.pr-grid-compressed .pr-commit-msg {
+  display: none;
+}
+
+.pr-context-menu-trigger {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 5;
+}
+
+.pr-context-menu-trigger:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+
+.pr-context-menu {
+  position: absolute;
+  top: 34px;
+  right: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  min-width: 120px;
+}
+
+.pr-context-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  transition: background 0.1s, color 0.1s;
+}
+
+.pr-context-menu-item:hover {
+  background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-active-cta-btn,
+  .pr-context-menu-trigger,
+  .pr-context-menu-item {
+    transition: none;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .pr-active-card {
+    min-height: auto;
+    padding: 20px;
+  }
+
+  .pr-grid-compressed {
+    grid-template-columns: 1fr;
+  }
+
+  .pr-active-card-cta {
+    flex-direction: column;
+  }
+
+  .pr-active-card-name {
+    font-size: 1.2rem;
+  }
+}
+
+/* === Redesign 2026-Q2 — T-05 Narrated Overview === */
+
+.cl-narration {
+  font-family: 'EB Garamond', 'Cormorant Garamond', Georgia, serif;
+  font-size: 18px;
+  line-height: 1.7;
+  max-width: 60ch;
+  color: var(--text-1);
+  margin: 24px 0;
+}
+.cl-narration p {
+  margin: 0 0 1.2em 0;
+}
+.cl-narration em {
+  font-style: italic;
+  color: var(--accent-2);
+}
+.cl-narration-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-style: italic;
+  color: var(--accent-2);
+  border-bottom: 1px dashed currentColor;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.cl-narration-link:hover {
+  border-bottom-style: solid;
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-narration-link {
+    transition: none;
+  }
+}
