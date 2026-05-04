@@ -28,3 +28,28 @@ export const ACTIVE_PROJECTS: ProjectConfig[] = [
 export function getProject(id: string): ProjectConfig | undefined {
   return ACTIVE_PROJECTS.find((p) => p.id === id);
 }
+
+// ── Active Chest ─────────────────────────────────────────────────────────────
+
+export const ACTIVE_CHEST_KEY = "pg-os-active-chest";
+
+export function getActiveChestId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(ACTIVE_CHEST_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveChestId(id: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (id === null) window.localStorage.removeItem(ACTIVE_CHEST_KEY);
+    else window.localStorage.setItem(ACTIVE_CHEST_KEY, id);
+  } catch { /* no-op */ }
+}
+
+export function getDefaultActiveChestId(): string {
+  return ACTIVE_PROJECTS[0]?.id ?? "metrasens";
+}

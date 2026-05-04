@@ -10,6 +10,8 @@ import { subscribeTable } from "../../../lib/realtime";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { RealtimeConfig } from "../../api/realtime/config/route";
 import { TasksRegion } from "../Tasks/TasksRegion";
+import { ProjectActiveCard } from "./ProjectActiveCard";
+import { getActiveChestId, setActiveChestId, getDefaultActiveChestId } from "../../../lib/projects";
 
 type Glyph = "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
 
@@ -80,11 +82,22 @@ function DeadlineTag({ days, isoDate }: { days: number | null; isoDate?: string 
   return null;
 }
 
-function ProjectCard({ project, num }: { project: Project; num: number }) {
+function ProjectCard({
+  project,
+  num,
+  compressed,
+  onSetActive,
+}: {
+  project: Project;
+  num: number;
+  compressed?: boolean;
+  onSetActive?: () => void;
+}) {
   const [launching, setLaunching] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [contextText, setContextText] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const showToast = (message: string, variant: NonNullable<ToastState>["variant"]) => {
     setToast({ message, variant });
@@ -120,10 +133,27 @@ function ProjectCard({ project, num }: { project: Project; num: number }) {
     }
   }, [project.id]);
 
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".pr-context-menu") && !target.closest(".pr-context-menu-trigger")) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [menuOpen]);
+
   const pad = String(num).padStart(2, "0");
 
   return (
-    <Link href={`/projects/${project.id}`} className="card pr-card pr-card-link" prefetch={false}>
+    <Link
+      href={`/projects/${project.id}`}
+      className={`card pr-card pr-card-link${compressed ? " pr-card-compressed" : ""}`}
+      prefetch={false}
+    >
       <SparkleCorner />
 
       {/* Header row */}
@@ -221,6 +251,36 @@ function ProjectCard({ project, num }: { project: Project; num: number }) {
       {/* Toast */}
       {toast && (
         <div className={`pr-toast pr-toast-${toast.variant}`}>{toast.message}</div>
+      )}
+
+      {/* 3-dot context menu — "Set active" */}
+      {onSetActive && (
+        <>
+          <button
+            className="pr-context-menu-trigger"
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen((v) => !v); }}
+            aria-label="Project options"
+          >
+            …
+          </button>
+          {menuOpen && (
+            <div className="pr-context-menu" onClick={(e) => e.stopPropagation()}>
+              <button
+                className="pr-context-menu-item"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onSetActive();
+                }}
+              >
+                Set active
+              </button>
+            </div>
+          )}
+        </>
       )}
     </Link>
   );
@@ -323,8 +383,60 @@ export function ProjectsView() {
     };
   }, [fetchProjects]);
 
+  // ── Active Chest state ────────────────────────────────────────────────────
+  const [activeId, setActiveId] = useState<string | null>(() => getActiveChestId());
+
+  // Hydrate from localStorage on mount (handles SSR mismatch); fall back to
+  // the default first-active project so the hero card always renders unless
+  // the 14-day idle effect has explicitly cleared it.
+  useEffect(() => {
+    const stored = getActiveChestId();
+    setActiveId(stored ?? getDefaultActiveChestId());
+  }, []);
+
   const filtered = applyModeFilter(projects, brand, "id");
   const brandCfg = brand ? MODE_CONFIG[brand] : null;
+
+  // ── Keyboard navigation [ and ] ───────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key !== "[" && e.key !== "]") return;
+      e.preventDefault();
+      const list = filtered;
+      if (list.length === 0) return;
+      const currentIdx = activeId ? list.findIndex((p) => p.id === activeId) : -1;
+      let nextIdx: number;
+      if (e.key === "]") nextIdx = (currentIdx + 1) % list.length;
+      else nextIdx = currentIdx <= 0 ? list.length - 1 : currentIdx - 1;
+      const next = list[nextIdx];
+      if (!next) return;
+      setActiveChestId(next.id);
+      setActiveId(next.id);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, filtered]);
+
+  // ── 14-day idle auto-clear ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeId) return;
+    const p = projects.find((x) => x.id === activeId);
+    if (!p) return;
+    const last = p.lastCommitAt ? new Date(p.lastCommitAt).getTime() : 0;
+    const idleMs = Date.now() - last;
+    const hasQueue = (p.queueCount ?? 0) > 0;
+    const hasActions = (p.topActions?.length ?? 0) > 0;
+    if (idleMs > 14 * 86_400_000 && !hasQueue && !hasActions) {
+      setActiveChestId(null);
+      setActiveId(null);
+    }
+  }, [activeId, projects]);
+
+  // ── Split filtered into active + rest ─────────────────────────────────────
+  const activeProject = activeId ? filtered.find((p) => p.id === activeId) ?? null : null;
+  const restProjects = filtered.filter((p) => p.id !== activeProject?.id);
 
   return (
     <div className="view view-projects">
@@ -348,11 +460,23 @@ export function ProjectsView() {
       )}
 
       {!loading && !error && (
-        <div className="pr-grid">
-          {filtered.map((project, i) => (
-            <ProjectCard key={project.id} project={project} num={i + 1} />
-          ))}
-        </div>
+        <>
+          {activeProject && <ProjectActiveCard project={activeProject} />}
+          <div className={activeProject ? "pr-grid pr-grid-compressed" : "pr-grid"}>
+            {(activeProject ? restProjects : filtered).map((project, i) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                num={i + 1}
+                compressed={!!activeProject}
+                onSetActive={() => {
+                  setActiveChestId(project.id);
+                  setActiveId(project.id);
+                }}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Tasks layer — full cross-project list below project cards */}
