@@ -16,6 +16,10 @@ import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
 import { FlowView } from "./_components/views/FlowView";
 import { ClaudeView } from "./_components/views/ClaudeView";
+import { TimelineView } from "./_components/views/TimelineView";
+import SeasonMeter from "./_components/SeasonMeter";
+import { NowProvider } from "./_components/NowProvider";
+import { AmbientIdle } from "./_components/AmbientIdle";
 import CommandPalette, { useCommandPaletteHotkey } from "./_components/CommandPalette";
 
 export default function Page() {
@@ -23,7 +27,7 @@ export default function Page() {
   const isCloud = useIsCloud();
   useCommandPaletteHotkey();
   return (
-    <>
+    <NowProvider>
       <AmbientParticles />
       <div className="shell">
         {/* TOP BAR */}
@@ -50,10 +54,16 @@ export default function Page() {
         <TabBar />
 
         {/* ACTIVE VIEW */}
-        {active === "home" && <HomeView />}
+        {active === "home" && (
+          <>
+            <SeasonMeter />
+            <HomeView />
+          </>
+        )}
         {active === "habits" && <HabitsView />}
         {active === "projects" && <ProjectsView />}
         {active === "flow" && <FlowView />}
+        {active === "timeline" && <TimelineView />}
         {active === "claude" && <ClaudeView />}
 
         {/* HUMILITY FOOTER — always visible, per blueprint */}
@@ -66,6 +76,7 @@ export default function Page() {
       <CaptureFAB />
       <CopilotLauncher />
       <CommandPalette />
-    </>
+      <AmbientIdle />
+    </NowProvider>
   );
 }

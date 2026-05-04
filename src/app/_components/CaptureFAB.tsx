@@ -78,7 +78,7 @@ export function CaptureFAB() {
     <>
       <button
         ref={btnRef}
-        className="capture-fab"
+        className="capture-fab spring-hover"
         onClick={() => setOpen(true)}
         aria-label="Open capture sheet"
         title="Capture (⌘⇧K)"

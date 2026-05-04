@@ -4,6 +4,7 @@ import { useVoiceCapture } from "./useVoiceCapture";
 import { useMode } from "./ModeProvider";
 import { useIsCloud } from "./useIsCloud";
 import { useSound } from "./SoundProvider";
+import { useDragToDismiss } from "./useDragToDismiss";
 import { MODE_CONFIG } from "../../lib/modes";
 
 type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal" | "todo";
@@ -78,6 +79,9 @@ export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps)
   const voice = useVoiceCapture();
   const { play } = useSound();
 
+  // Drag-to-dismiss (mobile-first, also works on desktop pointer)
+  const { dragY, isDragging, handleProps: dragHandleProps } = useDragToDismiss(onClose);
+
   // Sync voice transcript into textarea
   useEffect(() => {
     if (voice.transcript) {
@@ -149,13 +153,24 @@ export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps)
     if (!trimmed || sending) return;
 
     setSending(dest.id);
+
+    // Optimistic UI: clear inputs immediately so the next thought can flow.
+    // If the request fails, restore them.
+    const prevText = text;
+    const prevTitle = title;
+    const prevContext = context;
+    setText("");
+    setTitle("");
+    setContext("");
+    voice.reset();
+
     try {
       const body: Record<string, string> = {
         destination: dest.id,
         text: trimmed,
       };
-      if (dest.showTitle && title.trim()) body.title = title.trim();
-      if (dest.showContext && context) body.source = context;
+      if (dest.showTitle && prevTitle.trim()) body.title = prevTitle.trim();
+      if (dest.showContext && prevContext) body.source = prevContext;
 
       const res = await fetch("/api/capture", {
         method: "POST",
@@ -168,14 +183,18 @@ export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps)
       if (data.ok) {
         play(dest.id === "ship" ? "ship" : "capture");
         showStatus({ text: `✓ ${data.detail ?? `Sent to ${dest.label}`}`, type: "success" });
-        setText("");
-        setTitle("");
-        setContext("");
-        voice.reset();
       } else {
+        // Rollback on server error
+        setText(prevText);
+        setTitle(prevTitle);
+        setContext(prevContext);
         showStatus({ text: `⚠ ${data.error ?? "Send failed"}`, type: "error" });
       }
-    } catch (err) {
+    } catch {
+      // Rollback on network error
+      setText(prevText);
+      setTitle(prevTitle);
+      setContext(prevContext);
       showStatus({ text: `⚠ Network error — try again`, type: "error" });
     } finally {
       setSending(null);
@@ -197,6 +216,14 @@ export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps)
 
   const micError = voice.error === "not-allowed" || voice.error === "service-not-allowed";
 
+  // Drag transform — only applied while dragging, then springs back via CSS
+  const sheetStyle: React.CSSProperties = dragY > 0
+    ? {
+        transform: `translateY(${dragY}px)`,
+        transition: isDragging ? "none" : "transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+      }
+    : {};
+
   return (
     <div className="cap-backdrop" onClick={onClose} role="dialog" aria-modal aria-label="Capture">
       <div
@@ -206,11 +233,17 @@ export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps)
         aria-modal="true"
         aria-labelledby="capture-sheet-title"
         onClick={(e) => e.stopPropagation()}
+        style={sheetStyle}
       >
+        {/* Drag handle (mobile-first; also works on desktop pointer) */}
+        <div className="cap-drag-handle" {...dragHandleProps} aria-hidden>
+          <span className="cap-drag-pill" />
+        </div>
+
         {/* Header */}
         <div className="cap-header">
           <span className="cap-title" id="capture-sheet-title">CAPTURE</span>
-          <button className="cap-close" onClick={onClose} aria-label="Close">✕</button>
+          <button className="cap-close spring-hover" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         {/* Textarea */}
@@ -274,7 +307,7 @@ export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps)
             return (
               <button
                 key={dest.id}
-                className={`cap-dest-btn${isSending ? " sending" : ""}${isBrandDefault ? " cm-brand-default" : ""}`}
+                className={`cap-dest-btn spring-hover${isSending ? " sending" : ""}${isBrandDefault ? " cm-brand-default" : ""}`}
                 onClick={() => handleSend(dest)}
                 onMouseEnter={() => setHoveredDest(dest.id)}
                 onMouseLeave={() => setHoveredDest(null)}

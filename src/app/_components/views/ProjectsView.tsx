@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { SparkleCorner, CardGlyph } from "../CardGlyph";
+import { Skeleton } from "../Skeleton";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
 import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
@@ -151,7 +152,7 @@ function ProjectCard({
   return (
     <Link
       href={`/projects/${project.id}`}
-      className={`card pr-card pr-card-link${compressed ? " pr-card-compressed" : ""}`}
+      className={`card pr-card pr-card-link spring-hover${compressed ? " pr-card-compressed" : ""}`}
       prefetch={false}
     >
       <SparkleCorner />
@@ -223,7 +224,7 @@ function ProjectCard({
       <div className="pr-footer">
         <span className="pr-open-hint">OPEN →</span>
         <button
-          className="pr-launch"
+          className="pr-launch spring-hover"
           onClick={handleLaunch}
           disabled={launching}
           type="button"
@@ -452,7 +453,23 @@ export function ProjectsView() {
         </div>
       )}
 
-      {loading && <div className="pr-loading">Loading projects…</div>}
+      {loading && (
+        <div className="pr-grid pr-grid-loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card pr-card pr-card-skeleton">
+              <Skeleton variant="text" width="40%" height={11} />
+              <div style={{ height: 12 }} />
+              <Skeleton variant="text" width="70%" height={20} />
+              <div style={{ height: 6 }} />
+              <Skeleton variant="text" width="55%" height={12} />
+              <div style={{ height: 14 }} />
+              <Skeleton variant="text" lines={2} />
+              <div style={{ height: 16 }} />
+              <Skeleton variant="pill" width={140} height={24} />
+            </div>
+          ))}
+        </div>
+      )}
       {error && <div className="pr-error">⚠ {error}</div>}
 
       {!loading && !error && filtered.length === 0 && brand && (

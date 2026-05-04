@@ -352,7 +352,7 @@ export function CopilotPanel({ open, onClose }: CopilotPanelProps) {
                   <button
                     key={s}
                     type="button"
-                    className="cp-suggestion"
+                    className="cp-suggestion spring-hover"
                     onClick={() => {
                       setInput(s);
                     }}

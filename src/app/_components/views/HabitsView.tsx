@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyHabitTagFilter } from "../../../lib/modes";
+import { Skeleton } from "../Skeleton";
 import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
 import { subscribeMultipleTables } from "../../../lib/realtime";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -252,9 +253,31 @@ function SetupCard({ hint, onRetry }: { hint: string; onRetry: () => void }) {
 
 function LoadingCard() {
   return (
-    <div className="card">
-      <div className="card-label">01 // TODAY · HABITS</div>
-      <p className="hb-loading">Loading habits…</p>
+    <div className="ht-layout">
+      <div className="card">
+        <div className="card-label">01 // SEASON</div>
+        <div style={{ height: 12 }} />
+        <Skeleton variant="text" width="55%" height={20} />
+        <div style={{ height: 14 }} />
+        <Skeleton variant="pill" width="100%" height={10} />
+        <div style={{ height: 10 }} />
+        <Skeleton variant="text" width="40%" height={11} />
+      </div>
+      <div className="card">
+        <div className="card-label">02 // ANCHORS</div>
+        <div style={{ height: 12 }} />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0" }}>
+            <Skeleton variant="avatar" width={28} height={28} />
+            <Skeleton variant="text" width="60%" height={14} />
+          </div>
+        ))}
+      </div>
+      <div className="card">
+        <div className="card-label">03 // WEEKLY</div>
+        <div style={{ height: 12 }} />
+        <Skeleton variant="text" lines={3} />
+      </div>
     </div>
   );
 }

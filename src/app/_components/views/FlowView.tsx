@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useMode } from "../ModeProvider";
 import { type BrandMode, MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
+import { Skeleton } from "../Skeleton";
 import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
 import { subscribeMultipleTables } from "../../../lib/realtime";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -153,24 +154,55 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
 
   const handleSubmit = useCallback(async () => {
     if (!text.trim()) return;
+
+    // Optimistic UI: insert a synthetic ship row immediately so the user
+    // sees their submission in the list. If the request fails we'll restore.
+    const trimmed = text.trim();
+    const ctx = context || null;
+    const optimisticShip: Ship = {
+      id: -Date.now(), // negative id signals "pending" / not real yet
+      text: trimmed,
+      context: ctx,
+      created_at: Date.now(),
+    };
+    const prevText = text;
+    const prevContext = context;
+    setShipsData((prev) =>
+      prev
+        ? {
+            ...prev,
+            ships: [optimisticShip, ...prev.ships],
+            shippedToday: true,
+          }
+        : prev,
+    );
+    setText("");
+    setContext("");
     setSubmitting(true);
     setError(null);
+
     try {
       const res = await fetch("/api/ships", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.trim(), context: context || null }),
+        body: JSON.stringify({ text: trimmed, context: ctx }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error ?? "Ship failed");
       }
-      setText("");
-      setContext("");
       setConfirmed(true);
       setTimeout(() => setConfirmed(false), 2000);
       await fetchShips();
     } catch (e) {
+      // Roll back the optimistic insert + restore the input
+      setText(prevText);
+      setContext(prevContext);
+      setShipsData((prev) =>
+        prev
+          ? { ...prev, ships: prev.ships.filter((s) => s.id !== optimisticShip.id) }
+          : prev,
+      );
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setSubmitting(false);
@@ -225,7 +257,7 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
             ))}
           </select>
           <button
-            className={`fl-btn fl-btn-primary fl-submit${confirmed ? " fl-confirm" : ""}`}
+            className={`fl-btn fl-btn-primary fl-submit spring-hover${confirmed ? " fl-confirm" : ""}`}
             onClick={handleSubmit}
             disabled={submitting || !text.trim()}
           >
@@ -245,17 +277,28 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
       </div>
 
       {/* Recent ships */}
-      <ul className="fl-ships">
-        {recent.map((s) => (
-          <li key={s.id} className="fl-ship">
-            <span className="fl-ship-text">{s.text}</span>
-            <span className="fl-ship-meta">
-              {s.context && <span className="fl-ship-ctx">{s.context}</span>}
-              <span className="fl-ship-time">{relTime(s.created_at)}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
+      {shipsData === null && !error ? (
+        <ul className="fl-ships fl-ships-loading">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li key={i} className="fl-ship">
+              <Skeleton variant="text" width="70%" height={14} />
+              <Skeleton variant="text" width="20%" height={11} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul className="fl-ships">
+          {recent.map((s) => (
+            <li key={s.id} className={`fl-ship${s.id < 0 ? " fl-ship-pending" : ""}`}>
+              <span className="fl-ship-text">{s.text}</span>
+              <span className="fl-ship-meta">
+                {s.context && <span className="fl-ship-ctx">{s.context}</span>}
+                <span className="fl-ship-time">{s.id < 0 ? "saving…" : relTime(s.created_at)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -347,6 +390,18 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
 
       {error && <span className="flow-error">{error}</span>}
 
+      {loading && (
+        <ul className="fl-queue fl-queue-loading">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <li key={i} className="fl-qitem">
+              <Skeleton variant="text" width="60%" height={14} />
+              <div style={{ height: 8 }} />
+              <Skeleton variant="text" width="35%" height={11} />
+            </li>
+          ))}
+        </ul>
+      )}
+
       {!loading && count === 0 && (
         <p className="fl-empty">Queue is empty. Nothing waiting on you.</p>
       )}
@@ -365,13 +420,13 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
                 <span className={waitClass(item.created_at)}>{waitLabel(item.created_at)}</span>
                 <div className="fl-qactions">
                   <button
-                    className="fl-btn fl-btn-danger"
+                    className="fl-btn fl-btn-danger spring-hover"
                     onClick={() => handleDismiss(item.id)}
                   >
                     DISMISS
                   </button>
                   <button
-                    className="fl-btn fl-btn-primary"
+                    className="fl-btn fl-btn-primary spring-hover"
                     onClick={() => handleDecide(item)}
                   >
                     DECIDE →

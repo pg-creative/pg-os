@@ -5,6 +5,8 @@
  * Renders user / assistant text / tool-call / tool-result / error variants.
  */
 
+import { Skeleton } from "../Skeleton";
+
 export type MessageRole = "user" | "assistant";
 
 export interface ToolCallEvent {
@@ -69,14 +71,15 @@ export function CopilotMessage({ msg }: CopilotMessageProps) {
         <div className="cp-msg-bubble">
           {msg.error ? (
             <span className="cp-msg-error">{msg.error}</span>
+          ) : msg.streaming && !msg.text ? (
+            <span className="cp-msg-text cp-msg-streaming-skeleton" aria-label="Generating response">
+              <Skeleton variant="text" width="90%" height={14} />
+              <Skeleton variant="text" width="75%" height={14} />
+              <Skeleton variant="text" width="55%" height={14} />
+            </span>
           ) : (
             <>
-              <span className="cp-msg-text">
-                {msg.text}
-                {msg.streaming && !msg.text && (
-                  <span className="cp-msg-cursor" aria-hidden="true" />
-                )}
-              </span>
+              <span className="cp-msg-text">{msg.text}</span>
               {msg.streaming && msg.text && (
                 <span className="cp-msg-cursor" aria-hidden="true" />
               )}
