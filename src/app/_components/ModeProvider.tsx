@@ -2,18 +2,27 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { type BrandMode, MODE_CONFIG, nextBrandMode, prevBrandMode } from "../../lib/modes";
 
-export type Mode = "howls" | "totoro" | "mononoke";
+export type Mode =
+  | "laputa-day"
+  | "laputa-twilight"
+  | "laputa-midnight"
+  | "howls"
+  | "totoro"
+  | "mononoke";
 
 export const MODE_LABELS: Record<Mode, string> = {
+  "laputa-day": "LAPUTA DAY",
+  "laputa-twilight": "LAPUTA TWILIGHT",
+  "laputa-midnight": "LAPUTA MIDNIGHT",
   "howls": "HOWL'S GOLDEN HOUR",
   "totoro": "TOTORO DUSK",
   "mononoke": "MONONOKE FOREST",
 };
 
 function modeForHour(h: number): Mode {
-  if (h >= 6 && h < 18) return "howls";
-  if (h >= 18 && h < 21) return "totoro";
-  return "mononoke";
+  if (h >= 6 && h < 18) return "laputa-day";
+  if (h >= 18 && h < 21) return "laputa-twilight";
+  return "laputa-midnight";
 }
 
 export function greetingForHour(h: number): string {
@@ -23,16 +32,17 @@ export function greetingForHour(h: number): string {
   return "night,";
 }
 
-const VALID_MODES: Mode[] = ["howls", "totoro", "mononoke"];
+const VALID_MODES: Mode[] = [
+  "laputa-day", "laputa-twilight", "laputa-midnight",
+  "howls", "totoro", "mononoke",
+];
 const KEY_MANUAL = "pg-os-laputa-manual";
 const KEY_AUTO = "pg-os-laputa-auto";
 const KEY_BRAND = "pg-os-brand-mode";
 
-// Backward-compat: map legacy "laputa-*" localStorage values to the new palette ids.
+// Backward-compat: any prior alt-palette value still resolves cleanly.
 const LEGACY_MAP: Record<string, Mode> = {
-  "laputa-day": "howls",
-  "laputa-twilight": "totoro",
-  "laputa-midnight": "mononoke",
+  // No remaps needed — laputa-* are canonical again. Reserved for future renames.
 };
 function migrateMode(raw: string | null): Mode | null {
   if (!raw) return null;
@@ -60,7 +70,7 @@ type Ctx = {
 const ModeCtx = createContext<Ctx | null>(null);
 
 export function ModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<Mode>("howls");
+  const [mode, setModeState] = useState<Mode>("laputa-day");
   const [autoMode, setAutoModeState] = useState<boolean>(true);
   const [greeting, setGreeting] = useState<string>("afternoon,");
   const [brand, setBrandState] = useState<BrandMode | null>(null);

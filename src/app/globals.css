@@ -1,76 +1,135 @@
 @import "tailwindcss";
 
-/* === Palette tokens (rebrand 2026-Q2 — Howl's / Totoro / Mononoke) ===== */
-/* Three Ghibli-aligned dark-warm palettes. All variants share spacing,    */
-/* radius, motion. Per-variant: bg/fg/accent + serif + hero painting.      */
+/* === Palette tokens (Q2 — Laputa daily-driver + Ghibli alts) =========== */
+/* Six palettes. Laputa Day/Twilight/Midnight = primary daily-driver       */
+/* (light powder-blue lineage, AAA legibility). Howl's / Totoro / Mononoke */
+/* = optional warm-dark alts. All share spacing, radius, motion.           */
 
-/* ── Howl's Golden Hour (6am–6pm — warm amber, deep blue accents) ─────── */
+/* ── Laputa Day (6am–6pm — powder blue, coral accents, cream parchment) ─ */
+:root[data-variant="laputa-day"] {
+  --bg-0:#E8F0F7; --bg-1:#DEE7F2; --bg-2:#CED9E6;
+  --fg:#1A2533; --fg-dim:#3A4756; --muted:#536273;
+  --accent:#3F6FA8; --accent-2:#D87C52; --accent-3:#789BBE;
+  --panel:rgba(255,255,255,0.78); --panel-solid:#F4F8FC;
+  --border:rgba(63,111,168,0.36); --border-soft:rgba(40,60,82,0.14);
+  --success:#5C8A55; --danger:#B0432C;
+  --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  --hero-0:url("/hero-laputa.png");
+  --hero-url:var(--hero-0);
+  --avatar-text:#FFFFFF;
+  --particle-1:#3F6FA8; --particle-2:#FFFFFF; --particle-3:#A8C2DA;
+  --banner-gradient: linear-gradient(100deg, rgba(244,248,252,0.92) 0%, rgba(244,248,252,0.62) 35%, rgba(244,248,252,0.10) 70%, rgba(244,248,252,0) 100%);
+  --scrim-rgb: 232, 240, 247;
+}
+/* ── Laputa Twilight (6pm–9pm — deep blue, amber, soft golden bands) ──── */
+:root[data-variant="laputa-twilight"] {
+  --bg-0:#1F3252; --bg-1:#17294A; --bg-2:#122240;
+  --fg:#F0F5FC; --fg-dim:#CBD8EA; --muted:#9DB1CB;
+  --accent:#92BFEF; --accent-2:#F2B585; --accent-3:#C2D5EA;
+  --panel:rgba(23,41,74,0.70); --panel-solid:#15253F;
+  --border:rgba(146,191,239,0.45); --border-soft:rgba(180,200,220,0.18);
+  --success:#9FCB99; --danger:#F09F80;
+  --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  --hero-0:url("/hero-laputa-twilight.png");
+  --hero-url:var(--hero-0);
+  --avatar-text:#0F1D30;
+  --particle-1:#92BFEF; --particle-2:#F5E1C8; --particle-3:#F2B585;
+  --banner-gradient: linear-gradient(100deg, rgba(21,37,63,0.92) 0%, rgba(21,37,63,0.62) 35%, rgba(21,37,63,0.12) 70%, rgba(21,37,63,0) 100%);
+  --scrim-rgb: 18, 30, 50;
+}
+/* ── Laputa Midnight (9pm–6am — ink, golden embers, deep starlight) ───── */
+:root[data-variant="laputa-midnight"] {
+  --bg-0:#091433; --bg-1:#0F1D45; --bg-2:#15275A;
+  --fg:#EEF3FB; --fg-dim:#BFCFE8; --muted:#92A8CC;
+  --accent:#5E82E8; --accent-2:#F5C29A; --accent-3:#8AA0DC;
+  --panel:rgba(15,29,69,0.72); --panel-solid:#0C1A40;
+  --border:rgba(94,130,232,0.46); --border-soft:rgba(160,180,210,0.18);
+  --success:#9CC1E6; --danger:#F09F80;
+  --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  --hero-0:url("/hero-laputa-night.png");
+  --hero-url:var(--hero-0);
+  --avatar-text:#FFFFFF;
+  --particle-1:#5E82E8; --particle-2:#F5F1E0; --particle-3:#8AA0DC;
+  --banner-gradient: linear-gradient(100deg, rgba(12,26,64,0.94) 0%, rgba(12,26,64,0.62) 35%, rgba(12,26,64,0.12) 70%, rgba(12,26,64,0) 100%);
+  --scrim-rgb: 5, 10, 25;
+}
+/* ── Howl's Golden Hour (alt — warm amber, deep blue accents) ─────────── */
 :root[data-variant="howls"] {
   --bg-0:#0D0806; --bg-1:#1A120C; --bg-2:#22180F;
-  --fg:#F4E8D1; --fg-dim:#C9B391; --muted:#8B7355;
-  --accent:#D6A367; --accent-2:#E89B6F; --accent-3:#6B8CAE;
-  --panel:rgba(38,26,18,0.55); --panel-solid:#201610;
-  --border:rgba(214,163,103,0.20); --border-soft:rgba(214,163,103,0.10);
-  --success:#7FB069; --danger:#D0594B;
+  --fg:#FCF3DC; --fg-dim:#DBC79E; --muted:#A88B66;
+  --accent:#E5B374; --accent-2:#F0A87C; --accent-3:#85A3C2;
+  --panel:rgba(38,26,18,0.65); --panel-solid:#201610;
+  --border:rgba(229,179,116,0.30); --border-soft:rgba(229,179,116,0.14);
+  --success:#8FC078; --danger:#E0695A;
   --serif:"Cormorant Garamond","Cormorant",Georgia,serif;
   --body:"Inter",system-ui,-apple-system,sans-serif;
   --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
   --hero-0:url("/hero-howls.png");
   --hero-url:var(--hero-0);
   --avatar-text:#1A120C;
-  --particle-1:#D6A367; --particle-2:#F4E8D1; --particle-3:#E89B6F;
-  --banner-gradient: linear-gradient(100deg, rgba(32,22,16,0.88) 0%, rgba(32,22,16,0.55) 35%, rgba(32,22,16,0.10) 70%, rgba(32,22,16,0) 100%);
+  --particle-1:#E5B374; --particle-2:#FCF3DC; --particle-3:#F0A87C;
+  --banner-gradient: linear-gradient(100deg, rgba(32,22,16,0.92) 0%, rgba(32,22,16,0.62) 35%, rgba(32,22,16,0.12) 70%, rgba(32,22,16,0) 100%);
+  --scrim-rgb: 13, 8, 6;
 }
-/* ── Totoro Dusk (6pm–9pm — firefly amber over mossy green) ───────────── */
+/* ── Totoro Dusk (alt — firefly amber over mossy green) ───────────────── */
 :root[data-variant="totoro"] {
   --bg-0:#070A08; --bg-1:#0F1410; --bg-2:#151C17;
-  --fg:#E8EDE3; --fg-dim:#BDC7B4; --muted:#7A8A78;
-  --accent:#E0B552; --accent-2:#D57A5F; --accent-3:#73A58E;
-  --panel:rgba(16,26,20,0.55); --panel-solid:#101A14;
-  --border:rgba(224,181,82,0.17); --border-soft:rgba(224,181,82,0.08);
-  --success:#8FBD7A; --danger:#C76A5A;
+  --fg:#F1F5EB; --fg-dim:#CDD6C0; --muted:#94A491;
+  --accent:#EBC360; --accent-2:#E1886E; --accent-3:#85B69E;
+  --panel:rgba(16,26,20,0.65); --panel-solid:#101A14;
+  --border:rgba(235,195,96,0.27); --border-soft:rgba(235,195,96,0.12);
+  --success:#9DC889; --danger:#D17968;
   --serif:"EB Garamond",Georgia,serif;
   --body:"Inter",system-ui,-apple-system,sans-serif;
   --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
   --hero-0:url("/hero-totoro.png");
   --hero-url:var(--hero-0);
   --avatar-text:#0F1410;
-  --particle-1:#E0B552; --particle-2:#BDC7B4; --particle-3:#D57A5F;
-  --banner-gradient: linear-gradient(100deg, rgba(15,20,16,0.90) 0%, rgba(15,20,16,0.55) 35%, rgba(15,20,16,0.10) 70%, rgba(15,20,16,0) 100%);
+  --particle-1:#EBC360; --particle-2:#CDD6C0; --particle-3:#E1886E;
+  --banner-gradient: linear-gradient(100deg, rgba(15,20,16,0.94) 0%, rgba(15,20,16,0.62) 35%, rgba(15,20,16,0.12) 70%, rgba(15,20,16,0) 100%);
+  --scrim-rgb: 7, 10, 8;
 }
-/* ── Mononoke Forest (9pm–6am — kodama red, jade stone, spirit gold) ──── */
+/* ── Mononoke Forest (alt — kodama red, jade stone, spirit gold) ──────── */
 :root[data-variant="mononoke"] {
   --bg-0:#060908; --bg-1:#0D1311; --bg-2:#121A17;
-  --fg:#EFE8DA; --fg-dim:#C1B89F; --muted:#6F867F;
-  --accent:#C9A560; --accent-2:#B8564F; --accent-3:#87A89A;
-  --panel:rgba(14,22,20,0.58); --panel-solid:#0E1614;
-  --border:rgba(201,165,96,0.19); --border-soft:rgba(201,165,96,0.09);
-  --success:#86B08A; --danger:#B8564F;
+  --fg:#F7F1E2; --fg-dim:#D2C8AC; --muted:#8AA098;
+  --accent:#D7B26A; --accent-2:#C66860; --accent-3:#9CB9AB;
+  --panel:rgba(14,22,20,0.68); --panel-solid:#0E1614;
+  --border:rgba(215,178,106,0.29); --border-soft:rgba(215,178,106,0.13);
+  --success:#94BD97; --danger:#C66860;
   --serif:"Playfair Display",Georgia,serif;
   --body:"Inter",system-ui,-apple-system,sans-serif;
   --mono:"Space Mono","SF Mono",Menlo,monospace;
   --hero-0:url("/hero-mononoke.png");
   --hero-url:var(--hero-0);
   --avatar-text:#0E1614;
-  --particle-1:#C9A560; --particle-2:#C1B89F; --particle-3:#B8564F;
-  --banner-gradient: linear-gradient(100deg, rgba(14,22,20,0.92) 0%, rgba(14,22,20,0.55) 35%, rgba(14,22,20,0.10) 70%, rgba(14,22,20,0) 100%);
+  --particle-1:#D7B26A; --particle-2:#D2C8AC; --particle-3:#C66860;
+  --banner-gradient: linear-gradient(100deg, rgba(14,22,20,0.94) 0%, rgba(14,22,20,0.62) 35%, rgba(14,22,20,0.12) 70%, rgba(14,22,20,0) 100%);
+  --scrim-rgb: 6, 9, 8;
 }
-/* Default until ModeProvider mounts (matches howls — warm gold daytime) */
-:root { color-scheme: dark; }
+/* Default until ModeProvider mounts — matches Laputa Day (light blue daytime). */
+:root { color-scheme: light dark; }
 :root:not([data-variant]) {
-  --bg-0:#0D0806; --bg-1:#1A120C; --bg-2:#22180F;
-  --fg:#F4E8D1; --fg-dim:#C9B391; --muted:#8B7355;
-  --accent:#D6A367; --accent-2:#E89B6F; --accent-3:#6B8CAE;
-  --panel:rgba(38,26,18,0.55); --panel-solid:#201610;
-  --border:rgba(214,163,103,0.20); --border-soft:rgba(214,163,103,0.10);
-  --success:#7FB069; --danger:#D0594B;
-  --serif:"Cormorant Garamond",Georgia,serif;
+  --bg-0:#E8F0F7; --bg-1:#DEE7F2; --bg-2:#CED9E6;
+  --fg:#1A2533; --fg-dim:#3A4756; --muted:#536273;
+  --accent:#3F6FA8; --accent-2:#D87C52; --accent-3:#789BBE;
+  --panel:rgba(255,255,255,0.78); --panel-solid:#F4F8FC;
+  --border:rgba(63,111,168,0.36); --border-soft:rgba(40,60,82,0.14);
+  --success:#5C8A55; --danger:#B0432C;
+  --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
   --body:"Inter",system-ui,sans-serif;
   --mono:"JetBrains Mono",Menlo,monospace;
-  --hero-0:url("/hero-howls.png"); --hero-url:var(--hero-0);
-  --avatar-text:#1A120C;
-  --particle-1:#D6A367; --particle-2:#F4E8D1; --particle-3:#E89B6F;
-  --banner-gradient: linear-gradient(100deg, rgba(32,22,16,0.88) 0%, rgba(32,22,16,0.55) 35%, rgba(32,22,16,0.10) 70%, rgba(32,22,16,0) 100%);
+  --hero-0:url("/hero-laputa.png"); --hero-url:var(--hero-0);
+  --avatar-text:#FFFFFF;
+  --particle-1:#3F6FA8; --particle-2:#FFFFFF; --particle-3:#A8C2DA;
+  --banner-gradient: linear-gradient(100deg, rgba(244,248,252,0.92) 0%, rgba(244,248,252,0.62) 35%, rgba(244,248,252,0.10) 70%, rgba(244,248,252,0) 100%);
+  --scrim-rgb: 232, 240, 247;
 }
 :root { transition: background 0.6s ease, color 0.6s ease; }
 .card, .day, .inbox-av, .np-controls .btn { transition: background 0.6s ease, border-color 0.6s ease, color 0.6s ease; }
@@ -168,12 +227,12 @@ body{
   background: var(--banner-gradient), var(--hero-0) center/cover no-repeat;
   overflow:hidden;
 }
-.session .greeting{font-family:var(--serif),serif;font-size:44px;font-weight:500;line-height:1.1;letter-spacing:-0.01em;margin:0}
+.session .greeting{font-family:var(--serif),serif;font-size:44px;font-weight:600;line-height:1.1;letter-spacing:-0.01em;margin:0}
 .session .greeting em{font-style:italic;color:var(--accent)}
 .session .datestamp{font-family:var(--mono),monospace;font-size:10.5px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-top:10px}
 .session .clock{position:absolute;top:20px;right:24px;text-align:right}
 .session .clock .tz{font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
-.session .clock .time{font-family:var(--serif),serif;font-size:54px;line-height:1;display:flex;align-items:baseline;gap:6px;color:var(--fg);font-weight:500}
+.session .clock .time{font-family:var(--serif),serif;font-size:54px;line-height:1;display:flex;align-items:baseline;gap:6px;color:var(--fg);font-weight:600}
 .session .clock .colon{color:var(--accent);animation:blink 1.2s ease-in-out infinite}
 .session .clock .secs{font-size:22px;color:var(--fg-dim);margin-left:4px}
 .session .clock .local{font-family:var(--mono),monospace;font-size:9.5px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-top:8px}
@@ -181,7 +240,7 @@ body{
 /* ── Vitals ─────────────────────────────────────────────────────────── */
 .vitals{grid-area:vitals}
 .vit-hero{margin:-6px 0 14px}
-.vit-big{font-family:var(--serif),serif;font-size:38px;font-weight:500;line-height:1;display:flex;align-items:baseline;gap:8px}
+.vit-big{font-family:var(--serif),serif;font-size:38px;font-weight:600;line-height:1;display:flex;align-items:baseline;gap:8px}
 .vit-big small{font-family:var(--mono),monospace;font-size:11px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-left:6px}
 .vit-sub{font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;margin-top:6px}
 .vit-sub .up{color:var(--success);margin-right:8px}
@@ -190,20 +249,20 @@ body{
 .vit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:14px}
 .vit-kv{font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase}
 .vit-kv .k{color:var(--muted);margin-bottom:4px}
-.vit-kv .v{font-family:var(--serif),serif;font-size:20px;letter-spacing:-0.01em;color:var(--fg);font-weight:500;text-transform:none;display:flex;align-items:baseline;gap:4px}
+.vit-kv .v{font-family:var(--serif),serif;font-size:20px;letter-spacing:-0.01em;color:var(--fg);font-weight:600;text-transform:none;display:flex;align-items:baseline;gap:4px}
 .vit-kv .v small{font-family:var(--mono),monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em}
 .rings{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px}
 .ring{display:flex;flex-direction:column;align-items:center;gap:4px;font-family:var(--mono),monospace;font-size:9px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
 .ring svg{display:block}
-.ring .num{font-family:var(--serif),serif;font-size:13px;color:var(--fg);letter-spacing:-0.01em;font-weight:500;text-transform:none;margin-top:2px}
+.ring .num{font-family:var(--serif),serif;font-size:13px;color:var(--fg);letter-spacing:-0.01em;font-weight:600;text-transform:none;margin-top:2px}
 
 /* ── Location ───────────────────────────────────────────────────────── */
 .location{grid-area:location;min-height:560px;padding:0;overflow:hidden}
 .loc-bg{position:absolute;inset:0;z-index:1;background-image:var(--hero-url);background-size:cover;background-position:center;opacity:0.82;filter:saturate(1.05) brightness(1.02)}
-.loc-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(13,8,6,0.15) 0%,rgba(13,8,6,0.55) 60%,var(--bg-1) 100%)}
+.loc-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(var(--scrim-rgb),0.15) 0%,rgba(var(--scrim-rgb),0.55) 60%,var(--bg-1) 100%)}
 .loc-body{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:flex-end;height:100%;padding:20px 22px 22px;min-height:560px}
 .loc-coords{font-family:var(--mono),monospace;font-size:10.5px;letter-spacing:0.18em;color:var(--fg-dim);text-transform:uppercase;display:flex;justify-content:space-between;border-top:1px solid var(--border-soft);padding-top:14px;margin-top:14px}
-.loc-city{font-family:var(--serif),serif;font-size:34px;font-weight:500;line-height:1.1;font-style:italic;margin:0;color:var(--fg)}
+.loc-city{font-family:var(--serif),serif;font-size:34px;font-weight:600;line-height:1.1;font-style:italic;margin:0;color:var(--fg)}
 .loc-meta{font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.16em;color:var(--fg-dim);text-transform:uppercase;margin-top:6px}
 .loc-list{margin-top:22px;display:flex;flex-direction:column;gap:10px}
 .loc-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border-soft);font-family:var(--mono),monospace;font-size:10.5px;letter-spacing:0.1em;color:var(--fg-dim);text-transform:uppercase}
@@ -211,11 +270,11 @@ body{
 
 /* ── Calendar ───────────────────────────────────────────────────────── */
 .calendar{grid-area:calendar}
-.cal-title{font-family:var(--serif),serif;font-size:28px;font-weight:500;margin:0 0 16px}
+.cal-title{font-family:var(--serif),serif;font-size:28px;font-weight:600;margin:0 0 16px}
 .cal-title em{font-style:italic;color:var(--accent)}
 .days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:18px}
 .day{border:1px solid var(--border-soft);border-radius:7px;padding:10px 4px;text-align:center;font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;transition:all 0.2s;background:rgba(255,255,255,0.32)}
-.day .num{display:block;font-family:var(--serif),serif;font-size:18px;color:var(--fg-dim);margin-top:4px;letter-spacing:-0.01em;font-weight:500}
+.day .num{display:block;font-family:var(--serif),serif;font-size:18px;color:var(--fg-dim);margin-top:4px;letter-spacing:-0.01em;font-weight:600}
 .day.today{background:var(--fg);color:var(--bg-0);border-color:var(--fg)}
 .day.today .num{color:var(--bg-0)}
 .events{display:flex;flex-direction:column;gap:0}
@@ -259,7 +318,7 @@ body{
 .np-art-img::after,.np-art-img::before{display:none}
 .np-title-link{color:inherit;text-decoration:none}
 .np-title-link:hover .title{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:4px}
-.np-info .title{font-family:var(--serif),serif;font-size:24px;font-weight:500;line-height:1.15;margin:0 0 4px}
+.np-info .title{font-family:var(--serif),serif;font-size:24px;font-weight:600;line-height:1.15;margin:0 0 4px}
 .np-info .title em{font-style:italic;color:var(--accent)}
 .np-info .sub{font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
 .waveform{height:46px;display:flex;align-items:center;gap:2px;margin-bottom:10px}
@@ -275,7 +334,7 @@ body{
 
 /* ── Project ────────────────────────────────────────────────────────── */
 .project{grid-area:project}
-.proj-title{font-family:var(--serif),serif;font-size:22px;font-weight:500;margin:0 0 4px}
+.proj-title{font-family:var(--serif),serif;font-size:22px;font-weight:600;margin:0 0 4px}
 .proj-title em{font-style:italic;color:var(--accent)}
 .proj-sub{font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
 .progress-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
@@ -296,9 +355,12 @@ body{
 .switcher .chip.active{background:var(--fg);color:var(--bg-0);border-color:var(--fg)}
 .switcher .chip.active .swatch{border-color:var(--bg-0)}
 .switcher .swatch{width:10px;height:10px;border-radius:50%;border:1px solid var(--border-soft)}
-.switcher .swatch.howls{background:linear-gradient(135deg,#1A120C,#D6A367)}
-.switcher .swatch.totoro{background:linear-gradient(135deg,#0F1410,#E0B552)}
-.switcher .swatch.mononoke{background:linear-gradient(135deg,#0D1311,#C9A560)}
+.switcher .swatch.laputa-day{background:linear-gradient(135deg,#E8F0F7 35%,#3F6FA8)}
+.switcher .swatch.laputa-twilight{background:linear-gradient(135deg,#1F3252 35%,#92BFEF)}
+.switcher .swatch.laputa-midnight{background:linear-gradient(135deg,#091433 35%,#5E82E8)}
+.switcher .swatch.howls{background:linear-gradient(135deg,#1A120C,#E5B374)}
+.switcher .swatch.totoro{background:linear-gradient(135deg,#0F1410,#EBC360)}
+.switcher .swatch.mononoke{background:linear-gradient(135deg,#0D1311,#D7B26A)}
 .switcher .chip.auto-toggle{font-weight:500;background:rgba(90,135,184,0.15);color:var(--accent);border-color:var(--border)}
 .switcher .chip.auto-toggle.active{background:var(--accent);color:var(--avatar-text);border-color:var(--accent);box-shadow:0 0 12px rgba(74,110,223,0.3)}
 .switcher .label{font-family:var(--mono),monospace;font-size:9.5px;letter-spacing:0.2em;color:var(--muted);padding:0 4px;text-transform:uppercase}

@@ -133,12 +133,16 @@ export function useCommands(): Command[] {
   }));
 
   // ── Palette ───────────────────────────────────────────────────────────────
+  type PaletteId = "laputa-day" | "laputa-twilight" | "laputa-midnight" | "howls" | "totoro" | "mononoke";
   const paletteCommands: Command[] = (
     [
-      { id: "howls",     label: "Howl's Golden Hour", keywords: ["day", "morning", "afternoon", "amber", "gold"] },
-      { id: "totoro",    label: "Totoro Dusk",        keywords: ["twilight", "dusk", "evening", "firefly"] },
-      { id: "mononoke",  label: "Mononoke Forest",    keywords: ["midnight", "night", "forest", "spirit"] },
-    ] as Array<{ id: "howls" | "totoro" | "mononoke"; label: string; keywords: string[] }>
+      { id: "laputa-day",      label: "Laputa Day",         keywords: ["day", "morning", "afternoon", "powder", "blue", "sky", "light"] },
+      { id: "laputa-twilight", label: "Laputa Twilight",    keywords: ["twilight", "dusk", "evening", "deep blue", "amber"] },
+      { id: "laputa-midnight", label: "Laputa Midnight",    keywords: ["midnight", "night", "starlight", "ink"] },
+      { id: "howls",           label: "Howl's Golden Hour", keywords: ["howls", "amber", "gold", "warm", "alt"] },
+      { id: "totoro",          label: "Totoro Dusk",        keywords: ["totoro", "firefly", "moss", "alt"] },
+      { id: "mononoke",        label: "Mononoke Forest",    keywords: ["mononoke", "forest", "spirit", "alt"] },
+    ] as Array<{ id: PaletteId; label: string; keywords: string[] }>
   ).map(({ id, label, keywords }) => ({
     id: `palette.${id}`,
     label,

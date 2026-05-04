@@ -15,14 +15,14 @@ export const viewport: Viewport = {
   maximumScale: 5,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#1A120C" },
-    { media: "(prefers-color-scheme: dark)",  color: "#0D0806" },
+    { media: "(prefers-color-scheme: light)", color: "#E8F0F7" },
+    { media: "(prefers-color-scheme: dark)",  color: "#091433" },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-variant="howls" suppressHydrationWarning>
+    <html lang="en" data-variant="laputa-day" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
