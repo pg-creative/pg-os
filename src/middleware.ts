@@ -50,6 +50,10 @@ function briefingCookieName(d: Date): string {
   return `pg-os-briefing-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function eveningCookieName(d: Date): string {
+  return `pg-os-evening-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /**
  * Returns a redirect response to /briefing if the morning gate fires:
  *   pathname === "/", local hour ∈ [6, 10), and no per-day briefing cookie.
@@ -69,6 +73,25 @@ function maybeMorningRedirect(req: NextRequest): NextResponse | null {
   return NextResponse.redirect(briefingUrl);
 }
 
+/**
+ * Returns a redirect response to /evening if the evening gate fires:
+ *   pathname === "/", local hour ∈ [21, 24), and no per-day evening cookie.
+ * Returns null otherwise. Once submitted, /api/evening/complete sets the cookie.
+ */
+function maybeEveningRedirect(req: NextRequest): NextResponse | null {
+  const { pathname } = req.nextUrl;
+  if (pathname !== "/") return null;
+  const now = new Date();
+  const hour = now.getHours();
+  if (hour < 21) return null;
+  const cookieName = eveningCookieName(now);
+  if (req.cookies.get(cookieName)) return null;
+  const eveningUrl = req.nextUrl.clone();
+  eveningUrl.pathname = "/evening";
+  eveningUrl.search = "";
+  return NextResponse.redirect(eveningUrl);
+}
+
 export function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
@@ -79,10 +102,12 @@ export function middleware(req: NextRequest) {
 
   const secret = process.env.PGOS_SHARED_SECRET;
 
-  // Dev mode (no secret) — fire morning redirect, then pass everything else.
+  // Dev mode (no secret) — fire morning OR evening redirect, then pass.
   if (!secret) {
-    const redirect = maybeMorningRedirect(req);
-    if (redirect) return redirect;
+    const morning = maybeMorningRedirect(req);
+    if (morning) return morning;
+    const evening = maybeEveningRedirect(req);
+    if (evening) return evening;
     return NextResponse.next();
   }
 
@@ -103,9 +128,11 @@ export function middleware(req: NextRequest) {
 
   const cookie = req.cookies.get(COOKIE_NAME)?.value;
   if (cookie === secret) {
-    // Authed — fire morning redirect on root, otherwise pass through.
-    const redirect = maybeMorningRedirect(req);
-    if (redirect) return redirect;
+    // Authed — fire morning OR evening redirect on root, otherwise pass.
+    const morning = maybeMorningRedirect(req);
+    if (morning) return morning;
+    const evening = maybeEveningRedirect(req);
+    if (evening) return evening;
     return NextResponse.next();
   }
 

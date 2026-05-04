@@ -165,12 +165,8 @@ export function useCommands(): Command[] {
       id: "evening.show",
       label: "Evening Ceremony",
       group: "Rituals",
-      hint: "Ships in W3",
-      keywords: ["evening", "ceremony", "ritual", "night", "show"],
-      run: () => {
-        console.log("evening ceremony ships in W3");
-        alert("Evening ceremony ships in Week 03");
-      },
+      keywords: ["evening", "ceremony", "ritual", "night", "show", "close"],
+      run: () => router.push("/evening"),
     },
   ];
 
