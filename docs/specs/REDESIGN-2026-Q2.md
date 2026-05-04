@@ -452,13 +452,15 @@ A: 11500   S: 14000   SSS: 18000
 - [x] T-05 Narrated Claude overview *(1.5)* — `80d6d90` · 2026-05-04 · screens in `docs/screenshots/redesign-2026-q2/w02/`
 - **Outcome:** hands on keyboard, eyes on signal. ✓
 
-### Week 03 — *Unlock: Depth*
-- [ ] T-11 Evening Ceremony *(2)*
-- [ ] T-09 Now Mode *(3)*
-- [ ] T-07 Season meter + T-08 Ambient idle *(2)*
-- [ ] T-12 Motion polish *(1.5)*
-- [ ] T-06 Timeline feed *(2 — optional this week)*
-- **Outcome:** the OS becomes a ritual.
+### Week 03 — *Unlock: Depth* ✓ COMPLETE (2026-05-04)
+- [x] T-11 Evening Ceremony *(2)* — `f681f07` · 2026-05-04
+- [x] T-09 Now Mode *(3)* — `29feb52` · 2026-05-04
+- [x] T-07 Season meter *(1)* — `83efe0f` · 2026-05-04
+- [x] T-08 Ambient idle *(1)* — `3ee8824` · 2026-05-04
+- [x] T-12 Motion polish *(1.5)* — `3fa8161` · 2026-05-04
+- [x] T-06 Timeline feed *(2)* — `26e93a5` · 2026-05-04
+- **Outcome:** the OS becomes a ritual. ✓
+- **Foundation:** T-13 Visual rebrand (Howl's / Totoro / Mononoke palettes) — `7576e45` · 2026-05-04
 
 ---
 

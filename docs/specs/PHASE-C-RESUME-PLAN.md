@@ -1,8 +1,21 @@
 # PG OS Q2 Redesign — Phase C Resume Plan
 
 > **Saved:** 2026-05-04
-> **Last commit:** `7576e45` — `feat(visual): Q2 rebrand foundation — Howl's / Totoro / Mononoke palettes (T-13)`
-> **Status:** Phase A + B + T-13 visual foundation **shipped**. Phase C **not started**.
+> **Last commit:** `3fa8161` — `feat(polish): haptic motion + skeletons + finalize Phase C wireup (T-12)`
+> **Status:** ✓ **PHASE C COMPLETE (2026-05-04)** — all 6 tickets shipped in parallel rip. See `REDESIGN-2026-Q2.md` § Week 03 for SHAs. This file is now historical.
+
+## ✓ Phase C Shipped (2026-05-04)
+- `f681f07` — T-11 Evening Ceremony (4-step ritual + 21:00 redirect gate)
+- `29feb52` — T-09 Now Mode (⌘. focus overlay + cross-tab state sync)
+- `83efe0f` — T-07 Season meter + drilldown (Q2 progress strip on Home)
+- `3ee8824` — T-08 Ambient idle (90s → palette-tagged quote rotation)
+- `26e93a5` — T-06 Unified timeline (ships ⨯ queue ⨯ runs ⨯ decisions ⨯ telegram ⨯ captures)
+- `3fa8161` — T-12 Polish (spring hover, drag-to-dismiss, skeletons, page wireup, +834 lines globals.css)
+- 12 Playwright screenshots in `docs/screenshots/redesign-2026-q2/w03/` covering all 3 palettes
+
+---
+
+## (Historical — original resume notes below)
 > **Source of truth for tickets:** `docs/specs/REDESIGN-2026-Q2.md`
 > **Visual handoff bundle:** `docs/specs/redesign-2026-q2/`
 > **Operator directive (verbatim):** *"i want to do all of this at once not just week 03 all of it -- and what about te stylytistci / visual redesign per claude designs recommendatiosn when does that happen?"*
