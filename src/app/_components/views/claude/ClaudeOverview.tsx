@@ -1,53 +1,102 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useIsCloud } from "../../useIsCloud";
 import { EmptyState } from "../../EmptyState";
 
-type OverviewData = {
-  proposalCount: number;
-  proposalsByType: Record<string, number>;
-  recentCorrections: number;
-  recentConfirmations: number;
-  sessionsAnalyzed: number;
-  agentSummary: { total: number; healthy: number; errored: number };
-  archiveSize: { conversations: number; messages: number } | null;
-  lastReviewDate: string | null;
+type Narration = {
+  narration: string;
+  updatedAt: string;
+  targets: string[];
 };
 
-function relDate(iso: string | null): string {
-  if (!iso) return "never";
-  try {
-    const d = new Date(iso);
-    const diff = Date.now() - d.getTime();
-    const days = Math.floor(diff / 86_400_000);
-    if (days === 0) return "today";
-    if (days === 1) return "yesterday";
-    if (days < 7) return `${days}d ago`;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
-    return iso;
+/**
+ * Parse a narration paragraph into ReactNodes.
+ * Handles:
+ *   *word*               → <em>word</em>
+ *   [[label|target]]     → <button className="cl-narration-link">label</button>
+ */
+function renderNarrationParagraph(
+  text: string,
+  scrollToSection: (id: string) => void,
+): ReactNode[] {
+  // Token pattern: either [[label|target]] or *word*
+  const TOKEN = /(\[\[([^\]|]+)\|([^\]]+)\]\])|(\*([^*]+)\*)/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = TOKEN.exec(text)) !== null) {
+    // Push any plain text before this token
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+
+    if (match[1]) {
+      // [[label|target]]
+      const label = match[2].trim();
+      const target = match[3].trim();
+      nodes.push(
+        <button
+          key={key++}
+          className="cl-narration-link"
+          onClick={() => scrollToSection(target)}
+        >
+          {label}
+        </button>,
+      );
+    } else if (match[4]) {
+      // *emphasis*
+      nodes.push(<em key={key++}>{match[5]}</em>);
+    }
+
+    lastIndex = match.index + match[0].length;
   }
+
+  // Remaining plain text
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes;
 }
 
 export function ClaudeOverview() {
-  const [data, setData] = useState<OverviewData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [narration, setNarration] = useState<Narration | null>(null);
+  const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState(false);
   const isCloud = useIsCloud();
 
-  const fetchOverview = useCallback(async () => {
-    try {
-      const res = await fetch("/api/claude/overview", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load overview");
-      setData(await res.json());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    }
+  const scrollToSection = useCallback((id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   useEffect(() => {
-    fetchOverview();
-  }, [fetchOverview]);
+    let cancelled = false;
+    fetch("/api/claude/overview/narrate", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("narrate fetch failed");
+        return res.json() as Promise<Narration>;
+      })
+      .then((data) => {
+        if (!cancelled) setNarration(data);
+      })
+      .catch(() => {
+        // Fall through — render fallback prose inline rather than error
+        if (!cancelled) {
+          setNarration({
+            narration:
+              "Watching the patterns. Nothing strident this week — last review still holds.",
+            updatedAt: new Date().toISOString(),
+            targets: [],
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const launchClaude = useCallback(async () => {
     setLaunching(true);
@@ -70,22 +119,6 @@ export function ClaudeOverview() {
     }
   }, []);
 
-  if (error) return <div className="card cl-card"><span className="flow-error">{error}</span></div>;
-  if (!data) return (
-    <div className="card cl-card">
-      <EmptyState
-        verb="Reading"
-        explanation="Pulling the last <em>seven</em> days of signals from disk."
-        glyph="◐"
-        variant="small"
-      />
-    </div>
-  );
-
-  const totalSignals = data.recentCorrections + data.recentConfirmations;
-  const corrPct = totalSignals ? (data.recentCorrections / totalSignals) * 100 : 0;
-  const confPct = totalSignals ? (data.recentConfirmations / totalSignals) * 100 : 0;
-
   return (
     <section id="cl-overview" className="card cl-card cl-overview">
       <div className="card-label">
@@ -93,74 +126,25 @@ export function ClaudeOverview() {
         <span className="cl-tag-muted">last 7 days</span>
       </div>
 
-      <div className="cl-overview-grid">
-        <div className="cl-stat-block">
-          <div className="cl-stat-label">SIGNAL RATIO</div>
-          <div className="cl-ratio-bar" aria-label={`${data.recentConfirmations} confirmations, ${data.recentCorrections} corrections`}>
-            <div className="cl-ratio-conf" style={{ width: `${confPct}%` }} />
-            <div className="cl-ratio-corr" style={{ width: `${corrPct}%` }} />
-          </div>
-          <div className="cl-stat-row">
-            <span className="cl-conf-text">{data.recentConfirmations} wins</span>
-            <span className="cl-corr-text">{data.recentCorrections} corrections</span>
-          </div>
-        </div>
-
-        <div className="cl-stat-block">
-          <div className="cl-stat-label">SESSIONS ANALYZED</div>
-          <div className="cl-stat-value">{data.sessionsAnalyzed}</div>
-          <div className="cl-stat-sub">across all surfaces</div>
-        </div>
-
-        <div className="cl-stat-block">
-          <div className="cl-stat-label">PENDING PROPOSALS</div>
-          <div className="cl-stat-value">{data.proposalCount}</div>
-          <div className="cl-stat-types">
-            {Object.entries(data.proposalsByType).map(([type, count]) => (
-              <span key={type} className={`cl-mini-badge cl-badge-${badgeKind(type)}`}>
-                {type.replace(/_/g, " ").toLowerCase()} · {count}
-              </span>
+      {loading ? (
+        <EmptyState
+          verb="Listening"
+          explanation="Reading what the agents observed <em>this week</em>."
+          glyph="◐"
+          variant="small"
+        />
+      ) : narration ? (
+        <div className="cl-narration" aria-live="polite">
+          {narration.narration
+            .split(/\n\n+/)
+            .filter(Boolean)
+            .map((para, i) => (
+              <p key={i}>
+                {renderNarrationParagraph(para, scrollToSection)}
+              </p>
             ))}
-          </div>
         </div>
-
-        <div className="cl-stat-block">
-          <div className="cl-stat-label">AGENT HEALTH</div>
-          <div className="cl-agent-dots">
-            {Array.from({ length: data.agentSummary.total }).map((_, i) => (
-              <span
-                key={i}
-                className={
-                  i < data.agentSummary.healthy
-                    ? "cl-dot ok"
-                    : i < data.agentSummary.healthy + data.agentSummary.errored
-                    ? "cl-dot err"
-                    : "cl-dot unknown"
-                }
-              />
-            ))}
-          </div>
-          <div className="cl-stat-sub">
-            {data.agentSummary.healthy} healthy · {data.agentSummary.errored} errored
-          </div>
-        </div>
-
-        <div className="cl-stat-block">
-          <div className="cl-stat-label">ARCHIVE</div>
-          <div className="cl-stat-value">
-            {data.archiveSize ? data.archiveSize.conversations.toLocaleString() : "—"}
-          </div>
-          <div className="cl-stat-sub">
-            {data.archiveSize ? `${data.archiveSize.messages.toLocaleString()} messages` : "no archive"}
-          </div>
-        </div>
-
-        <div className="cl-stat-block">
-          <div className="cl-stat-label">LAST REVIEW</div>
-          <div className="cl-stat-value cl-stat-small">{relDate(data.lastReviewDate)}</div>
-          <div className="cl-stat-sub">{data.lastReviewDate ?? "no review log"}</div>
-        </div>
-      </div>
+      ) : null}
 
       <div className="cl-overview-actions">
         {isCloud ? (
@@ -176,13 +160,4 @@ export function ClaudeOverview() {
       </div>
     </section>
   );
-}
-
-function badgeKind(type: string): string {
-  const t = type.toLowerCase();
-  if (t.includes("rule_promotion")) return "gold";
-  if (t.includes("config")) return "sapphire";
-  if (t.includes("rule_add")) return "emerald";
-  if (t.includes("skill")) return "coral";
-  return "muted";
 }
