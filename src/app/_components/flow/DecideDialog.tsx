@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { showToast } from "../Toast";
 
 export type QueueItem = {
   id: string;
@@ -46,6 +47,15 @@ function daysWaiting(createdAt: number): number {
   return Math.floor((Date.now() - createdAt) / 86_400_000);
 }
 
+function prettyDecision(decision: string): string {
+  if (decision === "approved") return "Approved";
+  if (decision === "deferred") return "Deferred";
+  if (decision === "rejected") return "Rejected";
+  if (decision === "dismissed") return "Dismissed";
+  // Custom decision (free-form text or option string) — return as-is, capped.
+  return decision.length > 60 ? decision.slice(0, 57) + "…" : decision;
+}
+
 function ageTier(days: number): { label: string; cls: string } {
   if (days >= 14) return { label: `${days}d · stale`, cls: "decide-age-stale" };
   if (days >= 7)  return { label: `${days}d`,         cls: "decide-age-aged" };
@@ -63,21 +73,35 @@ export function DecideDialog({
   const [acting, setActing] = useState(false);
   const [freeform, setFreeform] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const submit = useCallback(async (decision: string) => {
-    if (acting) return;
+    if (acting || confirmed) return;
     setActing(true);
     setError(null);
     try {
       const res = await fetch(`/api/queue?id=${encodeURIComponent(item.id)}&decision=${encodeURIComponent(decision)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      onResolved(item.id, decision);
+      // Show success pulse inside the dialog, then fire toast + advance.
+      setConfirmed(decision);
+      showToast({
+        kind: "success",
+        title: prettyDecision(decision),
+        body: item.title,
+      });
+      window.setTimeout(() => {
+        onResolved(item.id, decision);
+        setConfirmed(null);
+        setActing(false);
+      }, 520);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Resolve failed");
+      const msg = e instanceof Error ? e.message : "Resolve failed";
+      setError(msg);
+      showToast({ kind: "error", title: "Resolve failed", body: msg });
       setActing(false);
     }
-  }, [acting, item.id, onResolved]);
+  }, [acting, confirmed, item.id, item.title, onResolved]);
 
   // Keyboard handlers — number keys pick options, letters trigger actions.
   useEffect(() => {
@@ -135,13 +159,19 @@ export function DecideDialog({
 
   return createPortal(
     <div
-      className="decide-backdrop"
+      className={`decide-backdrop${confirmed ? " is-confirmed" : ""}`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="decide-title"
     >
-      <div ref={dialogRef} className="decide-panel" tabIndex={-1}>
+      <div ref={dialogRef} className={`decide-panel${confirmed ? " is-confirmed" : ""}`} tabIndex={-1}>
+        {confirmed && (
+          <div className="decide-confirmed-overlay" aria-hidden="true">
+            <span className="decide-confirmed-glyph">✓</span>
+            <span className="decide-confirmed-text">{prettyDecision(confirmed)}</span>
+          </div>
+        )}
         <header className="decide-head">
           <div className="decide-tags">
             {item.source && <span className="decide-tag">{item.source.toUpperCase()}</span>}

@@ -6935,6 +6935,238 @@ body[data-brick-celebrating="true"] .bb-wall {
   .decide-backdrop, .decide-panel { animation: none; }
 }
 
+/* ── Decide-dialog success pulse ──────────────────────────────────────────
+   Brief overlay that flashes inside the panel after a decision is recorded
+   so PG sees a visible "✓ Approved" before the dialog auto-closes. */
+.decide-confirmed-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 10;
+  background: color-mix(in oklab, var(--success) 24%, var(--panel-solid));
+  animation: decide-confirmed-in 200ms ease-out;
+  pointer-events: none;
+}
+.decide-confirmed-glyph {
+  font-family: var(--serif),serif;
+  font-size: 76px;
+  font-weight: 600;
+  color: var(--success);
+  line-height: 1;
+  text-shadow: 0 0 40px color-mix(in oklab, var(--success) 60%, transparent);
+  animation: decide-confirmed-glyph 520ms cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+.decide-confirmed-text {
+  font-family: var(--serif),serif;
+  font-size: 22px;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+  max-width: 80%;
+  text-align: center;
+  line-height: 1.3;
+}
+.decide-panel.is-confirmed {
+  /* Subtle ring + slight scale to reinforce success */
+  box-shadow: 0 0 0 2px var(--success), 0 24px 80px rgba(0,0,0,0.4);
+  transform: scale(1.005);
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+@keyframes decide-confirmed-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes decide-confirmed-glyph {
+  0%   { opacity: 0; transform: scale(0.4) rotate(-12deg); }
+  60%  { opacity: 1; transform: scale(1.15) rotate(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ── Toast deck ──────────────────────────────────────────────────────────
+   Bottom-right stack. Click to dismiss; auto-dismiss after duration. */
+.toast-deck {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 40px));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border-soft);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.32);
+  cursor: pointer;
+  animation: toast-in 240ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  transition: transform 0.15s, opacity 0.15s;
+}
+.toast:hover { transform: translateY(-1px); }
+.toast-glyph {
+  font-family: var(--serif),serif;
+  font-size: 18px;
+  font-weight: 600;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.toast-success { border-left: 3px solid var(--success); }
+.toast-success .toast-glyph { background: color-mix(in oklab, var(--success) 18%, transparent); color: var(--success); }
+.toast-info { border-left: 3px solid var(--accent); }
+.toast-info .toast-glyph { background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent); }
+.toast-warning { border-left: 3px solid var(--accent-2); }
+.toast-warning .toast-glyph { background: color-mix(in oklab, var(--accent-2) 18%, transparent); color: var(--accent-2); }
+.toast-error { border-left: 3px solid var(--danger); }
+.toast-error .toast-glyph { background: color-mix(in oklab, var(--danger) 18%, transparent); color: var(--danger); }
+.toast-body { min-width: 0; }
+.toast-title {
+  font-family: var(--mono),monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.toast-text {
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* ── Source-grouped queue ────────────────────────────────────────────────
+   Each source becomes a collapsible section with count, oldest-age tag,
+   and per-group Triage button. session-skill-scanner-weekly is pinned
+   to the top (PG's biggest source — usually batch-decidable). */
+.fl-q-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fl-q-group {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
+}
+.fl-q-group.fl-q-group-aged { border-left: 3px solid var(--accent-2); }
+.fl-q-group.fl-q-group-stale { border-left: 3px solid var(--danger); }
+.fl-q-group.is-open { background: rgba(255,255,255,0.03); }
+.fl-q-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+.fl-q-group-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  color: var(--fg-dim);
+  font-family: var(--mono),monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 0.15s;
+}
+.fl-q-group-toggle:hover { color: var(--fg); }
+.fl-q-group-chev {
+  font-size: 11px;
+  color: var(--accent);
+  width: 12px;
+  display: inline-block;
+}
+.fl-q-group-source {
+  color: var(--fg);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+.fl-q-group-count {
+  font-family: var(--serif),serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  margin-left: 4px;
+}
+.fl-q-group-age {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  font-weight: 500;
+  padding-right: 8px;
+}
+.fl-q-group-stale .fl-q-group-age { color: var(--danger); }
+.fl-q-group-aged .fl-q-group-age { color: var(--accent-2); }
+.fl-q-group-triage {
+  flex-shrink: 0;
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.12s;
+}
+.fl-q-group-triage:hover {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  transform: translateX(2px);
+}
+.fl-q-group .fl-queue {
+  border-top: 1px solid var(--border-soft);
+  padding: 0 10px;
+}
+.fl-q-group .fl-qitem {
+  /* Tighter rows inside grouped sections — saves vertical real-estate. */
+  padding: 10px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast, .decide-confirmed-overlay, .decide-confirmed-glyph,
+  .decide-panel.is-confirmed { animation: none; transition: none; transform: none; }
+}
+
 .bridge-crew,
 .bridge-status {
   display: flex;

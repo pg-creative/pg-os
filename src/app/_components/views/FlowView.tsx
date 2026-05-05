@@ -9,6 +9,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { RealtimeConfig } from "../../api/realtime/config/route";
 import { DecideDialog } from "../flow/DecideDialog";
 import { TriageMode } from "../flow/TriageMode";
+import { showToast } from "../Toast";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -370,12 +371,18 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
     };
   }, [fetchQueue]);
 
-  const handleDismiss = useCallback(async (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  const handleDismiss = useCallback(async (item: QueueItem) => {
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
     try {
-      const res = await fetch(`/api/queue?id=${encodeURIComponent(id)}&decision=dismissed`, { method: "DELETE" });
+      const res = await fetch(`/api/queue?id=${encodeURIComponent(item.id)}&decision=dismissed`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-    } catch {
+      showToast({ kind: "success", title: "Dismissed", body: item.title });
+    } catch (e) {
+      showToast({
+        kind: "error",
+        title: "Dismiss failed",
+        body: e instanceof Error ? e.message : "unknown error",
+      });
       await fetchQueue();
     }
   }, [fetchQueue]);
@@ -492,35 +499,20 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
       )}
 
       {count > 0 && (
-        <ul className="fl-queue">
-          {filteredItems.map((item) => (
-            <li key={item.id} className="fl-qitem">
-              <div className="fl-qmeta-row">
-                <span className="fl-qtitle">{item.title}</span>
-                {item.source && (
-                  <span className="fl-qsource">{item.source.toUpperCase()}</span>
-                )}
-              </div>
-              <div className="fl-qbottom">
-                <span className={waitClass(item.created_at)}>{waitLabel(item.created_at)}</span>
-                <div className="fl-qactions">
-                  <button
-                    className="fl-btn fl-btn-danger spring-hover"
-                    onClick={() => handleDismiss(item.id)}
-                  >
-                    DISMISS
-                  </button>
-                  <button
-                    className="fl-btn fl-btn-primary spring-hover"
-                    onClick={() => handleDecide(item)}
-                  >
-                    DECIDE →
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <QueueGroups
+          items={filteredItems}
+          onDecide={handleDecide}
+          onDismiss={handleDismiss}
+          onTriageGroup={(groupItems) => {
+            setItems((prev) => prev); // no-op state read so memoization aligns
+            setTriageOpen(true);
+            // The triage modal reads from filteredItems, so we'd need group
+            // scoping. Simplest path: temporarily narrow source filter to the
+            // group's source so the triage list = the group.
+            const src = groupItems[0]?.source ?? "";
+            setSourceFilter(src);
+          }}
+        />
       )}
 
       {decideItem && (
@@ -539,6 +531,138 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
         />
       )}
     </div>
+  );
+}
+
+// ── Source-grouped queue list ────────────────────────────────────────────────
+// Pin session-skill-scanner-weekly first (PG's largest source — usually batch-
+// decidable P1s), then sort remaining groups by descending count, with no-source
+// items last as "OTHER".
+
+const PINNED_SOURCES = ["session-skill-scanner-weekly", "session-skill-scanner-daily"];
+const COLLAPSE_THRESHOLD = 5;
+
+interface QueueGroupsProps {
+  items: QueueItem[];
+  onDecide: (item: QueueItem) => void;
+  onDismiss: (item: QueueItem) => void;
+  onTriageGroup: (items: QueueItem[]) => void;
+}
+
+function QueueGroups({ items, onDecide, onDismiss, onTriageGroup }: QueueGroupsProps) {
+  const groups = useMemo(() => {
+    const buckets = new Map<string, QueueItem[]>();
+    for (const item of items) {
+      const key = item.source ?? "(other)";
+      const arr = buckets.get(key) ?? [];
+      arr.push(item);
+      buckets.set(key, arr);
+    }
+    const ordered: { source: string; items: QueueItem[] }[] = [];
+    for (const pinned of PINNED_SOURCES) {
+      const arr = buckets.get(pinned);
+      if (arr) {
+        ordered.push({ source: pinned, items: arr });
+        buckets.delete(pinned);
+      }
+    }
+    const others = Array.from(buckets.entries())
+      .map(([source, items]) => ({ source, items }))
+      .sort((a, b) => b.items.length - a.items.length || a.source.localeCompare(b.source));
+    // "(other)" sinks to the bottom regardless of count.
+    const otherIdx = others.findIndex((g) => g.source === "(other)");
+    if (otherIdx >= 0) {
+      const [other] = others.splice(otherIdx, 1);
+      others.push(other);
+    }
+    return [...ordered, ...others];
+  }, [items]);
+
+  return (
+    <div className="fl-q-groups">
+      {groups.map((g) => (
+        <QueueGroupSection
+          key={g.source}
+          source={g.source}
+          items={g.items}
+          defaultOpen={g.items.length < COLLAPSE_THRESHOLD}
+          onDecide={onDecide}
+          onDismiss={onDismiss}
+          onTriageGroup={onTriageGroup}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface QueueGroupSectionProps {
+  source: string;
+  items: QueueItem[];
+  defaultOpen: boolean;
+  onDecide: (item: QueueItem) => void;
+  onDismiss: (item: QueueItem) => void;
+  onTriageGroup: (items: QueueItem[]) => void;
+}
+
+function QueueGroupSection({ source, items, defaultOpen, onDecide, onDismiss, onTriageGroup }: QueueGroupSectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  const oldest = Math.max(...items.map((i) => Math.floor((Date.now() - i.created_at) / 86_400_000)));
+  const oldestCls = oldest >= 14 ? "fl-q-group-stale" : oldest >= 7 ? "fl-q-group-aged" : "fl-q-group-fresh";
+
+  return (
+    <section className={`fl-q-group ${oldestCls}${open ? " is-open" : ""}`}>
+      <header className="fl-q-group-head">
+        <button
+          type="button"
+          className="fl-q-group-toggle"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          <span className="fl-q-group-chev" aria-hidden="true">{open ? "▾" : "▸"}</span>
+          <span className="fl-q-group-source">{source.toUpperCase()}</span>
+          <span className="fl-q-group-count">{items.length}</span>
+          {oldest > 0 && (
+            <span className="fl-q-group-age">oldest {oldest}d</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className="fl-q-group-triage"
+          onClick={(e) => { e.stopPropagation(); onTriageGroup(items); }}
+          title={`Triage all ${items.length} ${source} items`}
+        >
+          Triage {items.length} →
+        </button>
+      </header>
+      {open && (
+        <ul className="fl-queue">
+          {items.map((item) => (
+            <li key={item.id} className="fl-qitem">
+              <div className="fl-qmeta-row">
+                <span className="fl-qtitle">{item.title}</span>
+              </div>
+              <div className="fl-qbottom">
+                <span className={waitClass(item.created_at)}>{waitLabel(item.created_at)}</span>
+                <div className="fl-qactions">
+                  <button
+                    className="fl-btn fl-btn-danger spring-hover"
+                    onClick={() => onDismiss(item)}
+                  >
+                    DISMISS
+                  </button>
+                  <button
+                    className="fl-btn fl-btn-primary spring-hover"
+                    onClick={() => onDecide(item)}
+                  >
+                    DECIDE →
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

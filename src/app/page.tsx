@@ -1,6 +1,7 @@
 "use client";
 import { ModeLabel } from "./_components/ModeSwitcher";
 import { BridgeModeProvider, HomeModeBadge } from "./_components/BridgeModeProvider";
+import { ToastDeck } from "./_components/Toast";
 import { LiveStamp } from "./_components/LiveClock";
 import { CityTemp } from "./_components/LocationLive";
 import { HomeModeToggle } from "./_components/HomeModeToggle";
@@ -78,6 +79,7 @@ export default function Page() {
       <CopilotLauncher />
       <CommandPalette />
       <AmbientIdle />
+      <ToastDeck />
     </NowProvider>
     </BridgeModeProvider>
   );
