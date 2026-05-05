@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useMode } from "../ModeProvider";
 import { type BrandMode, MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
 import { Skeleton } from "../Skeleton";
@@ -7,6 +7,8 @@ import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
 import { subscribeMultipleTables } from "../../../lib/realtime";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { RealtimeConfig } from "../../api/realtime/config/route";
+import { DecideDialog } from "../flow/DecideDialog";
+import { TriageMode } from "../flow/TriageMode";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -309,6 +311,11 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [decideItem, setDecideItem] = useState<QueueItem | null>(null);
+  const [triageOpen, setTriageOpen] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [search, setSearch] = useState<string>("");
+  const [sort, setSort] = useState<"oldest" | "newest">("oldest");
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -366,7 +373,7 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
   const handleDismiss = useCallback(async (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
     try {
-      const res = await fetch(`/api/queue?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const res = await fetch(`/api/queue?id=${encodeURIComponent(id)}&decision=dismissed`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
     } catch {
       await fetchQueue();
@@ -374,19 +381,93 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
   }, [fetchQueue]);
 
   const handleDecide = useCallback((item: QueueItem) => {
-    window.alert(item.note ?? item.title);
+    setDecideItem(item);
   }, []);
 
-  // Filter queue by brand mode's project ids (match source field)
-  const filteredItems = applyModeFilter(items, brand, "source" as keyof QueueItem);
+  const handleResolved = useCallback((id: string, _decision: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    setDecideItem(null);
+  }, []);
+
+  // ── Filter + sort pipeline ───────────────────────────────────────────────
+  // 1. Brand-mode project filter (existing)
+  // 2. Source dropdown (e.g. "session-skill-scanner-weekly")
+  // 3. Search match against title (case-insensitive)
+  // 4. Sort by oldest-first (default — surfaces stalest items) or newest-first
+  const brandFiltered = applyModeFilter(items, brand, "source" as keyof QueueItem);
+
+  const sources = useMemo(() => {
+    const set = new Set<string>();
+    for (const i of brandFiltered) if (i.source) set.add(i.source);
+    return Array.from(set).sort();
+  }, [brandFiltered]);
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = brandFiltered;
+    if (sourceFilter) list = list.filter((i) => i.source === sourceFilter);
+    if (q) list = list.filter((i) => i.title.toLowerCase().includes(q) || (i.note?.toLowerCase().includes(q) ?? false));
+    list = [...list].sort((a, b) => sort === "oldest"
+      ? a.created_at - b.created_at
+      : b.created_at - a.created_at,
+    );
+    return list;
+  }, [brandFiltered, sourceFilter, search, sort]);
+
   const count = filteredItems.length;
+  const totalCount = brandFiltered.length;
 
   return (
     <div className="card">
       <div className="card-label">
         <span>02 // APPROVAL QUEUE</span>
-        <span className="fl-tag-count">{count} WAITING</span>
+        <span className="fl-tag-count">
+          {count === totalCount ? `${count} WAITING` : `${count} / ${totalCount}`}
+        </span>
       </div>
+
+      {/* Filter + sort + triage launcher */}
+      {!loading && totalCount > 0 && (
+        <div className="fl-q-controls">
+          <input
+            type="text"
+            className="fl-q-search"
+            placeholder="Search queue…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search queue"
+          />
+          {sources.length > 1 && (
+            <select
+              className="fl-q-source"
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              aria-label="Filter by source"
+            >
+              <option value="">All sources</option>
+              {sources.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            className="fl-q-sort"
+            onClick={() => setSort((s) => (s === "oldest" ? "newest" : "oldest"))}
+            title="Toggle sort order"
+          >
+            {sort === "oldest" ? "Oldest first ↑" : "Newest first ↓"}
+          </button>
+          <button
+            type="button"
+            className="fl-q-triage spring-hover"
+            onClick={() => setTriageOpen(true)}
+            disabled={count === 0}
+          >
+            Triage {count} →
+          </button>
+        </div>
+      )}
 
       {error && <span className="flow-error">{error}</span>}
 
@@ -402,8 +483,12 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
         </ul>
       )}
 
-      {!loading && count === 0 && (
+      {!loading && totalCount === 0 && (
         <p className="fl-empty">Queue is empty. Nothing waiting on you.</p>
+      )}
+
+      {!loading && totalCount > 0 && count === 0 && (
+        <p className="fl-empty">No items match the current filter.</p>
       )}
 
       {count > 0 && (
@@ -436,6 +521,22 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {decideItem && (
+        <DecideDialog
+          item={decideItem}
+          onResolved={handleResolved}
+          onClose={() => setDecideItem(null)}
+        />
+      )}
+
+      {triageOpen && (
+        <TriageMode
+          initialItems={filteredItems}
+          onClose={() => { setTriageOpen(false); fetchQueue(); }}
+          onResolved={(id) => setItems((prev) => prev.filter((i) => i.id !== id))}
+        />
       )}
     </div>
   );

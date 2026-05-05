@@ -6582,6 +6582,359 @@ body[data-brick-celebrating="true"] .bb-wall {
   ::view-transition-new(root) { animation-duration: 1ms !important; }
 }
 
+/* ============================================================
+   FLOW QUEUE — Decide dialog + Triage mode + filter controls
+   Persona-style menu: numbered options, keyboard hints, big
+   serif title. Backdrop blurs the dashboard so the decision
+   gets full attention.
+   ============================================================ */
+
+.fl-q-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0 12px;
+  flex-wrap: wrap;
+}
+.fl-q-search {
+  flex: 1 1 140px;
+  min-width: 0;
+  font-family: var(--mono),monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255,255,255,0.04);
+  color: var(--fg);
+  transition: border-color 0.15s, background 0.15s;
+}
+.fl-q-search:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(255,255,255,0.08);
+}
+.fl-q-source {
+  font-family: var(--mono),monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255,255,255,0.04);
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+.fl-q-sort {
+  font-family: var(--mono),monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.fl-q-sort:hover { color: var(--fg); border-color: var(--accent); }
+.fl-q-triage {
+  font-family: var(--mono),monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s, transform 0.12s;
+}
+.fl-q-triage:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  transform: translateX(2px);
+}
+.fl-q-triage:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ── Decide dialog ──────────────────────────────────────────── */
+.decide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(8, 14, 28, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  animation: decide-backdrop-in 220ms ease-out;
+}
+@keyframes decide-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.decide-panel {
+  position: relative;
+  width: min(640px, 100%);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 26px 18px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  outline: none;
+  animation: decide-panel-in 280ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes decide-panel-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.decide-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.decide-tags {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.decide-tag {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.decide-age-fresh { color: var(--muted); background: rgba(255,255,255,0.04); }
+.decide-age-aged { color: var(--accent-2); background: color-mix(in oklab, var(--accent-2) 14%, transparent); }
+.decide-age-stale { color: var(--danger); background: color-mix(in oklab, var(--danger) 18%, transparent); }
+.decide-progress {
+  font-family: var(--mono),monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.decide-close {
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.decide-close:hover { color: var(--accent); border-color: var(--accent); }
+
+.decide-title {
+  font-family: var(--serif),serif;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  margin: 0 0 12px 0;
+}
+
+.decide-note {
+  font-family: var(--body),system-ui,sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+  background: rgba(0,0,0,0.16);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 0 0 14px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.decide-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.decide-options-label {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.decide-option {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255,255,255,0.03);
+  color: var(--fg);
+  font-size: 13.5px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+}
+.decide-option:hover:not(:disabled),
+.decide-option:focus-visible {
+  background: color-mix(in oklab, var(--accent) 14%, rgba(255,255,255,0.04));
+  border-color: var(--accent);
+  outline: none;
+  transform: translateX(2px);
+}
+.decide-option-num {
+  font-family: var(--serif),serif;
+  font-size: 16px;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--accent);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.decide-option-text { line-height: 1.4; }
+
+.decide-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.decide-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--mono),monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255,255,255,0.03);
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.decide-btn:hover:not(:disabled) { color: var(--fg); border-color: var(--accent); }
+.decide-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.decide-btn kbd {
+  font-family: var(--mono),monospace;
+  font-size: 8.5px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 3px;
+  padding: 1px 4px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.decide-btn-approve:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--success) 16%, transparent);
+  color: var(--success);
+  border-color: var(--success);
+}
+.decide-btn-defer:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.decide-btn-reject:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--danger) 14%, transparent);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.decide-freeform {
+  width: 100%;
+  font-family: var(--body),system-ui,sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: rgba(0,0,0,0.16);
+  color: var(--fg);
+  resize: vertical;
+  min-height: 56px;
+  margin-bottom: 10px;
+}
+.decide-freeform:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(0,0,0,0.22);
+}
+.decide-freeform::placeholder { color: var(--muted); font-style: italic; }
+
+.decide-error {
+  font-family: var(--mono),monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--danger);
+  background: color-mix(in oklab, var(--danger) 14%, transparent);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.decide-foot {
+  font-family: var(--mono),monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.decide-panel-summary { text-align: center; padding: 40px 32px; }
+.decide-panel-summary .decide-actions { grid-template-columns: 1fr; max-width: 200px; margin: 16px auto 0; }
+.decide-summary-line {
+  font-size: 14px;
+  color: var(--fg-dim);
+  line-height: 1.5;
+  margin: 0;
+}
+.decide-summary-line strong { color: var(--accent); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .decide-actions { grid-template-columns: 1fr 1fr; }
+  .decide-title { font-size: 22px; }
+  .decide-panel { padding: 18px 20px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decide-backdrop, .decide-panel { animation: none; }
+}
+
 .bridge-crew,
 .bridge-status {
   display: flex;
