@@ -1,36 +1,15 @@
 "use client";
+import { CrewRail } from "../bridge/CrewRail";
 
 /**
  * BridgeView — Cortana-style command center.
  * 3-col layout: Crew (left) | Comms (center) | Status (right).
- * Stage 1 ships the skeleton with placeholder content; later stages
- * wire real data into each rail.
  */
 
 export function BridgeView() {
   return (
     <div className="bridge">
-      <aside className="bridge-crew" aria-label="Agent crew">
-        <div className="bridge-rail-header">
-          <span className="bridge-rail-title">CREW</span>
-          <span className="bridge-rail-meta">— booting</span>
-        </div>
-        <ul className="bridge-crew-list">
-          {[
-            "session-review",
-            "morning-briefing",
-            "weekly-meta-audit",
-            "memory-hygiene",
-            "description-optimizer",
-          ].map((name) => (
-            <li key={name} className="bridge-crew-row bridge-crew-placeholder">
-              <span className="bridge-crew-dot" />
-              <span className="bridge-crew-name">{name}</span>
-              <span className="bridge-crew-status">—</span>
-            </li>
-          ))}
-        </ul>
-      </aside>
+      <CrewRail />
 
       <section className="bridge-comms" aria-label="Comms feed">
         <div className="bridge-rail-header">
