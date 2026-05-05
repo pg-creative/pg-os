@@ -5,7 +5,7 @@
  * Reuses useVoiceCapture for voice input (same hook as CaptureSheet).
  */
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useVoiceCapture } from "../useVoiceCapture";
 
 interface CopilotInputProps {
@@ -23,6 +23,10 @@ export function CopilotInput({
 }: CopilotInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const voice = useVoiceCapture();
+  // Defer mic button until after hydration — voice.supported reads window
+  // APIs that aren't available during SSR, which causes a layout mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Sync voice transcript into input
   useEffect(() => {
@@ -80,7 +84,7 @@ export function CopilotInput({
         aria-label="Message to co-pilot"
       />
       <div className="cp-input-actions">
-        {voice.supported && (
+        {mounted && voice.supported && (
           <button
             type="button"
             className={`cp-mic-btn${voice.listening ? " listening" : ""}`}

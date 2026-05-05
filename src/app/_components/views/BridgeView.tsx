@@ -1,5 +1,6 @@
 "use client";
 import { CrewRail } from "../bridge/CrewRail";
+import { CommsFeed } from "../bridge/CommsFeed";
 
 /**
  * BridgeView — Cortana-style command center.
@@ -11,24 +12,7 @@ export function BridgeView() {
     <div className="bridge">
       <CrewRail />
 
-      <section className="bridge-comms" aria-label="Comms feed">
-        <div className="bridge-rail-header">
-          <span className="bridge-rail-title">COMMS</span>
-          <span className="bridge-rail-meta">unified feed</span>
-        </div>
-        <div className="bridge-comms-feed bridge-comms-empty">
-          <p className="bridge-empty-heading">Comms link standing by.</p>
-          <p className="bridge-empty-hint">
-            Agent updates, approvals, and your chat with the co-pilot will
-            appear here. Press ⌘J to open the side-panel chat in the meantime.
-          </p>
-        </div>
-        <div className="bridge-comms-input">
-          <div className="bridge-comms-input-stub">
-            Input wires up in Stage&nbsp;3 — for now use ⌘J for chat.
-          </div>
-        </div>
-      </section>
+      <CommsFeed />
 
       <aside className="bridge-status" aria-label="Status widgets">
         <div className="bridge-rail-header">
