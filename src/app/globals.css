@@ -6373,6 +6373,215 @@ body:not([data-idle="true"]) .shell {
   right: 18px;
 }
 
+/* ── Breadcrumb density: crew rail collapsed-by-default ───────────────────
+   Default state shows only dot · name · timestamp. Click expands a detail
+   block beneath. Keeps the rail readable instead of a wall of text. */
+.bridge-crew-row {
+  cursor: pointer;
+}
+.bridge-crew-row .bridge-crew-desc,
+.bridge-crew-row .bridge-crew-tool,
+.bridge-crew-row .bridge-crew-msg,
+.bridge-crew-row .bridge-crew-meta-row,
+.bridge-crew-row .bridge-crew-run {
+  display: none;
+}
+.bridge-crew-row.is-open {
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.bridge-crew-row.is-open .bridge-crew-detail {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 2px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-soft);
+}
+.bridge-crew-row.is-open .bridge-crew-desc,
+.bridge-crew-row.is-open .bridge-crew-tool,
+.bridge-crew-row.is-open .bridge-crew-msg,
+.bridge-crew-row.is-open .bridge-crew-meta-row,
+.bridge-crew-row.is-open .bridge-crew-run {
+  display: block;
+}
+.bridge-crew-row.is-open .bridge-crew-desc {
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  line-height: 1.4;
+  -webkit-line-clamp: unset;
+  display: block;
+}
+.bridge-crew-row.is-open .bridge-crew-tool {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.bridge-crew-row.is-open .bridge-crew-msg {
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-style: italic;
+  line-height: 1.4;
+}
+.bridge-crew-row.is-open .bridge-crew-meta-row {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono),monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.bridge-crew-row.is-open .bridge-crew-run {
+  width: max-content;
+  margin-top: 4px;
+  flex: 0 0 auto;
+}
+
+/* ── Comms card chevron + collapsed-default ────────────────────────────── */
+.comms-card { cursor: default; }
+.comms-card[role="button"] { cursor: pointer; }
+.comms-card-chev {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  transition: transform 0.18s ease;
+}
+.comms-card.is-open .comms-card-chev {
+  color: var(--accent);
+}
+.comms-card .comms-card-summary {
+  /* Hidden by default — only shown when card is opened. */
+  display: none;
+}
+.comms-card.is-open .comms-card-summary {
+  display: block;
+  animation: comms-card-expand 220ms ease-out;
+}
+@keyframes comms-card-expand {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Pending widget headline + drilldown ──────────────────────────────── */
+.bridge-widget-headline {
+  font-family: var(--serif),serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  line-height: 1.1;
+}
+.bridge-widget-clear .bridge-widget-headline {
+  color: var(--muted);
+  font-style: italic;
+}
+.bridge-widget-pending {
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.bridge-widget-pending:hover {
+  background: color-mix(in oklab, var(--accent) 6%, rgba(255,255,255,0.03));
+  border-color: var(--accent);
+}
+.bridge-widget-pending.is-open {
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  border-color: var(--accent);
+}
+.bridge-widget-drilldown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  cursor: default;
+  animation: comms-card-expand 220ms ease-out;
+}
+.bridge-widget-pending-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bridge-widget-more {
+  font-family: var(--mono),monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Persona 5–style mode transition (Bridge ↔ Personal) ────────────────
+   Uses the View Transitions API. The browser auto-snapshots old + new DOM
+   and the pseudos crossfade them. We replace the default crossfade with a
+   diagonal sweep so the swap reads as cinematic, not just a tab swap. */
+@supports (view-transition-name: root) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 480ms;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  ::view-transition-old(root) {
+    animation-name: bridge-vt-out;
+  }
+  ::view-transition-new(root) {
+    animation-name: bridge-vt-in;
+  }
+}
+@keyframes bridge-vt-out {
+  from { opacity: 1; clip-path: polygon(-10% 0, 110% 0, 110% 100%, -10% 100%); transform: scale(1); }
+  to   { opacity: 0; clip-path: polygon(-10% 0, 110% 0, -10% 100%, -10% 100%); transform: scale(0.98); }
+}
+@keyframes bridge-vt-in {
+  from { opacity: 0; clip-path: polygon(110% 0, 110% 0, 110% 100%, 110% 100%); transform: scale(1.02); }
+  to   { opacity: 1; clip-path: polygon(-10% 0, 110% 0, 110% 100%, -10% 100%); transform: scale(1); }
+}
+
+/* ── Brick-lay celebration (Persona 5 hard flash + sparkle) ─────────────
+   Set [data-brick-celebrating="true"] on body for ~1.2s when a brick lays.
+   Fixed-positioned overlay flashes accent color, plus a radial-gradient
+   spark mask that sweeps. */
+body[data-brick-celebrating="true"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 35% at center, color-mix(in oklab, var(--accent-2) 40%, transparent), transparent 70%),
+    color-mix(in oklab, var(--accent) 8%, transparent);
+  animation: brick-celebrate-flash 1.2s cubic-bezier(0.32, 0, 0.21, 1);
+  mix-blend-mode: screen;
+}
+@keyframes brick-celebrate-flash {
+  0%   { opacity: 0; transform: scale(0.9); }
+  12%  { opacity: 1; transform: scale(1); }
+  35%  { opacity: 0.7; }
+  100% { opacity: 0; transform: scale(1.08); }
+}
+/* The wall itself gets a brief gold ring during the celebration */
+body[data-brick-celebrating="true"] .bb-wall {
+  box-shadow: 0 0 0 2px var(--accent-2),
+              0 0 24px 4px color-mix(in oklab, var(--accent-2) 40%, transparent);
+  animation: bb-wall-pulse 0.6s ease-out;
+}
+@keyframes bb-wall-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent-2); }
+  60%  { box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent-2) 60%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-brick-celebrating="true"]::after { animation: none; opacity: 0; }
+  body[data-brick-celebrating="true"] .bb-wall { animation: none; }
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation-duration: 1ms !important; }
+}
+
 .bridge-crew,
 .bridge-status {
   display: flex;

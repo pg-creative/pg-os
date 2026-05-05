@@ -406,25 +406,38 @@ export function CommsFeed() {
 }
 
 // ── Activity card (agent run / ship / capture / decision / telegram) ────────
+// Breadcrumb pattern: collapsed by default — tag · title · time. Click to
+// expand summary. Prevents the comms feed from being a wall of text.
 
 function ActivityCard({ row }: { row: ActivityRow }) {
+  const [open, setOpen] = useState(false);
   const sourceLabel = row.source.replace(/_/g, " ");
   const tag = row.agent ?? row.status ?? sourceLabel;
   const time = new Date(row.timestamp).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });
+  const hasMore = !!row.summary && row.summary !== row.title;
   return (
-    <article className={`comms-card comms-card-${row.source}`} aria-label={sourceLabel}>
+    <article
+      className={`comms-card comms-card-${row.source}${open ? " is-open" : ""}`}
+      aria-label={sourceLabel}
+      onClick={() => hasMore && setOpen((v) => !v)}
+      role={hasMore ? "button" : undefined}
+      tabIndex={hasMore ? 0 : undefined}
+    >
       <header className="comms-card-head">
         <span className="comms-card-tag">{sourceLabel}</span>
         {tag && tag !== sourceLabel && (
           <span className="comms-card-meta">{tag}</span>
         )}
         <span className="comms-card-time">{time}</span>
+        {hasMore && (
+          <span className="comms-card-chev" aria-hidden="true">{open ? "▾" : "▸"}</span>
+        )}
       </header>
       <p className="comms-card-title">{row.title}</p>
-      {row.summary && <p className="comms-card-summary">{row.summary}</p>}
+      {open && row.summary && <p className="comms-card-summary">{row.summary}</p>}
     </article>
   );
 }

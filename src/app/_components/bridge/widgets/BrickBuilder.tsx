@@ -59,6 +59,13 @@ export function BrickBuilder() {
       setState(next);
       saveBricks(next);
       setJustPlaced(true);
+      // Global Persona-5-style flash/celebration overlay, gated to a single
+      // body attribute so the effect can be styled in globals.css with
+      // [data-brick-celebrating] selectors.
+      try {
+        document.body.setAttribute("data-brick-celebrating", "true");
+        setTimeout(() => document.body.removeAttribute("data-brick-celebrating"), 1200);
+      } catch { /* SSR — ignore */ }
       setTimeout(() => setJustPlaced(false), 1500);
       setPhase("break");
       setPhaseEndAt(Date.now() + BREAK_MIN * 60_000);

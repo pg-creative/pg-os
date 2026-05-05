@@ -24,7 +24,7 @@ type LiveSession = {
 };
 
 function relTime(iso: string | null): string {
-  if (!iso) return "never";
+  if (!iso) return "";
   try {
     const d = new Date(iso);
     const diffMs = Date.now() - d.getTime();
@@ -53,37 +53,25 @@ export function CrewRail() {
   const [agents, setAgents] = useState<AgentHealth[]>([]);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const isCloud = useIsCloud();
 
   const fetchAll = useCallback(async () => {
     try {
-      const [agentRes, sessRes] = await Promise.all([
+      const [a, s] = await Promise.all([
         fetch("/api/claude/agents", { cache: "no-store" }),
         fetch("/api/sessions", { cache: "no-store" }),
       ]);
-      if (!agentRes.ok) throw new Error("agents fetch failed");
-      const agentData = await agentRes.json();
-      setAgents(agentData.agents ?? []);
-      if (sessRes.ok) {
-        const sessData = await sessRes.json();
-        setSessions(sessData.sessions ?? []);
-      }
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "load failed");
-    } finally {
-      setLoading(false);
-    }
+      if (a.ok) setAgents((await a.json()).agents ?? []);
+      if (s.ok) setSessions((await s.json()).sessions ?? []);
+    } catch { /* swallow — header will say scanning */ }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
     fetchAll();
-    // Sessions can change minute-to-minute; agents change slowly. Single
-    // 30s tick is a reasonable compromise (keeps Claude Code latency visible
-    // without thrashing the local fs).
     const i = setInterval(fetchAll, 30_000);
     return () => clearInterval(i);
   }, [fetchAll]);
@@ -91,7 +79,6 @@ export function CrewRail() {
   const dispatch = useCallback(async (name: string) => {
     if (!RUNNABLE.has(name) || isCloud) return;
     setRunning(name);
-    setFeedback(null);
     try {
       const res = await fetch("/api/claude/run-agent", {
         method: "POST",
@@ -99,26 +86,21 @@ export function CrewRail() {
         body: JSON.stringify({ agent: name }),
       });
       const j = await res.json();
-      if (j.alreadyRunning) {
-        setFeedback(`${name} · running (pid ${j.pid})`);
-      } else if (j.spawned) {
-        setFeedback(`${name} · started (pid ${j.pid})`);
-      } else {
-        setFeedback(`${name} · ${j.error ?? "failed"}`);
-      }
-      setTimeout(() => setFeedback(null), 6_000);
+      const msg = j.alreadyRunning
+        ? `${name} · running`
+        : j.spawned
+          ? `${name} · launched`
+          : `${name} · ${j.error ?? "failed"}`;
+      setFeedback(msg);
+      setTimeout(() => setFeedback(null), 5_000);
       setTimeout(fetchAll, 2_000);
-    } catch (e) {
-      setFeedback(`${name} · ${e instanceof Error ? e.message : "error"}`);
-      setTimeout(() => setFeedback(null), 6_000);
-    } finally {
-      setRunning(null);
-    }
+    } finally { setRunning(null); }
   }, [isCloud, fetchAll]);
 
-  const runningSessions = sessions.filter((s) => s.status === "running");
-  const idleSessions = sessions.filter((s) => s.status === "idle");
   const sessionCount = sessions.length;
+  const liveAgents = agents.filter((a) => a.lastStatus === "ok").length;
+
+  const toggle = (key: string) => setExpanded((cur) => (cur === key ? null : key));
 
   return (
     <aside className="bridge-crew" aria-label="Agent crew">
@@ -126,79 +108,91 @@ export function CrewRail() {
         <span className="bridge-rail-title">CREW</span>
         <span className="bridge-rail-meta">
           {loading
-            ? "scanning…"
+            ? "scanning"
             : sessionCount > 0
-              ? `${agents.length} agents · ${sessionCount} live`
-              : `${agents.length} agents`}
+              ? `${sessionCount}● · ${liveAgents}/${agents.length}`
+              : `${liveAgents}/${agents.length}`}
         </span>
       </div>
-
-      {error && <div className="bridge-crew-error">{error}</div>}
       {feedback && <div className="bridge-crew-feedback">{feedback}</div>}
 
-      {/* Live Claude Code sessions — surfaced first when present. */}
       {sessionCount > 0 && (
-        <>
-          <div className="bridge-crew-section">SESSIONS</div>
-          <ul className="bridge-crew-list">
-            {[...runningSessions, ...idleSessions].map((s) => (
+        <ul className="bridge-crew-list" aria-label="Live sessions">
+          {sessions.map((s) => {
+            const k = `s:${s.id}`;
+            const isOpen = expanded === k;
+            return (
               <li
                 key={s.id}
-                className={`bridge-crew-row bridge-session-${s.status}`}
+                className={`bridge-crew-row bridge-session-${s.status}${isOpen ? " is-open" : ""}`}
+                onClick={() => toggle(k)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), toggle(k))}
                 title={s.lastUserMsg ?? s.project}
               >
-                <span
-                  className="bridge-crew-dot"
-                  aria-hidden="true"
-                />
-                <span className="bridge-crew-body">
-                  <span className="bridge-crew-name">⏵ {s.project}</span>
-                  {s.lastUserMsg && (
-                    <span className="bridge-crew-desc">
-                      {s.currentTool ? `${s.currentTool} · ` : ""}
-                      {s.lastUserMsg}
-                    </span>
-                  )}
-                </span>
-                <span className="bridge-crew-status">
-                  {relTime(s.lastActivity)}
-                </span>
+                <span className="bridge-crew-dot" aria-hidden="true" />
+                <span className="bridge-crew-name">⏵ {s.project}</span>
+                <span className="bridge-crew-status">{relTime(s.lastActivity)}</span>
+                {isOpen && (
+                  <span className="bridge-crew-detail">
+                    {s.currentTool && <span className="bridge-crew-tool">{s.currentTool}</span>}
+                    {s.lastUserMsg && <span className="bridge-crew-msg">{s.lastUserMsg}</span>}
+                  </span>
+                )}
               </li>
-            ))}
-          </ul>
-          <div className="bridge-crew-section">AGENTS</div>
-        </>
+            );
+          })}
+        </ul>
       )}
 
-      <ul className="bridge-crew-list">
+      <ul className="bridge-crew-list" aria-label="Scheduled agents">
         {agents.map((a) => {
           const runnable = RUNNABLE.has(a.name) && !isCloud;
           const isRunning = running === a.name;
+          const k = `a:${a.name}`;
+          const isOpen = expanded === k;
           return (
             <li
               key={a.name}
-              className={`bridge-crew-row bridge-crew-${a.lastStatus}${runnable ? " is-runnable" : ""}${isRunning ? " is-running" : ""}`}
-              onClick={() => runnable && dispatch(a.name)}
-              role={runnable ? "button" : undefined}
-              tabIndex={runnable ? 0 : undefined}
+              className={`bridge-crew-row bridge-crew-${a.lastStatus}${runnable ? " is-runnable" : ""}${isRunning ? " is-running" : ""}${isOpen ? " is-open" : ""}`}
+              onClick={(e) => {
+                if (e.shiftKey && runnable) { dispatch(a.name); return; }
+                toggle(k);
+              }}
+              role="button"
+              tabIndex={0}
               onKeyDown={(e) => {
-                if (runnable && (e.key === "Enter" || e.key === " ")) {
+                if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  dispatch(a.name);
+                  toggle(k);
                 }
               }}
-              title={a.description || a.name}
+              title={runnable ? "Click to expand · ⇧Click to run" : a.description || a.name}
             >
               <span className="bridge-crew-dot" aria-hidden="true" />
-              <span className="bridge-crew-body">
-                <span className="bridge-crew-name">{a.name}</span>
-                {a.description && (
-                  <span className="bridge-crew-desc">{a.description}</span>
-                )}
-              </span>
-              <span className="bridge-crew-status">
-                {isRunning ? "…" : relTime(a.lastRun)}
-              </span>
+              <span className="bridge-crew-name">{a.name}</span>
+              <span className="bridge-crew-status">{isRunning ? "…" : relTime(a.lastRun)}</span>
+              {isOpen && (
+                <span className="bridge-crew-detail">
+                  {a.description && <span className="bridge-crew-desc">{a.description}</span>}
+                  <span className="bridge-crew-meta-row">
+                    <span>{a.schedule}</span>
+                    <span>·</span>
+                    <span>{a.budget}</span>
+                  </span>
+                  {runnable && (
+                    <button
+                      type="button"
+                      className="bridge-btn bridge-btn-approve bridge-crew-run"
+                      onClick={(e) => { e.stopPropagation(); dispatch(a.name); }}
+                      disabled={isRunning}
+                    >
+                      {isRunning ? "…" : "Run now"}
+                    </button>
+                  )}
+                </span>
+              )}
             </li>
           );
         })}

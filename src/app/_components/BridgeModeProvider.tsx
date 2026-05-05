@@ -13,6 +13,23 @@ type Ctx = {
 
 const BridgeModeCtx = createContext<Ctx | null>(null);
 
+// Wrap a state mutation in document.startViewTransition when available.
+// The browser captures a snapshot of the old DOM, runs the mutation, captures
+// the new DOM, then crossfades between them. Persona 5 wipes are layered via
+// CSS pseudos ::view-transition-old(root) / ::view-transition-new(root) in
+// globals.css under the BRIDGE MODE block.
+function withViewTransition(mutate: () => void) {
+  type DocWithVT = Document & {
+    startViewTransition?: (cb: () => void) => unknown;
+  };
+  const doc = document as DocWithVT;
+  if (typeof doc.startViewTransition === "function") {
+    doc.startViewTransition(mutate);
+  } else {
+    mutate();
+  }
+}
+
 export function BridgeModeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<HomeMode>("bridge");
 
@@ -22,15 +39,19 @@ export function BridgeModeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setMode = useCallback((m: HomeMode) => {
-    setModeState(m);
-    localStorage.setItem(KEY, m);
+    withViewTransition(() => {
+      setModeState(m);
+      try { localStorage.setItem(KEY, m); } catch { /* ignore */ }
+    });
   }, []);
 
   const toggle = useCallback(() => {
-    setModeState((prev) => {
-      const next: HomeMode = prev === "bridge" ? "personal" : "bridge";
-      localStorage.setItem(KEY, next);
-      return next;
+    withViewTransition(() => {
+      setModeState((prev) => {
+        const next: HomeMode = prev === "bridge" ? "personal" : "bridge";
+        try { localStorage.setItem(KEY, next); } catch { /* ignore */ }
+        return next;
+      });
     });
   }, []);
 
