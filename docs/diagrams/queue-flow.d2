@@ -1,196 +1,111 @@
-direction: right
+direction: down
 
-# ── Title ─────────────────────────────────────────────────────────────
 title: {
   shape: text
-  label: "PG OS Dashboard ↔ Claude Code\nWho writes the queue · who reads it · what bridges and what doesn't"
+  label: "How requests reach you"
   near: top-center
   style: {
-    font-size: 22
+    font-size: 36
     bold: true
     font-color: "#333333"
   }
 }
 
-# ── WRITERS (left column) ────────────────────────────────────────────
-writers: {
-  label: "Writers — populate the queue"
-  style: {
-    fill: "#FFF8F0"
-    stroke: "#D4A04A"
-    stroke-width: 2
-    border-radius: 8
-    font-size: 14
-    bold: true
-    font-color: "#333333"
-  }
-
-  active-cc: {
-    label: "Active Claude Code session\nterminal open · approval-queue.md rule fires"
-    style: { fill: "#FFFDF7"; stroke: "#D4A04A"; font-size: 12 }
-  }
-
-  agents: {
-    label: "Scheduled agents\nlaunchd / cron · runs HEADLESS\nNO terminal needed"
-    style: { fill: "#FFFDF7"; stroke: "#D4A04A"; font-size: 12; bold: true }
-  }
-
-  telegram: {
-    label: "Telegram webhook\n(/api/telegram-webhook)"
-    style: { fill: "#FFFDF7"; stroke: "#D4A04A"; font-size: 12 }
-  }
-
-  capture: {
-    shape: document
-    label: "Capture FAB / API\n/api/queue POST"
-    style: { fill: "#FFFDF7"; stroke: "#D4A04A"; font-size: 12 }
-  }
-}
-
-# ── STORE (middle) ───────────────────────────────────────────────────
-store: {
-  label: "Storage — independent of any terminal"
-  style: {
-    fill: "#F0F7FF"
-    stroke: "#5B9BD5"
-    stroke-width: 2
-    border-radius: 8
-    font-size: 14
-    bold: true
-    font-color: "#333333"
-  }
-
-  fs: {
-    shape: cylinder
-    label: "~/.pg-os/queue/*.md\nfilesystem · source of truth"
-    style: { fill: "#F7FBFF"; stroke: "#5B9BD5"; font-size: 12; bold: true }
-  }
-
-  sbq: {
-    shape: cylinder
-    label: "Supabase queue_items\ncloud mirror"
-    style: { fill: "#F7FBFF"; stroke: "#5B9BD5"; font-size: 12 }
-  }
-
-  sbd: {
-    shape: cylinder
-    label: "Supabase decisions_log\n14-day post-mortem audit"
-    style: { fill: "#F7FBFF"; stroke: "#5B9BD5"; font-size: 12 }
-  }
-
-  fs <-> sbq: "mirrored on each write" { style.font-size: 11 }
-}
-
-# ── DASHBOARD (right) ────────────────────────────────────────────────
-dashboard: {
-  label: "PG OS Dashboard — works with or without a terminal"
-  style: {
-    fill: "#F0FFF4"
-    stroke: "#2D8B4E"
-    stroke-width: 2
-    border-radius: 8
-    font-size: 14
-    bold: true
-    font-color: "#333333"
-  }
-
-  api: {
-    label: "/api/queue\nGET reads disk · DELETE resolves"
-    style: { fill: "#F7FFF7"; stroke: "#2D8B4E"; font-size: 12 }
-  }
-
-  flow: {
-    label: "Flow tab\ngrouped by source\nsession-skill-scanner pinned"
-    style: { fill: "#F7FFF7"; stroke: "#2D8B4E"; font-size: 12 }
-  }
-
-  decide: {
-    shape: diamond
-    label: "DECIDE / DISMISS"
-    style: { fill: "#FFF9F5"; stroke: "#2D8B4E"; font-size: 12; bold: true }
-  }
-
-  triage: {
-    label: "Triage Mode\nkeyboard 1-9 / A D X S"
-    style: { fill: "#F7FFF7"; stroke: "#2D8B4E"; font-size: 12 }
-  }
-
-  toast: {
-    label: "✓ Toast feedback\n+ in-dialog success pulse"
-    style: { fill: "#F7FFF7"; stroke: "#2D8B4E"; font-size: 12 }
-  }
-
-  api -> flow: "items" { style.font-size: 11 }
-  flow -> triage: "Triage 56 →" { style.font-size: 11 }
-  flow -> decide { style.font-size: 11 }
-  triage -> decide: "one at a time" { style.font-size: 11 }
-  decide -> toast: "every action" { style.font-size: 11 }
-}
-
-# ── AGENT DISPATCH (lower band) ──────────────────────────────────────
-dispatch: {
-  label: "Agent Dispatch from Dashboard\nrip new work without opening a terminal"
-  style: {
-    fill: "#FFF5F0"
-    stroke: "#E8805A"
-    stroke-width: 2
-    border-radius: 8
-    font-size: 14
-    bold: true
-    font-color: "#333333"
-  }
-
-  runnow: {
-    label: "Run Now button\n(Bridge crew rail)"
-    style: { fill: "#FFFDF7"; stroke: "#E8805A"; font-size: 12 }
-  }
-
-  api-run: {
-    label: "/api/claude/run-agent"
-    style: { fill: "#FFFDF7"; stroke: "#E8805A"; font-size: 12 }
-  }
-
-  spawn: {
-    shape: package
-    label: "spawns\n~/.claude/agents/<name>/run-<name>.sh\nheadless Claude Code subprocess"
-    style: { fill: "#FFFDF7"; stroke: "#E8805A"; font-size: 11 }
-  }
-
-  runnow -> api-run -> spawn: "" { style.font-size: 11 }
-}
-
-# ── Connections between sections ─────────────────────────────────────
-writers.active-cc -> store.fs: "writes when running" { style.font-size: 11 }
-writers.agents -> store.fs: "writes via cron" { style.font-size: 11; style.bold: true }
-writers.telegram -> store.fs: "writes" { style.font-size: 11 }
-writers.capture -> store.fs: "writes" { style.font-size: 11 }
-
-store.fs -> dashboard.api: "reads anytime" { style.font-size: 11; style.bold: true }
-dashboard.decide -> store.fs: "deletes file" { style.font-size: 11 }
-dashboard.decide -> store.sbq: "marks resolved" { style.font-size: 11 }
-dashboard.decide -> store.sbd: "logDecision" { style.font-size: 11 }
-
-dashboard -> dispatch: "ALSO launches agents" { style.font-size: 11 }
-dispatch.spawn -> writers.agents: "becomes a writer" { style.font-size: 11; style.stroke-dash: 3 }
-
-# ── What does NOT bridge ─────────────────────────────────────────────
-no-push: {
+subtitle: {
   shape: text
-  label: "✗ Dashboard CANNOT push messages INTO a running Claude Code session.\nThe terminal session only learns of your decisions on its NEXT read of the queue / decisions_log."
+  label: "PG OS Dashboard ↔ Claude Code · queue flow"
+  near: top-center
+  style: {
+    font-size: 16
+    italic: true
+    font-color: "#888888"
+  }
+}
+
+# 2x2 grid layout — 1 (TL) → 2 (TR) → 3 (BR) → 4 (BL) — clockwise
+flow: {
+  grid-columns: 2
+  grid-gap: 60
+  style: { stroke-width: 0; fill: "transparent" }
+
+  # ── 1 — TOP-LEFT — Writers ──────────────────────────────────────
+  sources: {
+    label: "1. WHO ASKS FOR YOUR ATTENTION\nthe writers\n\n• AI sessions you're running   (Claude Code)\n• Background automations   (cron · launchd)\n• Texts from your phone   (Telegram webhook)\n• Things you capture yourself   (Capture FAB)"
+    style: {
+      fill: "#FFF8F0"
+      stroke: "#D4A04A"
+      stroke-width: 3
+      border-radius: 12
+      font-size: 18
+      bold: true
+      font-color: "#333333"
+    }
+  }
+
+  # ── 2 — TOP-RIGHT — Queue ───────────────────────────────────────
+  inbox: {
+    shape: cylinder
+    label: "2. THE INBOX\nthe queue\n\nEach request = one .md file\nat ~/.pg-os/queue/\n\nMirrored to Supabase\n(queue_items table)"
+    style: {
+      fill: "#F0F7FF"
+      stroke: "#5B9BD5"
+      stroke-width: 3
+      font-size: 18
+      bold: true
+      font-color: "#333333"
+    }
+  }
+
+  # ── 4 — BOTTOM-LEFT — Dispatch ─────────────────────────────────
+  jobs: {
+    shape: package
+    label: "4. LAUNCH A JOB\nagent dispatch\n\nClick 'Run Now' on the dashboard\n→ POST /api/claude/run-agent\n→ spawns a headless Claude Code\n   that drops new requests in the inbox"
+    style: {
+      fill: "#FFF5F0"
+      stroke: "#E8805A"
+      stroke-width: 3
+      font-size: 18
+      bold: true
+      font-color: "#333333"
+    }
+  }
+
+  # ── 3 — BOTTOM-RIGHT — Dashboard ───────────────────────────────
+  dashboard: {
+    label: "3. YOUR DASHBOARD\nPG OS Flow tab\n\n• Reads the inbox via /api/queue\n• Approve / Dismiss with one click\n• Triage Mode (keyboard 1-9 / A D X S)\n• Every decision logged to decisions_log"
+    style: {
+      fill: "#F0FFF4"
+      stroke: "#2D8B4E"
+      stroke-width: 3
+      border-radius: 12
+      font-size: 18
+      bold: true
+      font-color: "#333333"
+    }
+  }
+}
+
+# Clockwise flow — TL → TR → BR → BL
+flow.sources -> flow.inbox: "writes a request" {
+  style: { font-size: 17; bold: true; stroke: "#666666"; stroke-width: 2 }
+}
+
+flow.inbox -> flow.dashboard: "you review" {
+  style: { font-size: 17; bold: true; stroke: "#666666"; stroke-width: 2 }
+}
+
+flow.dashboard -> flow.jobs: "click 'Run Now'" {
+  style: { font-size: 17; bold: true; stroke: "#666666"; stroke-width: 2 }
+}
+
+# Footnote — the one important caveat (no inbound to live sessions)
+note: {
+  shape: text
+  label: "One catch: an already-running Claude Code session can't be interrupted.\nIt only sees your decisions on its NEXT read of the inbox."
   near: bottom-center
   style: {
-    font-size: 13
+    font-size: 15
     italic: true
     font-color: "#C44545"
-  }
-}
-
-dashboard -> writers.active-cc: "no inbound channel" {
-  style: {
-    stroke: "#C44545"
-    stroke-dash: 4
-    stroke-width: 2
-    font-size: 11
-    italic: true
   }
 }
