@@ -1,5 +1,5 @@
 "use client";
-import { ModeSwitcher, ModeLabel, AutoBadge } from "./_components/ModeSwitcher";
+import { ModeLabel } from "./_components/ModeSwitcher";
 import { LiveStamp } from "./_components/LiveClock";
 import { CityTemp } from "./_components/LocationLive";
 import { HomeModeToggle } from "./_components/HomeModeToggle";
@@ -36,7 +36,7 @@ export default function Page() {
             <span className="dot" />
             <span>PG OS</span>
             <span className="ver">
-              // v0.3 // <ModeLabel /> · <AutoBadge />
+              // v0.3 // <ModeLabel />
               {isCloud === true && <span className="ver-cloud" title="Cloud mode — laptop-only actions are gated. Open 127.0.0.1:3030 from your Mac for full access."> · CLOUD</span>}
               {isCloud === false && <span className="ver-local" title="Local mode — full access including subprocess spawning."> · LOCAL</span>}
             </span>
@@ -72,7 +72,6 @@ export default function Page() {
         </div>
       </div>
 
-      <ModeSwitcher />
       <CaptureFAB />
       <CopilotLauncher />
       <CommandPalette />

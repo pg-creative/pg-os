@@ -32,7 +32,7 @@ function dispatchCapture(destination: Destination) {
 
 export function useCommands(): Command[] {
   const { setActive } = useActiveTab();
-  const { setBrand, setMode } = useMode();
+  const { setBrand, setMode, setAutoMode } = useMode();
   const router = useRouter();
 
   // ── Navigate ─────────────────────────────────────────────────────────────
@@ -148,13 +148,18 @@ export function useCommands(): Command[] {
     label,
     group: "Palette",
     keywords: ["palette", "theme", "color", id, ...keywords],
-    run: () => {
-      document.documentElement.dataset.variant = id;
-      localStorage.setItem("pg-os-laputa-manual", id);
-      localStorage.setItem("pg-os-laputa-auto", "0");
-      setMode(id);
-    },
+    run: () => setMode(id),
   }));
+
+  // Restore time-based auto-cycling after a manual ⌘K palette pick.
+  paletteCommands.push({
+    id: "palette.auto",
+    label: "Resume Auto Palette",
+    group: "Palette",
+    hint: "Track time of day",
+    keywords: ["palette", "auto", "resume", "time", "day", "natural", "default"],
+    run: () => setAutoMode(true),
+  });
 
   // ── Briefing / Evening ────────────────────────────────────────────────────
   const ceremonyCommands: Command[] = [
@@ -186,6 +191,6 @@ export function useCommands(): Command[] {
       ...ceremonyCommands,
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setActive, setBrand, setMode, router],
+    [setActive, setBrand, setMode, setAutoMode, router],
   )();
 }

@@ -32,35 +32,23 @@ export function greetingForHour(h: number): string {
   return "night,";
 }
 
-const VALID_MODES: Mode[] = [
-  "laputa-day", "laputa-twilight", "laputa-midnight",
-  "howls", "totoro", "mononoke",
-];
-const KEY_MANUAL = "pg-os-laputa-manual";
-const KEY_AUTO = "pg-os-laputa-auto";
 const KEY_BRAND = "pg-os-brand-mode";
-
-// Backward-compat: any prior alt-palette value still resolves cleanly.
-const LEGACY_MAP: Record<string, Mode> = {
-  // No remaps needed — laputa-* are canonical again. Reserved for future renames.
-};
-function migrateMode(raw: string | null): Mode | null {
-  if (!raw) return null;
-  if ((VALID_MODES as string[]).includes(raw)) return raw as Mode;
-  if (raw in LEGACY_MAP) return LEGACY_MAP[raw];
-  return null;
-}
+// Stale keys from the pre-picker era — wiped on boot so auto can't get
+// permanently disabled by a leftover value.
+const STALE_KEYS = ["pg-os-laputa-manual", "pg-os-laputa-auto"];
 
 const VALID_BRAND_MODES: BrandMode[] = ["alchmy", "voyager", "writer", "metrasens", "recovery"];
 
 type Ctx = {
-  // ── Laputa time-mode (existing API — unchanged) ──────────────────────────────
+  // Laputa palette state. autoMode is IN-MEMORY ONLY (no localStorage):
+  // true = palette tracks time of day, false = ⌘K override locks current pick
+  // until the user calls setAutoMode(true) or reloads the page.
   mode: Mode;
   autoMode: boolean;
   greeting: string;
   setMode: (m: Mode) => void;
   setAutoMode: (on: boolean) => void;
-  // ── Brand mode (new parallel state) ─────────────────────────────────────────
+  // Brand mode (orthogonal to palette; persisted in localStorage)
   brand: BrandMode | null;
   setBrand: (b: BrandMode | null) => void;
   cycleBrandForward: () => void;
@@ -75,33 +63,20 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   const [greeting, setGreeting] = useState<string>("afternoon,");
   const [brand, setBrandState] = useState<BrandMode | null>(null);
 
-  // Boot from localStorage, then tick once
   useEffect(() => {
-    const savedAuto = localStorage.getItem(KEY_AUTO);
-    const auto = savedAuto === null ? true : savedAuto === "1";
-    setAutoModeState(auto);
+    STALE_KEYS.forEach((k) => localStorage.removeItem(k));
 
     const h = new Date().getHours();
     setGreeting(greetingForHour(h));
+    setModeState(modeForHour(h));
 
-    if (auto) {
-      setModeState(modeForHour(h));
-    } else {
-      const migrated = migrateMode(localStorage.getItem(KEY_MANUAL));
-      if (migrated) {
-        setModeState(migrated);
-        localStorage.setItem(KEY_MANUAL, migrated);
-      }
-    }
-
-    // Restore brand mode from localStorage
     const savedBrand = localStorage.getItem(KEY_BRAND) as BrandMode | null;
     if (savedBrand && VALID_BRAND_MODES.includes(savedBrand)) {
       setBrandState(savedBrand);
     }
   }, []);
 
-  // Re-check every minute so theme + greeting auto-update
+  // Live tick — palette + greeting follow the clock minute by minute.
   useEffect(() => {
     const tick = () => {
       const h = new Date().getHours();
@@ -112,12 +87,10 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(i);
   }, [autoMode]);
 
-  // Sync data-variant attribute (Laputa palette)
   useEffect(() => {
     document.documentElement.setAttribute("data-variant", mode);
   }, [mode]);
 
-  // Sync data-brand attribute + CSS accent-2 override
   useEffect(() => {
     if (brand) {
       document.documentElement.setAttribute("data-brand", brand);
@@ -132,13 +105,10 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   const setMode = (m: Mode) => {
     setModeState(m);
     setAutoModeState(false);
-    localStorage.setItem(KEY_MANUAL, m);
-    localStorage.setItem(KEY_AUTO, "0");
   };
 
   const setAutoMode = (on: boolean) => {
     setAutoModeState(on);
-    localStorage.setItem(KEY_AUTO, on ? "1" : "0");
     if (on) {
       const h = new Date().getHours();
       setModeState(modeForHour(h));

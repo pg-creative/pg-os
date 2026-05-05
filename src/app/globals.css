@@ -348,31 +348,10 @@ body{
 .check.done .box{background:var(--accent);border-color:var(--accent)}
 .check.done .box::after{content:"";width:7px;height:4px;border-left:1.5px solid var(--avatar-text);border-bottom:1.5px solid var(--avatar-text);transform:rotate(-45deg);margin-bottom:1px}
 
-/* ── Theme switcher ────────────────────────────────────────────────────── */
-.switcher{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:8px;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.85);border:1px solid var(--border-soft);border-radius:999px;backdrop-filter:blur(20px);box-shadow:0 12px 40px rgba(60,80,100,0.12)}
-.switcher .chip{padding:8px 14px;border-radius:999px;font-family:var(--mono),monospace;font-size:10px;letter-spacing:0.16em;color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;display:flex;align-items:center;gap:8px;border:1px solid transparent;user-select:none}
-.switcher .chip:hover{color:var(--fg-dim)}
-.switcher .chip.active{background:var(--fg);color:var(--bg-0);border-color:var(--fg)}
-.switcher .chip.active .swatch{border-color:var(--bg-0)}
-.switcher .swatch{width:10px;height:10px;border-radius:50%;border:1px solid var(--border-soft)}
-.switcher .swatch.laputa-day{background:linear-gradient(135deg,#E8F0F7 35%,#3F6FA8)}
-.switcher .swatch.laputa-twilight{background:linear-gradient(135deg,#1F3252 35%,#92BFEF)}
-.switcher .swatch.laputa-midnight{background:linear-gradient(135deg,#091433 35%,#5E82E8)}
-.switcher .swatch.howls{background:linear-gradient(135deg,#1A120C,#E5B374)}
-.switcher .swatch.totoro{background:linear-gradient(135deg,#0F1410,#EBC360)}
-.switcher .swatch.mononoke{background:linear-gradient(135deg,#0D1311,#D7B26A)}
-.switcher .chip.auto-toggle{font-weight:500;background:rgba(90,135,184,0.15);color:var(--accent);border-color:var(--border)}
-.switcher .chip.auto-toggle.active{background:var(--accent);color:var(--avatar-text);border-color:var(--accent);box-shadow:0 0 12px rgba(74,110,223,0.3)}
-.switcher .label{font-family:var(--mono),monospace;font-size:9.5px;letter-spacing:0.2em;color:var(--muted);padding:0 4px;text-transform:uppercase}
-#auto-badge.auto-on{color:var(--accent);font-weight:500}
-#auto-badge.auto-on::before{content:"◉ ";opacity:0.8}
-#auto-badge.auto-off{color:var(--muted);opacity:0.6}
-#auto-badge.auto-off::before{content:"○ "}
-
 /* ── Animations ────────────────────────────────────────────────────────── */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.45}}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
-.card,.topbar,.switcher{animation:fadeIn 0.5s ease-out}
+.card,.topbar{animation:fadeIn 0.5s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 @media(prefers-reduced-motion: reduce){
@@ -756,17 +735,6 @@ body{
     box-shadow:0 8px 32px rgba(60,80,100,0.18), 0 0 22px rgba(90,135,184,0.28);
   }
 
-  /* Mode switcher — smaller, moved to bottom-left so it doesn't collide with FAB */
-  .switcher{
-    bottom:18px;
-    left:14px;
-    transform:none;
-    padding:5px 7px;
-    font-size:9px;
-    gap:3px;
-  }
-  .switcher > *{ font-size:9px; }
-
   /* Ghost placeholder labels shrink */
   .ghost-label{ font-size:15px; }
   .gp-name, .gq-title{ font-size:14px; }
@@ -802,9 +770,6 @@ body{
   .capture-fab{
     bottom:max(16px, env(safe-area-inset-bottom));
     right:max(16px, env(safe-area-inset-right));
-  }
-  .switcher{
-    bottom:max(18px, calc(env(safe-area-inset-bottom) + 4px));
   }
 }
 
