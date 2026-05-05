@@ -6353,7 +6353,24 @@ body:not([data-idle="true"]) .shell {
   display: grid;
   grid-template-columns: 280px 1fr 340px;
   gap: 14px;
-  min-height: calc(100vh - 200px);
+  min-height: calc(100vh - 360px);
+}
+
+/* Compact bridge hero — same Ghibli scene as PersonalView session card,
+   ~150px tall instead of 240px so the 3-col grid still has air. */
+.card.session.bridge-session {
+  min-height: 150px;
+  margin-bottom: 14px;
+}
+.card.session.bridge-session .greeting {
+  font-size: 30px;
+}
+.card.session.bridge-session .clock .time {
+  font-size: 36px;
+}
+.card.session.bridge-session .clock {
+  top: 16px;
+  right: 18px;
 }
 
 .bridge-crew,
