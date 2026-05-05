@@ -13,6 +13,16 @@ export type AgentHealth = {
   budget: string;
 };
 
+type LiveSession = {
+  id: string;
+  project: string;
+  lastActivity: string;
+  lastActivityMs: number;
+  status: "running" | "idle";
+  lastUserMsg?: string;
+  currentTool?: string;
+};
+
 function relTime(iso: string | null): string {
   if (!iso) return "never";
   try {
@@ -41,18 +51,27 @@ const RUNNABLE = new Set([
 
 export function CrewRail() {
   const [agents, setAgents] = useState<AgentHealth[]>([]);
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const isCloud = useIsCloud();
 
-  const fetchAgents = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     try {
-      const res = await fetch("/api/claude/agents", { cache: "no-store" });
-      if (!res.ok) throw new Error("agents fetch failed");
-      const data = await res.json();
-      setAgents(data.agents ?? []);
+      const [agentRes, sessRes] = await Promise.all([
+        fetch("/api/claude/agents", { cache: "no-store" }),
+        fetch("/api/sessions", { cache: "no-store" }),
+      ]);
+      if (!agentRes.ok) throw new Error("agents fetch failed");
+      const agentData = await agentRes.json();
+      setAgents(agentData.agents ?? []);
+      if (sessRes.ok) {
+        const sessData = await sessRes.json();
+        setSessions(sessData.sessions ?? []);
+      }
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "load failed");
     } finally {
@@ -61,10 +80,13 @@ export function CrewRail() {
   }, []);
 
   useEffect(() => {
-    fetchAgents();
-    const i = setInterval(fetchAgents, 60_000);
+    fetchAll();
+    // Sessions can change minute-to-minute; agents change slowly. Single
+    // 30s tick is a reasonable compromise (keeps Claude Code latency visible
+    // without thrashing the local fs).
+    const i = setInterval(fetchAll, 30_000);
     return () => clearInterval(i);
-  }, [fetchAgents]);
+  }, [fetchAll]);
 
   const dispatch = useCallback(async (name: string) => {
     if (!RUNNABLE.has(name) || isCloud) return;
@@ -85,30 +107,67 @@ export function CrewRail() {
         setFeedback(`${name} · ${j.error ?? "failed"}`);
       }
       setTimeout(() => setFeedback(null), 6_000);
-      // Refresh agent list shortly after spawn so the dot/status update.
-      setTimeout(fetchAgents, 2_000);
+      setTimeout(fetchAll, 2_000);
     } catch (e) {
       setFeedback(`${name} · ${e instanceof Error ? e.message : "error"}`);
       setTimeout(() => setFeedback(null), 6_000);
     } finally {
       setRunning(null);
     }
-  }, [isCloud, fetchAgents]);
+  }, [isCloud, fetchAll]);
+
+  const runningSessions = sessions.filter((s) => s.status === "running");
+  const idleSessions = sessions.filter((s) => s.status === "idle");
+  const sessionCount = sessions.length;
 
   return (
     <aside className="bridge-crew" aria-label="Agent crew">
       <div className="bridge-rail-header">
         <span className="bridge-rail-title">CREW</span>
         <span className="bridge-rail-meta">
-          {loading ? "scanning…" : `${agents.length} configured`}
+          {loading
+            ? "scanning…"
+            : sessionCount > 0
+              ? `${agents.length} agents · ${sessionCount} live`
+              : `${agents.length} agents`}
         </span>
       </div>
 
-      {error && (
-        <div className="bridge-crew-error">{error}</div>
-      )}
-      {feedback && (
-        <div className="bridge-crew-feedback">{feedback}</div>
+      {error && <div className="bridge-crew-error">{error}</div>}
+      {feedback && <div className="bridge-crew-feedback">{feedback}</div>}
+
+      {/* Live Claude Code sessions — surfaced first when present. */}
+      {sessionCount > 0 && (
+        <>
+          <div className="bridge-crew-section">SESSIONS</div>
+          <ul className="bridge-crew-list">
+            {[...runningSessions, ...idleSessions].map((s) => (
+              <li
+                key={s.id}
+                className={`bridge-crew-row bridge-session-${s.status}`}
+                title={s.lastUserMsg ?? s.project}
+              >
+                <span
+                  className="bridge-crew-dot"
+                  aria-hidden="true"
+                />
+                <span className="bridge-crew-body">
+                  <span className="bridge-crew-name">⏵ {s.project}</span>
+                  {s.lastUserMsg && (
+                    <span className="bridge-crew-desc">
+                      {s.currentTool ? `${s.currentTool} · ` : ""}
+                      {s.lastUserMsg}
+                    </span>
+                  )}
+                </span>
+                <span className="bridge-crew-status">
+                  {relTime(s.lastActivity)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="bridge-crew-section">AGENTS</div>
+        </>
       )}
 
       <ul className="bridge-crew-list">

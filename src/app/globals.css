@@ -6839,6 +6839,331 @@ body:not([data-idle="true"]) .shell {
   text-overflow: ellipsis;
 }
 
+/* ── Crew sections (sessions vs agents) ───────────────────── */
+.bridge-crew-section {
+  font-family: var(--mono),monospace;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.bridge-crew-section:first-child { margin-top: 0; }
+.bridge-crew-row.bridge-session-running .bridge-crew-dot {
+  background: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 8px var(--accent);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.bridge-crew-row.bridge-session-idle .bridge-crew-dot {
+  background: var(--accent-3);
+  opacity: 0.8;
+}
+.bridge-crew-row.bridge-session-running,
+.bridge-crew-row.bridge-session-idle {
+  cursor: default;
+}
+
+/* ── Memento Mori ─────────────────────────────────────────── */
+.bridge-widget-memento .bridge-memento-num {
+  font-family: var(--serif),serif;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--fg);
+  margin-bottom: 2px;
+}
+.bridge-widget-memento .bridge-memento-label {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+/* ── Quote rotator ────────────────────────────────────────── */
+.bridge-widget-quote .bridge-quote-body {
+  font-family: var(--serif),serif;
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--fg-dim);
+  margin: 0 0 4px 0;
+}
+.bridge-widget-quote .bridge-quote-author {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ── Lofi player ──────────────────────────────────────────── */
+.bridge-widget-lofi .bridge-lofi-cycle {
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, border-color 0.15s, transform 0.3s;
+}
+.bridge-widget-lofi .bridge-lofi-cycle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: rotate(180deg);
+}
+.bridge-lofi-station {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.bridge-lofi-name {
+  font-family: var(--serif),serif;
+  font-size: 16px;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--fg);
+}
+.bridge-lofi-vibe {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.bridge-lofi-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+}
+.bridge-lofi-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.bridge-lofi-play {
+  width: 100%;
+  font-family: var(--mono),monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 14px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.bridge-lofi-play:hover {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+/* ── Brick Builder game ───────────────────────────────────── */
+.bridge-widget-bricks .bb-timer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-soft);
+}
+.bb-timer-num {
+  font-family: var(--serif),serif;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  line-height: 1;
+}
+.bb-timer-phase {
+  font-family: var(--mono),monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.bb-timer-break .bb-timer-phase { color: var(--accent-3); }
+
+.bb-wall {
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.18);
+  border: 1px solid var(--border-soft);
+  min-height: 64px;
+  display: flex;
+  align-items: flex-end;
+}
+.bb-wall-empty {
+  font-family: var(--mono),monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  font-style: italic;
+  text-transform: uppercase;
+  width: 100%;
+  text-align: center;
+  padding: 12px 0;
+}
+.bb-wall-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 2px;
+  width: 100%;
+}
+.bb-brick {
+  height: 12px;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: transform 0.2s ease;
+}
+.bb-brick-fresh {
+  animation: brick-place 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes brick-place {
+  0%   { transform: translateY(-30px) scale(0.7); opacity: 0; }
+  60%  { transform: translateY(2px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.bb-stats {
+  display: flex;
+  gap: 14px;
+  margin: 6px 0 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+.bb-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+.bb-stat-num {
+  font-family: var(--serif),serif;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  line-height: 1;
+}
+.bb-tier-swatch {
+  width: 18px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+  border: 1px solid var(--border-soft);
+  box-shadow:
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.bb-stat-label {
+  font-family: var(--mono),monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.bb-next {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--accent-2);
+  text-transform: uppercase;
+  text-align: center;
+  padding: 4px 0 8px;
+  font-weight: 500;
+}
+.bb-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── Comms cards (activity + approval) ────────────────────── */
+.comms-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+}
+.comms-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono),monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.comms-card-tag {
+  color: var(--accent);
+  font-weight: 600;
+}
+.comms-card-meta { color: var(--fg-dim); }
+.comms-card-time { margin-left: auto; color: var(--muted); }
+.comms-card-title {
+  font-size: 13px;
+  color: var(--fg);
+  line-height: 1.4;
+  margin: 2px 0 0 0;
+}
+.comms-card-summary {
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  line-height: 1.4;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.comms-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Source-tinted left border */
+.comms-card-agent_run { border-left: 2px solid var(--accent); }
+.comms-card-ship     { border-left: 2px solid var(--success); }
+.comms-card-queue    { border-left: 2px solid var(--accent-2); }
+.comms-card-decision { border-left: 2px solid var(--accent-3); }
+.comms-card-telegram { border-left: 2px solid var(--accent-2); }
+.comms-card-capture  { border-left: 2px solid var(--muted); }
+.comms-card-approval {
+  border-left: 2px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+
 /* ── Responsive: collapse status rail then crew rail ──────── */
 @media (max-width: 1280px) {
   .bridge { grid-template-columns: 240px 1fr; }

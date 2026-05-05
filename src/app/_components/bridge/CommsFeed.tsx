@@ -2,11 +2,17 @@
 
 /**
  * CommsFeed — Bridge mode's center column.
- * Stage 3a: persistent inline chat (replaces empty placeholder).
- * Stages 3b/3c: merge agent runs + approvals into the same chronological feed.
+ *
+ * Unified chronological feed:
+ *   - chat (you ↔ co-pilot, streamed via /api/copilot/chat)
+ *   - agent_run / ship / capture / decision / telegram (from /api/timeline)
+ *   - pending approvals (from /api/claude/proposals)
+ *
+ * Items sort by timestamp ascending — oldest at top, newest at bottom.
+ * Chat input lives at the bottom; new turns + new activity scroll into view.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { CopilotMessage, CopilotMsg, ToolCallEvent } from "../Copilot/CopilotMessage";
 import { CopilotInput } from "../Copilot/CopilotInput";
@@ -20,9 +26,36 @@ interface SSEEvent {
   error?: string;
 }
 
+type ActivityRow = {
+  source: string;
+  id: string;
+  timestamp: string;
+  title: string;
+  summary?: string;
+  agent?: string;
+  status?: string;
+  cost_usd?: number | null;
+};
+
+type Proposal = {
+  description: string;
+  category?: string;
+  type?: string;
+  occurrences?: number;
+  source?: string;
+  __index?: number; // injected so approve/dismiss know which slot
+};
+
+type ChatItem = { kind: "chat"; ts: number; msg: CopilotMsg };
+type ActivityItem = { kind: "activity"; ts: number; row: ActivityRow };
+type ApprovalItem = { kind: "approval"; ts: number; proposal: Proposal };
+type FeedItem = ChatItem | ActivityItem | ApprovalItem;
+
 const STORAGE_KEY = "pg-os-comms-history-v1";
 const HISTORY_KEY = "pg-os-comms-history-canonical-v1";
+const CHAT_TS_KEY = "pg-os-comms-ts-v1"; // map id→ts so persisted chat keeps chronological position
 const MAX_PERSISTED = 60;
+const ACTIVITY_LIMIT = 30;
 
 function nanoid() {
   return Math.random().toString(36).slice(2, 10);
@@ -30,65 +63,125 @@ function nanoid() {
 
 export function CommsFeed() {
   const [messages, setMessages] = useState<CopilotMsg[]>([]);
+  const [chatTs, setChatTs] = useState<Record<string, number>>({});
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [acting, setActing] = useState<number | null>(null);
   const historyRef = useRef<MessageParam[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Boot — restore persisted history.
+  // ── Boot — restore chat from localStorage ─────────────────────────────────
   useEffect(() => {
     try {
       const rawMsgs = localStorage.getItem(STORAGE_KEY);
-      if (rawMsgs) {
-        const parsed = JSON.parse(rawMsgs) as CopilotMsg[];
-        setMessages(parsed);
-      }
+      if (rawMsgs) setMessages(JSON.parse(rawMsgs) as CopilotMsg[]);
       const rawHistory = localStorage.getItem(HISTORY_KEY);
-      if (rawHistory) {
-        historyRef.current = JSON.parse(rawHistory) as MessageParam[];
-      }
+      if (rawHistory) historyRef.current = JSON.parse(rawHistory) as MessageParam[];
+      const rawTs = localStorage.getItem(CHAT_TS_KEY);
+      if (rawTs) setChatTs(JSON.parse(rawTs) as Record<string, number>);
     } catch {
       /* ignore corrupted history */
     }
   }, []);
 
-  // Persist messages on change (cap to MAX_PERSISTED to keep payload small).
+  // Persist chat on change
   useEffect(() => {
     try {
-      const trimmed = messages.slice(-MAX_PERSISTED);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-    } catch {
-      /* quota or serialization failure — silently drop */
-    }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_PERSISTED)));
+    } catch { /* ignore */ }
   }, [messages]);
 
-  // Auto-scroll to bottom on new content.
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_TS_KEY, JSON.stringify(chatTs));
+    } catch { /* ignore */ }
+  }, [chatTs]);
+
+  // ── Initial fetch + SSE subscription for activity + proposals ─────────────
+  const fetchActivity = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/timeline?days=2`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const rows: ActivityRow[] = Array.isArray(data.rows) ? data.rows : data.events ?? [];
+      setActivity(rows.slice(-ACTIVITY_LIMIT));
+    } catch { /* ignore */ }
+  }, []);
+
+  const fetchProposals = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/claude/proposals`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = (data.proposals ?? []) as Proposal[];
+      setProposals(list.map((p, i) => ({ ...p, __index: i })));
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    fetchActivity();
+    fetchProposals();
+
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource("/api/timeline/events");
+      es.addEventListener("refresh", () => {
+        fetchActivity();
+        fetchProposals();
+      });
+      es.onerror = () => { /* will reconnect automatically */ };
+    } catch { /* SSE unavailable */ }
+
+    const i = setInterval(() => {
+      fetchActivity();
+      fetchProposals();
+    }, 60_000);
+    return () => {
+      clearInterval(i);
+      es?.close();
+    };
+  }, [fetchActivity, fetchProposals]);
+
+  // Auto-scroll to bottom on new content
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, activity, proposals]);
 
   const persistHistory = useCallback(() => {
     try {
-      const trimmed = historyRef.current.slice(-MAX_PERSISTED);
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
-    } catch {
-      /* ignore */
-    }
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(historyRef.current.slice(-MAX_PERSISTED)));
+    } catch { /* ignore */ }
   }, []);
 
   const handleClear = useCallback(() => {
     setMessages([]);
     historyRef.current = [];
     setInput("");
+    setChatTs({});
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(HISTORY_KEY);
-    } catch {
-      /* ignore */
-    }
+      localStorage.removeItem(CHAT_TS_KEY);
+    } catch { /* ignore */ }
   }, []);
+
+  const decide = useCallback(async (index: number, action: "approve" | "dismiss") => {
+    setActing(index);
+    try {
+      await fetch("/api/claude/proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, index }),
+      });
+      await fetchProposals();
+    } finally {
+      setActing(null);
+    }
+  }, [fetchProposals]);
 
   const handleSubmit = useCallback(async () => {
     const text = input.trim();
@@ -97,18 +190,20 @@ export function CommsFeed() {
     setInput("");
     setLoading(true);
 
-    const userMsg: CopilotMsg = { id: nanoid(), role: "user", text };
+    const userId = nanoid();
+    const userTs = Date.now();
+    const userMsg: CopilotMsg = { id: userId, role: "user", text };
     setMessages((prev) => [...prev, userMsg]);
-    historyRef.current = [
-      ...historyRef.current,
-      { role: "user", content: text },
-    ];
+    setChatTs((prev) => ({ ...prev, [userId]: userTs }));
+    historyRef.current = [...historyRef.current, { role: "user", content: text }];
 
     const assistantId = nanoid();
+    const assistantTs = Date.now();
     setMessages((prev) => [
       ...prev,
       { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [] },
     ]);
+    setChatTs((prev) => ({ ...prev, [assistantId]: assistantTs }));
 
     try {
       const res = await fetch("/api/copilot/chat", {
@@ -153,9 +248,7 @@ export function CommsFeed() {
               if (event.name) {
                 toolCalls.push({ name: event.name });
                 setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId ? { ...m, toolCalls: [...toolCalls] } : m,
-                  ),
+                  prev.map((m) => (m.id === assistantId ? { ...m, toolCalls: [...toolCalls] } : m)),
                 );
               }
               break;
@@ -166,18 +259,14 @@ export function CommsFeed() {
                   tc.ok = event.ok ?? true;
                   tc.error = event.error;
                   setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantId ? { ...m, toolCalls: [...toolCalls] } : m,
-                    ),
+                    prev.map((m) => (m.id === assistantId ? { ...m, toolCalls: [...toolCalls] } : m)),
                   );
                 }
               }
               break;
             case "done":
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, text: assembled, streaming: false } : m,
-                ),
+                prev.map((m) => (m.id === assistantId ? { ...m, text: assembled, streaming: false } : m)),
               );
               break;
             case "error":
@@ -194,12 +283,11 @@ export function CommsFeed() {
       }
 
       if (assembled) {
-        historyRef.current = [
-          ...historyRef.current,
-          { role: "assistant", content: assembled },
-        ];
+        historyRef.current = [...historyRef.current, { role: "assistant", content: assembled }];
         persistHistory();
       }
+      // Refresh activity in case the chat emitted a tool that wrote a ship/queue item.
+      fetchActivity();
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Request failed";
       setMessages((prev) =>
@@ -208,9 +296,31 @@ export function CommsFeed() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, persistHistory]);
+  }, [input, loading, persistHistory, fetchActivity]);
 
-  const isEmpty = messages.length === 0;
+  // ── Build unified feed ────────────────────────────────────────────────────
+  const feed: FeedItem[] = useMemo(() => {
+    const items: FeedItem[] = [];
+    for (const m of messages) {
+      const ts = chatTs[m.id] ?? 0;
+      items.push({ kind: "chat", ts: ts || 0, msg: m });
+    }
+    for (const r of activity) {
+      const ts = new Date(r.timestamp).getTime();
+      if (Number.isFinite(ts)) items.push({ kind: "activity", ts, row: r });
+    }
+    // Approvals always sort to "now" so they pin to the bottom — actionable.
+    for (const p of proposals) {
+      items.push({ kind: "approval", ts: Date.now(), proposal: p });
+    }
+    items.sort((a, b) => a.ts - b.ts);
+    return items;
+  }, [messages, chatTs, activity, proposals]);
+
+  const isEmpty = feed.length === 0;
+  const headerMeta = isEmpty
+    ? "ready"
+    : `${activity.length} events · ${proposals.length} pending`;
 
   return (
     <section className="bridge-comms" aria-label="Comms feed">
@@ -227,7 +337,7 @@ export function CommsFeed() {
               CLEAR
             </button>
           ) : (
-            "ready"
+            headerMeta
           )}
         </span>
       </div>
@@ -242,8 +352,8 @@ export function CommsFeed() {
           <div className="bridge-empty-block">
             <p className="bridge-empty-heading">Comms link standing by.</p>
             <p className="bridge-empty-hint">
-              Ask anything about your day, your queue, your recovery, or what to
-              ship next. Replies stream in below.
+              Chat with the co-pilot, and you&apos;ll also see agent runs,
+              approvals, and activity from across PG OS interleave here.
             </p>
             <div className="bridge-empty-suggestions">
               {[
@@ -264,7 +374,22 @@ export function CommsFeed() {
             </div>
           </div>
         ) : (
-          messages.map((msg) => <CopilotMessage key={msg.id} msg={msg} />)
+          feed.map((item, i) => {
+            if (item.kind === "chat") {
+              return <CopilotMessage key={`c-${item.msg.id}`} msg={item.msg} />;
+            }
+            if (item.kind === "approval") {
+              return (
+                <ApprovalCard
+                  key={`a-${item.proposal.__index ?? i}`}
+                  proposal={item.proposal}
+                  acting={acting === item.proposal.__index}
+                  onDecide={(action) => decide(item.proposal.__index ?? 0, action)}
+                />
+              );
+            }
+            return <ActivityCard key={`act-${item.row.id}`} row={item.row} />;
+          })
         )}
       </div>
 
@@ -277,5 +402,74 @@ export function CommsFeed() {
         />
       </div>
     </section>
+  );
+}
+
+// ── Activity card (agent run / ship / capture / decision / telegram) ────────
+
+function ActivityCard({ row }: { row: ActivityRow }) {
+  const sourceLabel = row.source.replace(/_/g, " ");
+  const tag = row.agent ?? row.status ?? sourceLabel;
+  const time = new Date(row.timestamp).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return (
+    <article className={`comms-card comms-card-${row.source}`} aria-label={sourceLabel}>
+      <header className="comms-card-head">
+        <span className="comms-card-tag">{sourceLabel}</span>
+        {tag && tag !== sourceLabel && (
+          <span className="comms-card-meta">{tag}</span>
+        )}
+        <span className="comms-card-time">{time}</span>
+      </header>
+      <p className="comms-card-title">{row.title}</p>
+      {row.summary && <p className="comms-card-summary">{row.summary}</p>}
+    </article>
+  );
+}
+
+// ── Approval card ───────────────────────────────────────────────────────────
+
+function ApprovalCard({
+  proposal,
+  acting,
+  onDecide,
+}: {
+  proposal: Proposal;
+  acting: boolean;
+  onDecide: (action: "approve" | "dismiss") => void;
+}) {
+  return (
+    <article className="comms-card comms-card-approval" aria-label="Pending approval">
+      <header className="comms-card-head">
+        <span className="comms-card-tag">approval</span>
+        {proposal.category && (
+          <span className="comms-card-meta">{proposal.category}</span>
+        )}
+        {proposal.occurrences && (
+          <span className="comms-card-meta">×{proposal.occurrences}</span>
+        )}
+      </header>
+      <p className="comms-card-title">{proposal.description}</p>
+      <div className="comms-card-actions">
+        <button
+          type="button"
+          className="bridge-btn bridge-btn-approve"
+          onClick={() => onDecide("approve")}
+          disabled={acting}
+        >
+          {acting ? "…" : "Approve"}
+        </button>
+        <button
+          type="button"
+          className="bridge-btn bridge-btn-dismiss"
+          onClick={() => onDecide("dismiss")}
+          disabled={acting}
+        >
+          Skip
+        </button>
+      </div>
+    </article>
   );
 }
