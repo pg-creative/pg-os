@@ -6342,3 +6342,207 @@ body:not([data-idle="true"]) .shell {
   pointer-events: none;
   user-select: none;
 }
+
+/* ============================================================
+   BRIDGE MODE — Cortana-style command center
+   3-col layout: Crew (left) | Comms (center) | Status (right)
+   Personal mode preserves the existing widget grid; Bridge takes over Home.
+   ============================================================ */
+
+.bridge {
+  display: grid;
+  grid-template-columns: 280px 1fr 340px;
+  gap: 14px;
+  min-height: calc(100vh - 200px);
+}
+
+.bridge-crew,
+.bridge-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 16px 14px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 20px rgba(60,80,100,0.08), 0 0 0 1px rgba(255,255,255,0.5) inset;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.bridge-comms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 16px 18px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 20px rgba(60,80,100,0.08), 0 0 0 1px rgba(255,255,255,0.5) inset;
+  max-height: calc(100vh - 200px);
+}
+
+.bridge-rail-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-family: var(--mono),monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+.bridge-rail-title {
+  color: var(--fg);
+  font-weight: 600;
+}
+.bridge-rail-meta {
+  color: var(--muted);
+  font-size: 9.5px;
+  font-style: italic;
+  text-transform: lowercase;
+  letter-spacing: 0.1em;
+}
+
+/* ── Crew rail ─────────────────────────────────────────────── */
+.bridge-crew-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bridge-crew-row {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 6px;
+  border-radius: 8px;
+  font-family: var(--mono),monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.bridge-crew-row:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--fg);
+}
+.bridge-crew-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.5;
+}
+.bridge-crew-row.bridge-crew-placeholder .bridge-crew-dot {
+  background: var(--border-soft);
+}
+.bridge-crew-name {
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+.bridge-crew-status {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Comms feed ────────────────────────────────────────────── */
+.bridge-comms-feed {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.bridge-comms-empty {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+  color: var(--muted);
+}
+.bridge-empty-heading {
+  font-family: var(--serif),serif;
+  font-size: 22px;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--fg);
+  margin: 0 0 8px 0;
+}
+.bridge-empty-hint {
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 420px;
+  margin: 0 auto;
+  color: var(--fg-dim);
+}
+.bridge-comms-input {
+  flex-shrink: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.bridge-comms-input-stub {
+  font-family: var(--mono),monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-align: center;
+  padding: 12px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 8px;
+}
+
+/* ── Status widgets ────────────────────────────────────────── */
+.bridge-widget {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bridge-widget-label {
+  font-family: var(--mono),monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+.bridge-widget-body {
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  line-height: 1.4;
+}
+.bridge-widget-stub .bridge-widget-body {
+  font-family: var(--mono),monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* ── Responsive: collapse status rail then crew rail ──────── */
+@media (max-width: 1280px) {
+  .bridge { grid-template-columns: 240px 1fr; }
+  .bridge-status { display: none; }
+}
+@media (max-width: 768px) {
+  .bridge { grid-template-columns: 1fr; }
+  .bridge-crew { display: none; }
+}

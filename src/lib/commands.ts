@@ -2,6 +2,7 @@
 import { useCallback } from "react";
 import { useActiveTab, type Tab } from "../app/_components/useActiveTab";
 import { useMode } from "../app/_components/ModeProvider";
+import { useBridgeMode } from "../app/_components/BridgeModeProvider";
 import { ACTIVE_PROJECTS } from "./projects";
 import { useRouter } from "next/navigation";
 import type { BrandMode } from "./modes";
@@ -33,6 +34,7 @@ function dispatchCapture(destination: Destination) {
 export function useCommands(): Command[] {
   const { setActive } = useActiveTab();
   const { setBrand, setMode, setAutoMode } = useMode();
+  const { toggle: toggleBridge, setMode: setHomeMode } = useBridgeMode();
   const router = useRouter();
 
   // ── Navigate ─────────────────────────────────────────────────────────────
@@ -161,6 +163,34 @@ export function useCommands(): Command[] {
     run: () => setAutoMode(true),
   });
 
+  // ── Home mode (Bridge ↔ Personal) ─────────────────────────────────────────
+  const homeModeCommands: Command[] = [
+    {
+      id: "home.toggle",
+      label: "Toggle Bridge / Personal",
+      group: "Home",
+      hint: "⌘/",
+      keywords: ["bridge", "personal", "home", "toggle", "command center", "mode"],
+      run: () => toggleBridge(),
+    },
+    {
+      id: "home.bridge",
+      label: "Home → Bridge",
+      group: "Home",
+      hint: "Command center",
+      keywords: ["bridge", "command", "center", "comms", "crew", "home"],
+      run: () => setHomeMode("bridge"),
+    },
+    {
+      id: "home.personal",
+      label: "Home → Personal",
+      group: "Home",
+      hint: "Ghibli widgets",
+      keywords: ["personal", "widgets", "ghibli", "home", "ambient"],
+      run: () => setHomeMode("personal"),
+    },
+  ];
+
   // ── Briefing / Evening ────────────────────────────────────────────────────
   const ceremonyCommands: Command[] = [
     {
@@ -188,9 +218,10 @@ export function useCommands(): Command[] {
       ...agentCommands,
       ...brandCommands,
       ...paletteCommands,
+      ...homeModeCommands,
       ...ceremonyCommands,
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setActive, setBrand, setMode, setAutoMode, router],
+    [setActive, setBrand, setMode, setAutoMode, toggleBridge, setHomeMode, router],
   )();
 }

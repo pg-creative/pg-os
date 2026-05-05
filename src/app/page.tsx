@@ -1,5 +1,6 @@
 "use client";
 import { ModeLabel } from "./_components/ModeSwitcher";
+import { BridgeModeProvider, HomeModeBadge } from "./_components/BridgeModeProvider";
 import { LiveStamp } from "./_components/LiveClock";
 import { CityTemp } from "./_components/LocationLive";
 import { HomeModeToggle } from "./_components/HomeModeToggle";
@@ -27,6 +28,7 @@ export default function Page() {
   const isCloud = useIsCloud();
   useCommandPaletteHotkey();
   return (
+    <BridgeModeProvider>
     <NowProvider>
       <AmbientParticles />
       <div className="shell">
@@ -36,7 +38,7 @@ export default function Page() {
             <span className="dot" />
             <span>PG OS</span>
             <span className="ver">
-              // v0.3 // <ModeLabel />
+              // v0.3 // <ModeLabel /> · <HomeModeBadge />
               {isCloud === true && <span className="ver-cloud" title="Cloud mode — laptop-only actions are gated. Open 127.0.0.1:3030 from your Mac for full access."> · CLOUD</span>}
               {isCloud === false && <span className="ver-local" title="Local mode — full access including subprocess spawning."> · LOCAL</span>}
             </span>
@@ -77,5 +79,6 @@ export default function Page() {
       <CommandPalette />
       <AmbientIdle />
     </NowProvider>
+    </BridgeModeProvider>
   );
 }
