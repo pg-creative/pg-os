@@ -3,13 +3,13 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 
 export type Tab = "home" | "habits" | "projects" | "flow" | "timeline" | "claude";
 
-export const TABS: { id: Tab; num: string; label: string }[] = [
-  { id: "home",     num: "00", label: "HOME" },
-  { id: "habits",   num: "01", label: "HABITS" },
-  { id: "projects", num: "02", label: "PROJECTS" },
-  { id: "flow",     num: "03", label: "FLOW" },
-  { id: "timeline", num: "04", label: "TIMELINE" },
-  { id: "claude",   num: "05", label: "CLAUDE" },
+export const TABS: { id: Tab; num: string; label: string; glyph: string }[] = [
+  { id: "home",     num: "00", label: "HOME",     glyph: "⌂" },
+  { id: "habits",   num: "01", label: "HABITS",   glyph: "✦" },
+  { id: "projects", num: "02", label: "PROJECTS", glyph: "▣" },
+  { id: "flow",     num: "03", label: "FLOW",     glyph: "≋" },
+  { id: "timeline", num: "04", label: "TIMELINE", glyph: "◴" },
+  { id: "claude",   num: "05", label: "CLAUDE",   glyph: "◆" },
 ];
 
 const KEY = "pg-os-active-tab";

@@ -59,9 +59,6 @@ export function BrickBuilder() {
       setState(next);
       saveBricks(next);
       setJustPlaced(true);
-      // Global Persona-5-style flash/celebration overlay, gated to a single
-      // body attribute so the effect can be styled in globals.css with
-      // [data-brick-celebrating] selectors.
       try {
         document.body.setAttribute("data-brick-celebrating", "true");
         setTimeout(() => document.body.removeAttribute("data-brick-celebrating"), 1200);
@@ -91,90 +88,164 @@ export function BrickBuilder() {
   const nxt = nextTier(state.totalBricks);
   const toNext = nxt ? nxt.unlockAt - state.totalBricks : 0;
 
+  // Phase label for the arcade header
+  const phaseLabel =
+    phase === "work" ? "WORK" : phase === "break" ? "REST" : "READY";
+  const timerText = phase === "idle" ? "25:00" : fmt(remaining);
+
   return (
-    <div className="bridge-widget bridge-widget-bricks">
-      <div className="bridge-widget-label">
-        BRICK BY BRICK
-        <span className="bridge-widget-tag">{state.totalBricks} placed</span>
+    <div className="bridge-widget bridge-widget-bricks bb-arcade">
+      <div className="bb-arcade-frame">
+        {/* NES sky stars */}
+        <span className="bb-arcade-star" style={{ left: "14%", top: "12%" }} />
+        <span className="bb-arcade-star" style={{ left: "62%", top: "8%" }} />
+        <span className="bb-arcade-star" style={{ left: "82%", top: "18%" }} />
+        <span className="bb-arcade-star" style={{ left: "38%", top: "22%" }} />
+
+        {/* Header — 1UP / phase / hi-score */}
+        <div className="bb-arcade-header">
+          <span className="bb-arcade-1up">1UP</span>
+          <span className={`bb-arcade-phase bb-arcade-phase-${phase}`}>
+            {phaseLabel}
+          </span>
+          <span className="bb-arcade-hi">HI {state.longestStreak}</span>
+        </div>
+
+        {/* Big chunky timer */}
+        <div className={`bb-arcade-timer bb-arcade-timer-${phase}`}>
+          {timerText}
+        </div>
+
+        {/* Construction site — girder + Mario + brick wall */}
+        <div className="bb-arcade-stage">
+          <div className="bb-arcade-girder" />
+          <div
+            className={`bb-arcade-mario ${phase === "work" ? "bb-arcade-mario-walking" : ""}`}
+          >
+            <Mario />
+          </div>
+          <div className="bb-arcade-wall" aria-label={`${state.totalBricks} bricks placed`}>
+            <BrickWall total={state.totalBricks} justPlaced={justPlaced} />
+          </div>
+        </div>
+
+        {/* Footer — stats row in pixel mono */}
+        <div className="bb-arcade-footer">
+          <span>BRICKS:{state.totalBricks}</span>
+          <span style={{ color: tier.color }}>{tier.label.toUpperCase()}</span>
+          <span>♥{state.currentStreak}</span>
+        </div>
+
+        {/* Scanlines overlay */}
+        <div className="bb-arcade-scanlines" aria-hidden />
       </div>
-      <div className="bridge-widget-body">
-        {phase !== "idle" && (
-          <div className={`bb-timer bb-timer-${phase}`}>
-            <span className="bb-timer-num">{fmt(remaining)}</span>
-            <span className="bb-timer-phase">{phase.toUpperCase()}</span>
-          </div>
+
+      {/* Action button + next-tier hint live OUTSIDE the arcade frame so the
+          NES screen is "the game" and the surround is "the cabinet controls". */}
+      <div className="bb-arcade-controls">
+        {phase === "idle" ? (
+          <button type="button" className="bb-arcade-btn bb-arcade-btn-go" onClick={startWork}>
+            ▶ INSERT&nbsp;COIN
+          </button>
+        ) : (
+          <button type="button" className="bb-arcade-btn bb-arcade-btn-stop" onClick={cancel}>
+            ■ CANCEL
+          </button>
         )}
-
-        <div className="bb-wall" aria-label={`${state.totalBricks} bricks placed`}>
-          <BrickWall total={state.totalBricks} justPlaced={justPlaced} />
-        </div>
-
-        <div className="bb-stats">
-          <span className="bb-stat">
-            <span className="bb-stat-num">{state.bricksToday}</span>
-            <span className="bb-stat-label">today</span>
-          </span>
-          <span className="bb-stat">
-            <span className="bb-stat-num">{state.currentStreak}</span>
-            <span className="bb-stat-label">streak</span>
-          </span>
-          <span className="bb-stat">
-            <span className="bb-stat-num bb-tier-swatch" style={{ background: tier.color }} aria-hidden />
-            <span className="bb-stat-label">{tier.label}</span>
-          </span>
-        </div>
-
         {nxt && (
-          <div className="bb-next" title={`Unlocks ${nxt.label} bricks at ${nxt.unlockAt} placed`}>
+          <span className="bb-arcade-next" title={`Unlocks ${nxt.label} at ${nxt.unlockAt}`}>
             {toNext} → {nxt.label}
-          </div>
+          </span>
         )}
-
-        <div className="bb-actions">
-          {phase === "idle" ? (
-            <button type="button" className="bridge-btn bridge-btn-approve" onClick={startWork}>
-              ▶ Start cycle
-            </button>
-          ) : (
-            <button type="button" className="bridge-btn" onClick={cancel}>
-              Cancel
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
 }
 
-// ── Wall renderer ────────────────────────────────────────────────────────────
-// Show up to MAX_VISIBLE recent bricks, colored by the tier in effect when
-// each was placed. Approximation: assume contiguous tiers — works for stat
-// display purposes since we don't persist per-brick history.
+// ── Brick wall renderer ─────────────────────────────────────────────────
+// Up to MAX_VISIBLE recent bricks, colored by the tier active when each was
+// placed. Approximation: contiguous tiers — works for display purposes.
 
-const MAX_VISIBLE = 60;
+const MAX_VISIBLE = 28; // smaller wall to fit beside Mario in the arcade frame
 
 function BrickWall({ total, justPlaced }: { total: number; justPlaced: boolean }) {
   const visible = Math.min(total, MAX_VISIBLE);
   if (visible === 0) {
-    return <div className="bb-wall-empty">first brick awaits</div>;
+    return <div className="bb-arcade-wall-empty">FIRST BRICK</div>;
   }
   const bricks: string[] = [];
-  // Walk forward from total - visible to total - 1, each gets the tier active
-  // at that count.
   for (let i = total - visible; i < total; i++) {
     let activeColor = TIERS[0].color;
     for (const t of TIERS) if (i >= t.unlockAt) activeColor = t.color;
     bricks.push(activeColor);
   }
   return (
-    <div className="bb-wall-grid">
+    <div className="bb-arcade-wall-grid">
       {bricks.map((color, i) => (
         <span
           key={`${total}-${i}`}
-          className={`bb-brick${justPlaced && i === bricks.length - 1 ? " bb-brick-fresh" : ""}`}
+          className={`bb-arcade-brick${justPlaced && i === bricks.length - 1 ? " bb-arcade-brick-fresh" : ""}`}
           style={{ background: color }}
         />
       ))}
     </div>
+  );
+}
+
+// ── Mario sprite ─────────────────────────────────────────────────────────
+// 14×16 px body grid + a hammer that pivots from the shoulder. Inline SVG so
+// no asset pipeline; CSS keyframes drive the walk + hammer swing.
+
+function Mario() {
+  const px = 3;
+  const COLORS: Record<string, string | undefined> = {
+    ".": undefined,
+    R: "#d23232",
+    B: "#3050d0",
+    F: "#fcb888",
+    K: "#000000",
+    Y: "#fcd400",
+    H: "#9b9b9b",
+    S: "#a05a2c",
+  };
+  const body = [
+    "....KKKKKK....",
+    "...KRRRRRRK...",
+    "...RRRRRRRR...",
+    "..KFFKFFFK....",
+    "..KFKFFKFK....",
+    "..KFFFFFFFK...",
+    "..KKFFFFFKK...",
+    "....KKKKK.....",
+    "..KKBBYBBKK...",
+    ".KRRRBYBRRRK..",
+    ".KRRRBBBRRRK..",
+    ".KRRRRRRRRKK..",
+    ".KKBBBKBBBK...",
+    "..KKBBKBBK....",
+    "...KKK.KKK....",
+    "...KKK.KKK....",
+  ];
+  const cells: React.ReactNode[] = [];
+  body.forEach((row, y) =>
+    [...row].forEach((ch, x) => {
+      const c = COLORS[ch];
+      if (!c) return;
+      cells.push(<rect key={`${x}-${y}`} x={x * px} y={y * px} width={px} height={px} fill={c} />);
+    }),
+  );
+  return (
+    <svg
+      width={14 * px}
+      height={16 * px + 16}
+      viewBox={`0 0 ${14 * px} ${16 * px + 16}`}
+      style={{ overflow: "visible" }}
+    >
+      <g className="bb-arcade-hammer">
+        <rect x={2 * px} y={1 * px} width={px} height={8 * px} fill={COLORS.S} stroke="#000" strokeWidth="0.5" />
+        <rect x={0} y={0} width={5 * px} height={3 * px} fill={COLORS.H} stroke="#000" strokeWidth="0.5" />
+      </g>
+      {cells}
+    </svg>
   );
 }

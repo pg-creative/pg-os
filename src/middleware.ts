@@ -100,6 +100,38 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Per-session escape hatch for the evening gate. Visiting `?skip-evening=1`
+  // sets the per-day evening cookie so the gate stops firing for the rest
+  // of today, then strips the param and redirects to the requested path.
+  // Useful when the ceremony itself is broken (e.g. mobile hydration bug)
+  // and PG needs to reach the dashboard NOW.
+  if (searchParams.get("skip-evening") === "1") {
+    const cleanUrl = req.nextUrl.clone();
+    cleanUrl.searchParams.delete("skip-evening");
+    const res = NextResponse.redirect(cleanUrl);
+    res.cookies.set(eveningCookieName(new Date()), "1", {
+      sameSite: "lax",
+      secure: req.nextUrl.protocol === "https:",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    });
+    return res;
+  }
+
+  // Same escape hatch for the morning briefing gate.
+  if (searchParams.get("skip-briefing") === "1") {
+    const cleanUrl = req.nextUrl.clone();
+    cleanUrl.searchParams.delete("skip-briefing");
+    const res = NextResponse.redirect(cleanUrl);
+    res.cookies.set(briefingCookieName(new Date()), "1", {
+      sameSite: "lax",
+      secure: req.nextUrl.protocol === "https:",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    });
+    return res;
+  }
+
   const secret = process.env.PGOS_SHARED_SECRET;
 
   // Dev mode (no secret) — fire morning OR evening redirect, then pass.
@@ -118,7 +150,7 @@ export function middleware(req: NextRequest) {
     const res = NextResponse.redirect(cleanUrl);
     res.cookies.set(COOKIE_NAME, secret, {
       httpOnly: true,
-      sameSite: "strict",
+      sameSite: "lax",
       secure: req.nextUrl.protocol === "https:",
       maxAge: COOKIE_MAX_AGE,
       path: "/",

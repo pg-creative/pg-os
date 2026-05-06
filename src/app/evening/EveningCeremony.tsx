@@ -206,42 +206,92 @@ export function EveningCeremony() {
     return () => window.removeEventListener("keydown", handler);
   }, [step, next, handleClose, router]);
 
+  // Day number from start of year — for the mission-report header
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86_400_000,
+  );
+  const stepNames = ["DAY IN REVIEW", "TIER CHECK", "CHEST", "JOURNAL", "TOMORROW", "CLOSE"];
+  const tierColor = season
+    ? TIER_LADDER.indexOf(season.tier_floor) >= 4
+      ? "#e5b374"
+      : TIER_LADDER.indexOf(season.tier_floor) >= 2
+        ? "#5cb37a"
+        : "#9b6fc2"
+    : "#7a8aa8";
+
   return (
-    <main className={`evening-ceremony ${reduced ? "reduced-motion" : ""}`} role="main" data-step={step}>
-      <div className="evening-glow" aria-hidden />
+    <main className={`evening-rpg ${reduced ? "reduced-motion" : ""}`} role="main" data-step={step}>
+      {/* Hex pattern background */}
+      <div className="evening-rpg-hex" aria-hidden />
 
-      {/* Step dots */}
-      <ol className="evening-progress" aria-label="Ceremony progress">
-        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-          <li
-            key={i}
-            className={`evening-dot ${i === step ? "active" : ""} ${i < step ? "done" : ""}`}
-            aria-current={i === step ? "step" : undefined}
-          />
-        ))}
-      </ol>
+      <div className="evening-rpg-frame">
+        {/* Mission-report header bar */}
+        <div className="evening-rpg-header">
+          <span className="evening-rpg-header-tag">▰ MISSION REPORT</span>
+          <span className="evening-rpg-header-day">DAY {dayOfYear}</span>
+        </div>
 
-      <div className="evening-content">
+        {/* Stage progress dots */}
+        <ol className="evening-rpg-progress" aria-label="Ceremony progress">
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <li
+              key={i}
+              className={`evening-rpg-dot ${i === step ? "active" : ""} ${i < step ? "done" : ""}`}
+              aria-current={i === step ? "step" : undefined}
+            />
+          ))}
+        </ol>
+
+        <p className="evening-rpg-stage">
+          ▸ STAGE {step + 1} OF {TOTAL_STEPS} · {stepNames[step]}
+        </p>
+
         {/* Step 0 — Day in review */}
         {step === 0 && (
-          <section className="evening-step" key="review">
-            <h1 className="evening-heading">The day in <em>review</em>.</h1>
+          <section className="evening-rpg-step" key="review">
+            <h1 className="evening-rpg-heading">The day&rsquo;s <em>ledger</em>.</h1>
+
+            {/* Stats grid */}
+            <div className="evening-rpg-stats">
+              <div className="evening-rpg-stat" style={{ "--ev-stat-color": "#5cb37a" } as React.CSSProperties}>
+                <div className="evening-rpg-stat-label">SHIPS</div>
+                <div className="evening-rpg-stat-value">{ships.length}</div>
+                <div className="evening-rpg-stat-bar"><span style={{ width: `${Math.min(100, ships.length * 25)}%` }} /></div>
+              </div>
+              <div className="evening-rpg-stat" style={{ "--ev-stat-color": "#e5b374" } as React.CSSProperties}>
+                <div className="evening-rpg-stat-label">XP</div>
+                <div className="evening-rpg-stat-value">{season?.xp_earned ?? 0}</div>
+                <div className="evening-rpg-stat-bar"><span style={{ width: `${Math.min(100, season?.xp_percent ?? 0)}%` }} /></div>
+              </div>
+              <div className="evening-rpg-stat" style={{ "--ev-stat-color": "#9b6fc2" } as React.CSSProperties}>
+                <div className="evening-rpg-stat-label">COIN</div>
+                <div className="evening-rpg-stat-value">{season?.coins ?? 0}</div>
+                <div className="evening-rpg-stat-bar"><span style={{ width: `${Math.min(100, (season?.coins ?? 0) * 5)}%` }} /></div>
+              </div>
+            </div>
+
+            {/* Quest log */}
+            <p className="evening-rpg-section-label">QUEST LOG · TODAY</p>
             {ships.length === 0 ? (
-              <p className="evening-body evening-quiet">A <em>quiet</em> day. No ships logged.</p>
+              <p className="evening-rpg-empty">A <em>quiet</em> day. No ships logged.</p>
             ) : (
-              <ul className="evening-ships">
-                {ships.map((s) => (
-                  <li key={s.id} className="evening-ship">
-                    <span className="evening-glyph" aria-hidden>◆</span>
-                    <span className="evening-ship-text">{s.text}</span>
-                  </li>
-                ))}
+              <ul className="evening-rpg-log">
+                {ships.map((s, i) => {
+                  const tags = ["FEAT", "FIX", "SHIP"];
+                  const colors = ["#5cb37a", "#9b6fc2", "#e5b374"];
+                  return (
+                    <li key={s.id} className="evening-rpg-log-row" style={{ borderLeftColor: colors[i % 3] }}>
+                      <span className="evening-rpg-log-tag" style={{ color: colors[i % 3] }}>{tags[i % 3]}</span>
+                      <span className="evening-rpg-log-text">{s.text}</span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
-            <div className="evening-cta-row">
-              <button type="button" className="evening-btn primary" onClick={next}>
-                <span>Continue</span>
-                <kbd className="evening-kbd">↵</kbd>
+
+            <div className="evening-rpg-cta-row">
+              <button type="button" className="evening-rpg-btn primary" onClick={next}>
+                ▸ NEXT STAGE — TIER CHECK
               </button>
             </div>
           </section>
@@ -249,65 +299,80 @@ export function EveningCeremony() {
 
         {/* Step 1 — Tier check */}
         {step === 1 && (
-          <section className="evening-step" key="tier">
-            <h1 className="evening-heading">The <em>tier</em> holds.</h1>
+          <section className="evening-rpg-step" key="tier">
+            <h1 className="evening-rpg-heading">The <em>tier</em> holds.</h1>
+
             {season ? (
-              <div className="evening-tier-block">
-                <div className="evening-tier-badge" data-advanced={tierAdvanced || tierBeatF ? "1" : "0"}>
-                  <span className="evening-tier-letter">{season.tier_floor}</span>
+              <>
+                <div className="evening-rpg-tier-block">
+                  <div
+                    className="evening-rpg-hex-badge"
+                    data-advanced={tierAdvanced || tierBeatF ? "1" : "0"}
+                    style={{ color: tierColor }}
+                  >
+                    <svg viewBox="0 0 60 64" width="100%" height="100%">
+                      <polygon points="30,3 56,18 56,46 30,61 4,46 4,18" fill="rgba(229,179,116,0.10)" stroke="currentColor" strokeWidth="2" />
+                      <text x="30" y="44" textAnchor="middle" fontFamily="Cormorant Garamond" fontStyle="italic" fontSize="30" fontWeight="500" fill="currentColor">
+                        {season.tier_floor}
+                      </text>
+                    </svg>
+                  </div>
+                  <div className="evening-rpg-tier-info">
+                    <div className="evening-rpg-section-label">TIER FLOOR</div>
+                    <div className="evening-rpg-tier-line">
+                      <em style={{ color: tierColor }}>{season.tier_floor}</em>
+                      <span className="evening-rpg-tier-xp">· {season.xp_earned} XP earned</span>
+                    </div>
+                    {tierAdvanced && <div className="evening-rpg-ratchet">⤤ ratcheted today</div>}
+                  </div>
                 </div>
-                <p className="evening-body">
-                  <span className="evening-mono">{season.xp_earned}</span> XP earned.
-                  Floor at <em>{season.tier_floor}</em>{tierAdvanced && " — ratcheted today"}.
-                </p>
-                <div className="evening-bar" aria-hidden>
+                <p className="evening-rpg-section-label">PROGRESS TO {season.tier}</p>
+                <div className="evening-rpg-progress-bar">
                   <span style={{ width: `${Math.min(100, season.tier_progress)}%` }} />
                 </div>
-              </div>
+              </>
             ) : (
-              <p className="evening-body evening-quiet">Season data is <em>quiet</em> tonight.</p>
+              <p className="evening-rpg-empty">Season data is <em>quiet</em> tonight.</p>
             )}
-            <div className="evening-cta-row">
-              <button type="button" className="evening-btn ghost" onClick={prev}>Back</button>
-              <button type="button" className="evening-btn primary" onClick={next}>
-                <span>Continue</span>
-                <kbd className="evening-kbd">↵</kbd>
-              </button>
+
+            <div className="evening-rpg-cta-row">
+              <button type="button" className="evening-rpg-btn ghost" onClick={prev}>◂ Back</button>
+              <button type="button" className="evening-rpg-btn primary" onClick={next}>▸ Next stage</button>
             </div>
           </section>
         )}
 
         {/* Step 2 — Chest */}
         {step === 2 && (
-          <section className="evening-step" key="chest">
-            <h1 className="evening-heading">The <em>chest</em>.</h1>
+          <section className="evening-rpg-step" key="chest">
+            <h1 className="evening-rpg-heading">The <em>chest</em>.</h1>
             {chestId ? (
-              <p className="evening-body evening-flourish">
-                Chest <em>closed</em>. <span className="evening-mono">{chestId}</span> rests.
-              </p>
+              <div className="evening-rpg-chest">
+                <span className="evening-rpg-chest-glyph">⬚</span>
+                <p className="evening-rpg-chest-text">
+                  Chest <em>closed</em>. <span className="evening-rpg-mono">{chestId}</span> rests.
+                </p>
+              </div>
             ) : (
-              <p className="evening-body evening-quiet">No chest was pinned today.</p>
+              <p className="evening-rpg-empty">No chest was pinned today.</p>
             )}
-            <div className="evening-cta-row">
-              <button type="button" className="evening-btn ghost" onClick={prev}>Back</button>
-              <button type="button" className="evening-btn primary" onClick={next}>
-                <span>Continue</span>
-                <kbd className="evening-kbd">↵</kbd>
-              </button>
+            <div className="evening-rpg-cta-row">
+              <button type="button" className="evening-rpg-btn ghost" onClick={prev}>◂ Back</button>
+              <button type="button" className="evening-rpg-btn primary" onClick={next}>▸ Next stage</button>
             </div>
           </section>
         )}
 
         {/* Step 3 — Journal */}
         {step === 3 && (
-          <section className="evening-step" key="journal">
-            <h1 className="evening-heading">A line to <em>remember</em>.</h1>
-            <label htmlFor="evening-journal" className="evening-label">
-              What's one thing worth remembering from today?
+          <section className="evening-rpg-step" key="journal">
+            <h1 className="evening-rpg-heading">A line to <em>remember</em>.</h1>
+            <label htmlFor="evening-journal" className="evening-rpg-section-label">
+              ▸ ONE THING WORTH REMEMBERING FROM TODAY
             </label>
             <textarea
               id="evening-journal"
-              className="evening-textarea"
+              className="evening-rpg-textarea"
               value={journalText}
               onChange={(e) => setJournalText(e.target.value)}
               placeholder="Optional — one sentence is enough."
@@ -315,26 +380,23 @@ export function EveningCeremony() {
               maxLength={1000}
               autoFocus
             />
-            <div className="evening-cta-row">
-              <button type="button" className="evening-btn ghost" onClick={prev}>Back</button>
-              <button type="button" className="evening-btn primary" onClick={next}>
-                <span>Continue</span>
-                <kbd className="evening-kbd">↵</kbd>
-              </button>
+            <div className="evening-rpg-cta-row">
+              <button type="button" className="evening-rpg-btn ghost" onClick={prev}>◂ Back</button>
+              <button type="button" className="evening-rpg-btn primary" onClick={next}>▸ Next stage</button>
             </div>
           </section>
         )}
 
         {/* Step 4 — Tomorrow's intention */}
         {step === 4 && (
-          <section className="evening-step" key="tomorrow">
-            <h1 className="evening-heading">Tomorrow's <em>intention</em>.</h1>
-            <label htmlFor="evening-tomorrow" className="evening-label">
-              One line for tomorrow's first move.
+          <section className="evening-rpg-step" key="tomorrow">
+            <h1 className="evening-rpg-heading">Tomorrow&rsquo;s <em>intention</em>.</h1>
+            <label htmlFor="evening-tomorrow" className="evening-rpg-section-label">
+              ▸ ONE LINE FOR TOMORROW&rsquo;S FIRST MOVE
             </label>
             <textarea
               id="evening-tomorrow"
-              className="evening-textarea"
+              className="evening-rpg-textarea"
               value={tomorrowText}
               onChange={(e) => setTomorrowText(e.target.value)}
               placeholder="The morning briefing will read this back."
@@ -342,38 +404,35 @@ export function EveningCeremony() {
               maxLength={500}
               autoFocus
             />
-            <div className="evening-cta-row">
-              <button type="button" className="evening-btn ghost" onClick={prev}>Back</button>
-              <button type="button" className="evening-btn primary" onClick={next}>
-                <span>Continue</span>
-                <kbd className="evening-kbd">↵</kbd>
-              </button>
+            <div className="evening-rpg-cta-row">
+              <button type="button" className="evening-rpg-btn ghost" onClick={prev}>◂ Back</button>
+              <button type="button" className="evening-rpg-btn primary" onClick={next}>▸ Next stage</button>
             </div>
           </section>
         )}
 
-        {/* Step 5 — Close */}
+        {/* Step 5 — Close (mission complete) */}
         {step === 5 && (
-          <section className="evening-step evening-close" key="close">
-            <h1 className="evening-heading evening-close-heading">
-              Until <em>tomorrow</em>.
-            </h1>
-            <p className="evening-body evening-flourish">
-              <span className="evening-mono">{todayLocal()}</span>
-            </p>
-            <div className="evening-cta-row">
-              <button type="button" className="evening-btn ghost" onClick={prev} disabled={submitting}>
-                Back
+          <section className="evening-rpg-step evening-rpg-close" key="close">
+            <div className="evening-rpg-victory">
+              <p className="evening-rpg-victory-tag">▰ MISSION COMPLETE</p>
+              <h1 className="evening-rpg-heading evening-rpg-victory-heading">
+                Until <em>tomorrow</em>.
+              </h1>
+              <p className="evening-rpg-mono evening-rpg-date">{todayLocal()}</p>
+            </div>
+            <div className="evening-rpg-cta-row">
+              <button type="button" className="evening-rpg-btn ghost" onClick={prev} disabled={submitting}>
+                ◂ Back
               </button>
               <button
                 type="button"
-                className="evening-btn primary"
+                className="evening-rpg-btn primary"
                 onClick={() => void handleClose()}
                 disabled={submitting}
                 aria-keyshortcuts="Meta+Enter"
               >
-                <span>{submitting ? "Closing…" : "Close the day"}</span>
-                <kbd className="evening-kbd">⌘↵</kbd>
+                {submitting ? "▸ Closing…" : "▸ Close the day  ⌘↵"}
               </button>
             </div>
           </section>
