@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PG OS — Lightweight Dashboard</title>
+  <style>
+    body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, ui-sans-serif, sans-serif;
+           background: #0f1419; color: #e4e9ee; margin: 0; padding: 24px; max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: 0.02em; }
+    h2 { font-size: 16px; margin: 28px 0 8px; color: #9aa6b1; text-transform: uppercase; letter-spacing: 0.08em; }
+    .meta { color: #6b7884; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .card { background: #1a2128; border: 1px solid #2a323b; border-radius: 10px; padding: 16px; }
+    .big { font-size: 36px; font-weight: 600; margin: 6px 0; color: #f0e0a0; }
+    .bar { height: 8px; background: #2a323b; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .bar > div { height: 100%; background: linear-gradient(90deg, #d4a73e, #f0e0a0); transition: width 0.4s; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td, th { padding: 6px 8px; border-bottom: 1px solid #232a32; text-align: left; vertical-align: top; }
+    tr.unlocked td { color: #c5e0a0; }
+    tr.locked td { color: #6b7884; }
+    code { background: #232a32; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+    a { color: #8ab4f8; }
+  </style>
+</head>
+<body>
+  <h1>PG OS — Lightweight Dashboard</h1>
+  <div class="meta">Generated 2026-05-16T03:43:21Z. Target $15K/mo by early October 2026.</div>
+
+  <h2>Income</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="meta">MTD (2026-05)</div>
+      <div class="big">$0</div>
+      <div class="meta">Target $15,000 (0%)</div>
+      <div class="bar"><div style="width: 0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="meta">Recent income entries</div>
+      <ul style="padding-left: 18px; margin: 8px 0 0;"><li class=meta>(none yet)</li></ul>
+    </div>
+  </div>
+
+  <h2>Revenue Tiers</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Tier</th><th>Threshold</th><th>Unlocked</th><th>Reward</th></tr></thead>
+      <tbody><tr class="locked"><td>1</td><td>$1,000</td><td>⬜</td><td>TODO PG fill (e.g. "Take a Friday off")</td></tr><tr class="locked"><td>2</td><td>$3,000</td><td>⬜</td><td>TODO PG fill (e.g. "Buy [thing PG actually wants]")</td></tr><tr class="locked"><td>3</td><td>$7,000</td><td>⬜</td><td>TODO PG fill (e.g. "Hire VA for X hrs/wk")</td></tr><tr class="locked"><td>4</td><td>$15,000</td><td>⬜</td><td>TODO PG fill (e.g. "Quit W2 conversation w/ Metrasens")</td></tr></tbody>
+    </table>
+  </div>
+
+  <h2>Projects</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Project</th><th>Status</th><th>Last commit</th><th>Summary</th></tr></thead>
+      <tbody><tr><td>upwork</td><td>🟢 Active</td><td>2026-05-15</td><td>v0.1 scaffold complete — awaiting calibration data</td></tr><tr><td>personal-os</td><td>🟢 Active</td><td>2026-05-15</td><td>Markdown tracking layer added alongside Next.js app</td></tr><tr><td>alchmy</td><td>🟢 Active</td><td>TODO</td><td>Brand reset complete; service productized</td></tr><tr><td>voyager</td><td>🟡 Slow</td><td>TODO</td><td>Yuriko's Tale + gaming content brand</td></tr><tr><td>writer</td><td>🟡 Slow</td><td>TODO</td><td>Essays + fiction; signed PG</td></tr><tr><td>heros-chronicle</td><td>🟢 Active</td><td>TODO</td><td>Life RPG; Oct 2 launch target</td></tr><tr><td>pg-creative</td><td>🟡 Maintenance</td><td>TODO</td><td>LLC entity / storefront</td></tr><tr><td>career-ops</td><td>🟢 Active</td><td>TODO</td><td>Career tooling — Kiln GTM prep</td></tr><tr><td>metrasens</td><td>🔴 W2</td><td>n/a</td><td>GTM Engineer day job</td></tr><tr><td>meta-claude</td><td>🟢 Active</td><td>TODO</td><td>Global config evolution workspace</td></tr><tr><td>brain</td><td>🟢 Active</td><td>2026-05-15</td><td>Karpathy LLM-Wiki substrate; /dartboard fills it</td></tr></tbody>
+    </table>
+  </div>
+
+  <h2>Module summaries</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="meta">Fitness</div>
+      <pre style="white-space: pre-wrap; font-size: 12px; color: #c5cdd5; margin: 8px 0 0;"># Fitness Module
+
+> **Sources:** WHOOP API (auto-pulled by `integrations/whoop.py` to `data/whoop-cache.json`), manual log below.
+
+## Current routine
+- **PPL split:** Push / Pull / Legs (3x or 4x weekly)
+- **Basketball:** TODO PG cadence (weekly? competitive league?)
+- **Sauna + cold plunge:** TODO PG cadence
+
+## WHOOP-tracked metrics (rolling 30-day)
+- **Strain avg:** TODO (auto-filled by whoop.py)
+- **Recovery avg:** TODO
+- **Workouts/week:** TODO
+- **Days hit goal:** TODO
+
+## Manual session log (this week)
+
+| Day | Type | Notes |
+|-----|------|-------|
+| TODO PG | TODO | TODO |
+
+## Goals
+-
+…</pre>
+    </div>
+    <div class="card">
+      <div class="meta">Sleep</div>
+      <pre style="white-space: pre-wrap; font-size: 12px; color: #c5cdd5; margin: 8px 0 0;"># Sleep Module
+
+> **Source:** WHOOP API (`integrations/whoop.py`). Sleep is a separate module from Fitness because optimization signals differ.
+
+## WHOOP-tracked metrics (rolling 30-day)
+- **Sleep performance avg:** TODO (auto-filled)
+- **Hours in bed avg:** TODO
+- **Hours asleep avg:** TODO
+- **Sleep efficiency avg:** TODO
+- **Sleep consistency avg:** TODO
+
+## Targets
+- **Hours asleep:** 7.5+ avg
+- **Consistency:** > 80% (same bed/wake within ±1 hour)
+- **Efficiency:** > 85%
+
+## This week
+| Day | In bed | Asleep | Efficiency |
+|-----|--------|--------|------------|
+| TODO PG / WHOOP | | | |
+…</pre>
+    </div>
+    <div class="card">
+      <div class="meta">Creative</div>
+      <pre style="white-space: pre-wrap; font-size: 12px; color: #c5cdd5; margin: 8px 0 0;"># Creative Module
+
+> Cross-brand creative output tracking. Each brand has its own pipeline; this is the **monthly aggregate** view.
+
+## Yuriko's Tale (Voyager — game project)
+- **Current chapter count:** TODO PG fill
+- **This month:** TODO new chapters written
+- **Pace:** target 1 chapter/month
+
+## Tricky P → Voyager (gaming brand content)
+- **TikTok cadence:** TODO PG fill (weekly target?)
+- **This month:** TODO videos posted
+- **Latest:** TODO
+
+## PG Writer (literary)
+- **Essays this month:** TODO
+- **Poetry:** TODO
+- **Fiction:** TODO
+
+## Alchmy (AI × creativity systems content)
+- **LinkedI
+…</pre>
+    </div>
+  </div>
+
+  <h2>Cross-module tiers</h2>
+  <div class="card">
+    <pre style="white-space: pre-wrap; font-size: 12px; color: #c5cdd5; margin: 0;"># Cross-Module Tiers — Multi-Dimensional Rewards
+
+> Tiers that require **simultaneous progress across modules** to unlock. These are the rewards that gamify the *system*, not any single number. The whole point: $15K MTD with broken sleep and zero workouts is a worse outcome than $10K MTD with high recovery and weekly Yuriko chapters.
+>
+> Single-axis tier rewards (just income) live in `../upwork/revenue-tiers.md`.
+
+## How this works
+- Tier is **unlocked** when ALL conditions held in the same calendar month
+- Tier is **earned** when held for 2+ consecutive months
+- Tier is **lost** if any condition drops for a full month (re-earn from scratch)
+
+## Tier C1 (Compound 1): "The Setup Works"
+**Conditions:**
+- $5K MTD income
+- 3+ workouts/week (4 of 4 weeks)
+- 1+ creative piece shipped on any brand
+- Sleep consistency > 70%
+
+**Reward:** TODO PG fill (e.g. "Buy [tool/gear PG wants]")
+
+## Tier C2 (Compound 2): "Sustained Operator"
+**Conditions:**
+- $10K MTD
+- 3+ workouts/week (4 of 4)
+- 1+ Yuriko chapter OR 2+ essays/posts on any brand
+- Sleep consistency > 75%
+- Recovery > 70% on 5+ days/week
+
+**Reward:** TODO PG fill (e.g. "Hire VA / contractor for X hrs/wk")
+
+## Tier C3 (Compound 3): "Free Agent"
+**Conditions:**
+- $15K MTD (GOAL)
+- 4+ workouts/week sustained
+- 1 deep creative piece + 4+ micro-pieces
+- Sleep consistency > 80%
+- Recovery > 75% on 5+ days/week
+
+**Reward:** TODO PG fill (e.g. "W2 quit conversation w/ Metrasens — exact terms TBD")
+
+## Tier C4 (Compound 4): "October Missi
+…</pre>
+  </div>
+
+  <div class="meta" style="margin-top: 32px;">
+    Source files: <code>modules/*.md</code>, <code>tiers.md</code>, <code>../upwork/income-log.md</code>, <code>../upwork/revenue-tiers.md</code>.
+    Regenerate: <code>python dashboard/generate.py</code>
+  </div>
+</body>
+</html>

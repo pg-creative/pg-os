@@ -28,3 +28,8 @@ screenshots/
 # Tool caches
 supabase/.temp/
 .vercel
+
+# Python caches (markdown tracking layer)
+__pycache__/
+*.pyc
+dashboard/__pycache__/
