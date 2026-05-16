@@ -73,6 +73,8 @@
 
 ## Hero's Chronicle beta-test mapping
 
-PG is setting these up inside HC's existing goal/quest system as a power-user dogfood pass. Each compound tier maps to ONE HC entity. Where HC's model can't represent a condition (e.g. multi-axis AND-gates), that's the UX feedback HC needs before Oct 2 launch.
+Dogfood plan + Quest mappings + feedback log moved to its proper home:
 
-TODO PG: after setting these up in HC, log gaps here as `## HC feedback: <gap>` sections.
+→ `~/CEREBRUM/heros-chronicle/docs/dogfood-compound-tiers.md`
+
+PG owns that pass. This file stays the source of truth for the C1-C4 conditions + rewards themselves.
