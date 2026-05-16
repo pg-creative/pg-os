@@ -1,6 +1,9 @@
 "use client";
 import { ModeLabel } from "./_components/ModeSwitcher";
-import { BridgeModeProvider, HomeModeBadge } from "./_components/BridgeModeProvider";
+import {
+  BridgeModeProvider,
+  HomeModeBadge,
+} from "./_components/BridgeModeProvider";
 import { ToastDeck } from "./_components/Toast";
 import { LiveStamp } from "./_components/LiveClock";
 import { CityTemp } from "./_components/LocationLive";
@@ -18,11 +21,15 @@ import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
 import { FlowView } from "./_components/views/FlowView";
 import { ClaudeView } from "./_components/views/ClaudeView";
+import { StackView } from "./_components/views/StackView";
 import { TimelineView } from "./_components/views/TimelineView";
+import { BrainView } from "./_components/views/BrainView";
 import SeasonMeter from "./_components/SeasonMeter";
 import { NowProvider } from "./_components/NowProvider";
 import { AmbientIdle } from "./_components/AmbientIdle";
-import CommandPalette, { useCommandPaletteHotkey } from "./_components/CommandPalette";
+import CommandPalette, {
+  useCommandPaletteHotkey,
+} from "./_components/CommandPalette";
 
 export default function Page() {
   const { active } = useActiveTab();
@@ -30,57 +37,79 @@ export default function Page() {
   useCommandPaletteHotkey();
   return (
     <BridgeModeProvider>
-    <NowProvider>
-      <AmbientParticles />
-      <div className="shell">
-        {/* TOP BAR */}
-        <div className="topbar">
-          <div className="brand">
-            <span className="dot" />
-            <span>PG OS</span>
-            <span className="ver">
-              // v0.3 // <ModeLabel /> · <HomeModeBadge />
-              {isCloud === true && <span className="ver-cloud" title="Cloud mode — laptop-only actions are gated. Open 127.0.0.1:3030 from your Mac for full access."> · CLOUD</span>}
-              {isCloud === false && <span className="ver-local" title="Local mode — full access including subprocess spawning."> · LOCAL</span>}
-            </span>
+      <NowProvider>
+        <AmbientParticles />
+        <div className="shell">
+          {/* TOP BAR */}
+          <div className="topbar">
+            <div className="brand">
+              <span className="dot" />
+              <span>PG OS</span>
+              <span className="ver">
+                // v0.3 // <ModeLabel /> · <HomeModeBadge />
+                {isCloud === true && (
+                  <span
+                    className="ver-cloud"
+                    title="Cloud mode — laptop-only actions are gated. Open 127.0.0.1:3030 from your Mac for full access."
+                  >
+                    {" "}
+                    · CLOUD
+                  </span>
+                )}
+                {isCloud === false && (
+                  <span
+                    className="ver-local"
+                    title="Local mode — full access including subprocess spawning."
+                  >
+                    {" "}
+                    · LOCAL
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="telemetry">
+              <span>
+                <CityTemp />
+              </span>
+              <span>
+                <LiveStamp />
+              </span>
+              <BrandModePicker />
+              <HomeModeToggle />
+              <SoundToggle />
+            </div>
           </div>
-          <div className="telemetry">
-            <span><CityTemp /></span>
-            <span><LiveStamp /></span>
-            <BrandModePicker />
-            <HomeModeToggle />
-            <SoundToggle />
+
+          {/* TAB BAR */}
+          <TabBar />
+
+          {/* ACTIVE VIEW */}
+          {active === "home" && (
+            <>
+              <SeasonMeter />
+              <HomeView />
+            </>
+          )}
+          {active === "habits" && <HabitsView />}
+          {active === "projects" && <ProjectsView />}
+          {active === "flow" && <FlowView />}
+          {active === "timeline" && <TimelineView />}
+          {active === "claude" && <ClaudeView />}
+          {active === "stack" && <StackView />}
+          {active === "brain" && <BrainView />}
+
+          {/* HUMILITY FOOTER — always visible, per blueprint */}
+          <div className="humility-footer">
+            The OS can show you. It cannot do it for you.
           </div>
         </div>
 
-        {/* TAB BAR */}
-        <TabBar />
-
-        {/* ACTIVE VIEW */}
-        {active === "home" && (
-          <>
-            <SeasonMeter />
-            <HomeView />
-          </>
-        )}
-        {active === "habits" && <HabitsView />}
-        {active === "projects" && <ProjectsView />}
-        {active === "flow" && <FlowView />}
-        {active === "timeline" && <TimelineView />}
-        {active === "claude" && <ClaudeView />}
-
-        {/* HUMILITY FOOTER — always visible, per blueprint */}
-        <div className="humility-footer">
-          The OS can show you. It cannot do it for you.
-        </div>
-      </div>
-
-      <CaptureFAB />
-      <CopilotLauncher />
-      <CommandPalette />
-      <AmbientIdle />
-      <ToastDeck />
-    </NowProvider>
+        <CaptureFAB />
+        <CopilotLauncher />
+        <CommandPalette />
+        <AmbientIdle />
+        <ToastDeck />
+      </NowProvider>
     </BridgeModeProvider>
   );
 }
