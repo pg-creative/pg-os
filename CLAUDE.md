@@ -123,7 +123,7 @@ cloudflared tunnel --url http://127.0.0.1:3030   # public URL for phone
 ## Phone Access
 `cloudflared tunnel --url http://127.0.0.1:3030` gives a random `*.trycloudflare.com` URL per session. Works as long as Mac is awake. OAuth sign-in does NOT work from the tunnel URL (redirect URIs are `127.0.0.1:3030`); sign in on desktop first, tokens then usable from anywhere.
 
-For a real Vercel deploy: needs migration of `~/.pg-os/ships.db`, `~/.pg-os/tokens.json`, `~/.pg-os/queue/*.md` to Supabase tables. Deferred as a proper follow-up.
+Cloud state migration (ships.db → Supabase, tokens.json → Supabase) shipped 2026-05-06 as part of Track A — see Status section above. Local files are now fallback paths used only when Supabase env vars aren't configured; the queue still writes to `~/.pg-os/queue/*.md` first (Claude Code rule) and mirrors to Supabase on next OS read.
 
 ## Agent Scope
 Tiny project. No strict agent-scope warnings yet. Just skip `node_modules/`, `.next/`, `docs/screenshots/`.
