@@ -33,3 +33,11 @@ supabase/.temp/
 __pycache__/
 *.pyc
 dashboard/__pycache__/
+
+# Session ephemeral (added 2026-05-17 during /cya)
+.playwright-cli/
+scripts/.playwright-cli/
+scripts/ex-*.png
+scripts/mj-portrait-live.png
+scripts/mj-log-*.txt
+scripts/mj-state-*.json

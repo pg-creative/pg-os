@@ -8,9 +8,11 @@ import { ClaudeAgents } from "./claude/ClaudeAgents";
 import { ClaudeSignals } from "./claude/ClaudeSignals";
 import { ClaudeSkills } from "./claude/ClaudeSkills";
 import { ClaudeArchive } from "./claude/ClaudeArchive";
+import { PixelOfficeView } from "./claude/PixelOfficeView";
 
 const SECTIONS = [
   { id: "cl-activity", label: "ACTIVITY" },
+  { id: "cl-office", label: "OFFICE" },
   { id: "cl-overview", label: "OVERVIEW" },
   { id: "cl-proposals", label: "PROPOSALS" },
   { id: "cl-trust", label: "TRUST" },
@@ -80,6 +82,7 @@ export function ClaudeView() {
 
       <div className="cl-stack">
         <ClaudeActivity />
+        <PixelOfficeView />
         <ClaudeOverview />
         <ClaudeProposals />
         <ClaudeTrust />

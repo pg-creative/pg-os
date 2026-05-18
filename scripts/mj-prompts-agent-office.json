@@ -1,0 +1,52 @@
+{
+  "_note": "Phase 2.5 asset batch for the agent-office redesign. 9 prompts × 4 candidates = 36 images. Run via: PROMPTS_FILE=mj-prompts-agent-office.json LEGNEXT_API_KEY=... node fire-mj.mjs",
+  "_outputs": "Land in personal-os/public/mj-assets/<id>-{0,1,2,3}.png. PG picks best per slot; chosen image gets copied to personal-os/public/agent-office/{characters,environments}/.",
+  "_aesthetic_lock": "Studio Ghibli anime cel-animation + Howl's Moving Castle golden-hour palette + JRPG jewel accents. Per ~/.claude/rules/visual-style.md and ~/.claude/research/agent-office-character-system-2026-05-16.md",
+  "jobs": [
+    {
+      "id": "char-wayfarer",
+      "slot": "character/wayfarer",
+      "text": "Studio Ghibli anime cel animation style character portrait, hooded wayfarer explorer in profile, deep forest green hooded cloak, warm amber lantern hanging from staff, calm reverent expression, golden hour warm lighting, rich golds and deep warm blues and soft cream palette with emerald and amber accents, Howls Moving Castle character art direction, anime cel shading not watercolor, luminous, painterly portrait, soft warm rim light, transparent atmosphere, full body --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-scribe",
+      "slot": "character/scribe",
+      "text": "Studio Ghibli anime cel animation style character portrait, young scribe with feathered quill in hand, warm cream linen robe with gold trim, ink-stained fingers, focused contemplative expression, scrolls tucked under arm, golden hour warm lighting from a window off-frame, rich amber and cream palette with sapphire blue accents on the inkwell, Howls Moving Castle character art direction, anime cel shading not watercolor, luminous, painterly portrait, full body --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-smith",
+      "slot": "character/smith",
+      "text": "Studio Ghibli anime cel animation style character portrait, brawny smith holding a small forging hammer, leather apron over warm cream tunic, soot streaks on cheek, confident grounded expression, embers floating from off-frame forge, golden hour amber lighting with deep warm blue background shadows, ruby red glow from forge embers, Howls Moving Castle character art direction, anime cel shading not watercolor, luminous, painterly portrait, full body --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-sage",
+      "slot": "character/sage",
+      "text": "Studio Ghibli anime cel animation style character portrait, elderly sage holding an open leather book glowing softly, long warm cream robe, kind contemplative expression with crows feet at the eyes, wisp of warm breath visible, golden hour warm lighting, rich amber and deep warm blue palette with sapphire blue accent on the book glow, Howls Moving Castle character art direction, anime cel shading not watercolor, luminous, painterly portrait, full body --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-ranger",
+      "slot": "character/ranger",
+      "text": "Studio Ghibli anime cel animation style character portrait, lithe ranger scout with longbow slung across back, deep forest green hooded vest over warm cream shirt, alert observant expression, small leather map satchel at hip, golden hour warm lighting filtering through unseen leaves, rich amber and emerald palette with deep warm blue background, Howls Moving Castle character art direction, anime cel shading not watercolor, luminous, painterly portrait, full body --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-bard",
+      "slot": "character/bard",
+      "text": "Studio Ghibli anime cel animation style character portrait, traveling bard with small wooden lute, warm cream tunic with embroidered amber trim, mid-strum mid-laugh expression, songbook tucked at hip, golden hour warm lighting, rich amber and coral palette with one ruby accent on the lute body, Howls Moving Castle character art direction, anime cel shading not watercolor, luminous, painterly portrait, full body --v 7 --ar 1:1"
+    },
+    {
+      "id": "env-atelier",
+      "slot": "environment/atelier",
+      "text": "Studio Ghibli anime background art, vast Howls Moving Castle library interior at golden hour, towering brass-trimmed bookshelves stacked with ancient tomes, warm cream walls with arched windows streaming golden hour sunlight, brass lanterns hanging from a high beamed ceiling, polished dark wood floors reflecting warm light, magical floating particles in the air, ink bottles glowing emerald and sapphire on a great central desk, deep warm blue ceiling shadows, rich golds and warm cream palette, Howls Moving Castle art direction, anime cel shading not watercolor, luminous painterly background, cinematic wide shot, atmospheric depth, no characters --v 7 --ar 16:9"
+    },
+    {
+      "id": "env-camp",
+      "slot": "environment/camp",
+      "text": "Studio Ghibli anime background art, wayfarer campfire scene at golden hour outdoor in a forest clearing, large warm bonfire at center with leaping golden flames and ember sparks rising, soft moss and fallen leaves around the fire, warm amber firelight pooling outward into deep warm blue dusk, distant forest treeline silhouetted against a coral and amber horizon, magical fireflies drifting through the air, deep warm blue night sky with first stars, Howls Moving Castle outdoor atmosphere, anime cel shading not watercolor, luminous painterly background, cinematic wide shot, no characters --v 7 --ar 16:9"
+    },
+    {
+      "id": "env-guild",
+      "slot": "environment/guild",
+      "text": "Studio Ghibli anime background art, cozy adventurers guild hall interior at golden hour, large stone hearth with warm fire on the back wall, long warm wood plank floor, mounted brass shields and warm parchment quest postings on the wooden walls, warm amber lantern light, golden hour sunlight streaming through tall amber-stained windows, deep warm blue ceiling shadows with exposed timber beams, polished bar counter on one side, magical floating dust motes in shafts of light, rich amber and warm cream palette with ruby accent on the hearth fire, Howls Moving Castle interior atmosphere, anime cel shading not watercolor, luminous painterly background, cinematic wide shot, no characters --v 7 --ar 16:9"
+    }
+  ]
+}
