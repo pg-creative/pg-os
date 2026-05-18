@@ -113,7 +113,7 @@ export function ChatQueryVariant() {
   const tier = (s: number) => (s >= 14 ? "high" : s >= 10 ? "mid" : "low");
 
   return (
-    <div className="ux-chat">
+    <div className="ux-chat" style={{ minHeight: "calc(100vh - 50px)" }}>
       <div className="ux-chat-hero">
         <div className="ux-chat-eyebrow">BRAIN · QUERY</div>
         <h1 className="ux-chat-headline">What are you looking for in here?</h1>

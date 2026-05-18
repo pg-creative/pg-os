@@ -116,7 +116,14 @@ export function TimelineFeedVariant() {
   };
 
   return (
-    <div className="ux-timeline">
+    <div
+      className="ux-timeline"
+      style={{
+        height: "calc(100vh - 50px)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <header className="ux-timeline-head">
         <input
           type="search"

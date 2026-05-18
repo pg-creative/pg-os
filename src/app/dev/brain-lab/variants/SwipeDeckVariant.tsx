@@ -182,7 +182,14 @@ export function SwipeDeckVariant() {
   );
 
   return (
-    <div className="ux-swipe">
+    <div
+      className="ux-swipe"
+      style={{
+        height: "calc(100vh - 50px)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* Top bar — progress + counter + undo */}
       <header className="ux-swipe-head">
         <div className="ux-swipe-counter">

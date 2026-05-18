@@ -42,8 +42,8 @@ export function SpatialMapVariant() {
   const { entries, loading, refresh } = useBrainEntries();
   const { busySlug, throwIt, defer, archive } = useBrainMutations(refresh);
   const [selected, setSelected] = useState<BrainEntry | null>(null);
-  const [scale, setScale] = useState(0.7);
-  const [pan, setPan] = useState({ x: 200, y: 100 });
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const panStart = useRef({ x: 0, y: 0 });
@@ -173,7 +173,14 @@ export function SpatialMapVariant() {
   };
 
   return (
-    <div className="ux-map">
+    <div
+      className="ux-map"
+      style={{
+        height: "calc(100vh - 50px)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* Toolbar */}
       <header className="ux-map-toolbar">
         <input
@@ -206,8 +213,8 @@ export function SpatialMapVariant() {
           <button
             type="button"
             onClick={() => {
-              setScale(0.7);
-              setPan({ x: 200, y: 100 });
+              setScale(1);
+              setPan({ x: 0, y: 0 });
             }}
           >
             reset
@@ -229,10 +236,10 @@ export function SpatialMapVariant() {
           width="100%"
           height="100%"
           viewBox={`0 0 ${WORLD_W} ${WORLD_H}`}
-          preserveAspectRatio="xMidYMid slice"
+          preserveAspectRatio="xMidYMid meet"
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-            transformOrigin: "0 0",
+            transformOrigin: "50% 50%",
           }}
         >
           {/* Tag ring labels */}

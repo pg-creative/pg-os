@@ -10115,6 +10115,18 @@ input[type="button"], input[type="submit"], summary {
 .bl-shell[data-theme="timeline"] .bl-stage {
   padding: 0;
   background: #fafaf8;
+  height: calc(100vh - 50px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.bl-shell[data-theme="table"] .bl-stage > *,
+.bl-shell[data-theme="swipe"] .bl-stage > *,
+.bl-shell[data-theme="map"] .bl-stage > *,
+.bl-shell[data-theme="chat"] .bl-stage > *,
+.bl-shell[data-theme="timeline"] .bl-stage > * {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ====================================================
@@ -11114,3 +11126,4 @@ input[type="button"], input[type="submit"], summary {
   .ux-map-legend { display: none; }
   .ux-map-mini { width: 130px; height: 90px; }
 }
+/* UX-CACHE-BUST-1779068098 */

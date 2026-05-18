@@ -151,7 +151,15 @@ export function TableVariant() {
   };
 
   return (
-    <div className={`ux-table density-${density}`} ref={tableRef}>
+    <div
+      className={`ux-table density-${density}`}
+      ref={tableRef}
+      style={{
+        height: "calc(100vh - 50px)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* Toolbar */}
       <div className="ux-table-toolbar">
         <input
