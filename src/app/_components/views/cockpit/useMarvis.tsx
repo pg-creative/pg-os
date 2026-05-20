@@ -282,9 +282,14 @@ export function useMarvis() {
       rec.onresult = (e) => {
         const last = e.results[e.results.length - 1];
         const heard = last[0].transcript || "";
-        if (/\bmarvis\b/i.test(heard)) {
-          // Take whatever follows "marvis" as the command.
-          const cmd = heard.replace(/.*\bmarvis\b[,.!?\s]*/i, "").trim();
+        // "Kitsu" — lenient, since Web Speech mishears short names
+        // ("kit sue", "kitsune", "ketsu", "kitsu").
+        const WAKE = /\b(kitsu|kitsune|kit\s?sue|ket\s?sue|ketsu|kitsu)\b/i;
+        if (WAKE.test(heard)) {
+          // Take whatever follows the wake word as the command.
+          const cmd = heard
+            .replace(new RegExp(`.*${WAKE.source}[,.!?\\s]*`, "i"), "")
+            .trim();
           if (cmd) ask(cmd);
           else startListening(); // bare "Marvis" → open the mic for a command
         }

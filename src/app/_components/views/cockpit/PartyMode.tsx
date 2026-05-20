@@ -144,7 +144,7 @@ export function PartyMode({
     const setLabel = (src: string) =>
       setTrackLabel(
         src.includes("party-default")
-          ? "MARVIS HOUSE BAND — drop /audio/party.mp3 to set your own"
+          ? "KITSU HOUSE BAND — drop /audio/party.mp3 to set your own"
           : "your track",
       );
 
@@ -469,7 +469,7 @@ export function PartyMode({
           </div>
           <div style={{ fontSize: 11, color: "#666", margin: "3px 0 8px" }}>
             👁 2,153,089 views · ★★★★★ · Uploaded May 20, 2009 by{" "}
-            <span style={{ color: "#2793e6" }}>MarvisDiscoVEVO</span>
+            <span style={{ color: "#2793e6" }}>KitsuDiscoVEVO</span>
           </div>
           <div
             style={{

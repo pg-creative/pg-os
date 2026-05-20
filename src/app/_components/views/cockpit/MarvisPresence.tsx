@@ -85,7 +85,7 @@ export function MarvisPresence() {
               color: "#D6A367",
             }}
           >
-            ◆ Marvis
+            ◆ Kitsu
           </span>
           <span
             style={{
@@ -160,8 +160,8 @@ export function MarvisPresence() {
           onClick={() => m.toggleWake(!m.wakeArmed)}
           title={
             m.wakeArmed
-              ? "‘Hey Marvis’ listening — click to disarm"
-              : "Arm hands-free ‘Hey Marvis’ wake word"
+              ? "‘Hey Kitsu’ listening — click to disarm"
+              : "Arm hands-free ‘Hey Kitsu’ wake word"
           }
           style={{
             background: m.wakeArmed ? "rgba(124,154,110,0.25)" : "transparent",

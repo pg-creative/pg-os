@@ -47,7 +47,7 @@ export function MarvisCorner({
       <>
         <button
           onClick={() => setOpen(true)}
-          title="Summon Marvis"
+          title="Summon Kitsu"
           style={{
             position: "fixed",
             right: 18,
@@ -117,7 +117,7 @@ export function MarvisCorner({
               color: C.amber,
             }}
           >
-            ◆ Marvis
+            ◆ Kitsu
           </span>
           <span
             style={{
@@ -237,7 +237,7 @@ export function MarvisCorner({
           <input
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            placeholder="message Marvis…"
+            placeholder="message Kitsu…"
             autoComplete="off"
             style={{
               flex: 1,
@@ -256,7 +256,7 @@ export function MarvisCorner({
           <button
             type="button"
             onClick={() => m.toggleWake(!m.wakeArmed)}
-            title="Hands-free 'Hey Marvis'"
+            title="Hands-free 'Hey Kitsu'"
             style={btn(m.wakeArmed ? C.emerald : C.dim, m.wakeArmed)}
           >
             👂
