@@ -21,6 +21,7 @@ import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
 import { FlowView } from "./_components/views/FlowView";
 import { ClaudeView } from "./_components/views/ClaudeView";
+import { CockpitView } from "./_components/views/CockpitView";
 import { StackView } from "./_components/views/StackView";
 import { TimelineView } from "./_components/views/TimelineView";
 import { BrainView } from "./_components/views/BrainView";
@@ -95,6 +96,7 @@ export default function Page() {
           {active === "flow" && <FlowView />}
           {active === "timeline" && <TimelineView />}
           {active === "claude" && <ClaudeView />}
+          {active === "cockpit" && <CockpitView />}
           {active === "stack" && <StackView />}
           {active === "brain" && <BrainView />}
 

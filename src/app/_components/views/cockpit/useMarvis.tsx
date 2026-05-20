@@ -1,0 +1,285 @@
+"use client";
+
+/**
+ * useMarvis — the client voice loop for the cockpit orchestrator.
+ *
+ * Loop:  listen (STT) → think (Claude via /api/copilot/chat?mode=marvis)
+ *        → speak (TTS) → idle.  Drives the MarvisPresence state machine.
+ *
+ * Graceful degradation (auto-upgrades as keys/plan come online, zero code change):
+ *   STT : Web Speech now (free).  Deepgram = follow-up (needs mic-proxy WS).
+ *   TTS : /api/cockpit/voice/tts → ElevenLabs (Creator plan) → OpenAI → 501,
+ *         on 501 the browser speaks via Web Speech synthesis.
+ *   wake: push-to-talk now.  Picovoice "Hey Marvis" = follow-up (needs SDK).
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
+export type MarvisState = "idle" | "listening" | "thinking" | "speaking";
+
+export interface MarvisConfig {
+  stt: string;
+  tts: string;
+  wake: string;
+  elevenVoiceId: string | null;
+  picovoiceAccessKey: string | null;
+  premium: boolean;
+}
+
+interface Turn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+// Minimal Web Speech typings (vendor-prefixed, not in lib.dom for all targets).
+type SpeechRec = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult:
+    | ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void)
+    | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+export function useMarvis() {
+  const [state, setState] = useState<MarvisState>("idle");
+  const [config, setConfig] = useState<MarvisConfig | null>(null);
+  const [transcript, setTranscript] = useState("");
+  const [reply, setReply] = useState("");
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const recRef = useRef<SpeechRec | null>(null);
+  const wakeRef = useRef<SpeechRec | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [wakeArmed, setWakeArmed] = useState(false);
+  const wakeArmedRef = useRef(false);
+
+  useEffect(() => {
+    fetch("/api/cockpit/voice/config")
+      .then((r) => r.json())
+      .then(setConfig)
+      .catch(() => setConfig(null));
+  }, []);
+
+  // ── Speak: stream audio from the TTS route, fall back to Web Speech ──
+  const speak = useCallback(async (text: string) => {
+    setState("speaking");
+    try {
+      const r = await fetch("/api/cockpit/voice/tts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (r.ok && r.headers.get("content-type")?.includes("audio")) {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          setState("idle");
+        };
+        await audio.play();
+        return;
+      }
+    } catch {
+      /* fall through to web speech */
+    }
+    // Web Speech fallback (free, robotic — placeholder until ElevenLabs Creator)
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.05;
+      u.onend = () => setState("idle");
+      window.speechSynthesis.speak(u);
+    } catch {
+      setState("idle");
+    }
+  }, []);
+
+  // ── Think: stream Marvis's reply from the shared Copilot agent ──
+  const ask = useCallback(
+    async (userText: string) => {
+      if (!userText.trim()) return;
+      setReply("");
+      setState("thinking");
+      const nextTurns: Turn[] = [...turns, { role: "user", text: userText }];
+      setTurns(nextTurns);
+
+      let acc = "";
+      try {
+        const r = await fetch("/api/copilot/chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mode: "marvis",
+            messages: nextTurns.map((t) => ({ role: t.role, content: t.text })),
+          }),
+        });
+        if (!r.body) throw new Error("no stream");
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const events = buf.split("\n\n");
+          buf = events.pop() ?? "";
+          for (const ev of events) {
+            const line = ev.split("\n").find((l) => l.startsWith("data: "));
+            if (!line) continue;
+            try {
+              const msg = JSON.parse(line.slice(6));
+              if (msg.type === "text" && msg.delta) {
+                acc += msg.delta;
+                setReply(acc);
+              }
+            } catch {
+              /* skip */
+            }
+          }
+        }
+      } catch {
+        acc = acc || "I lost the thread there. Say again?";
+      }
+      setTurns((t) => [...t, { role: "assistant", text: acc }]);
+      await speak(acc);
+    },
+    [turns, speak],
+  );
+
+  // ── Listen: Web Speech push-to-talk ──
+  const startListening = useCallback(() => {
+    const Ctor =
+      (
+        window as unknown as {
+          SpeechRecognition?: new () => SpeechRec;
+          webkitSpeechRecognition?: new () => SpeechRec;
+        }
+      ).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRec })
+        .webkitSpeechRecognition;
+    if (!Ctor) {
+      // No STT available — let the caller type instead.
+      setState("idle");
+      return false;
+    }
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.onresult = (e) => {
+      const last = e.results[e.results.length - 1];
+      const t = last[0].transcript;
+      setTranscript(t);
+    };
+    rec.onerror = () => setState("idle");
+    rec.onend = () => {
+      setTranscript((t) => {
+        if (t.trim()) ask(t);
+        else setState("idle");
+        return "";
+      });
+    };
+    recRef.current = rec;
+    setTranscript("");
+    setState("listening");
+    rec.start();
+    return true;
+  }, [ask]);
+
+  const stopListening = useCallback(() => {
+    recRef.current?.stop();
+  }, []);
+
+  const interrupt = useCallback(() => {
+    try {
+      audioRef.current?.pause();
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* noop */
+    }
+    setState("idle");
+  }, []);
+
+  // ── Interim "Hey Marvis" wake word via Web Speech continuous listen ──
+  // (Free, no approval. Swap to Picovoice once config.picovoiceAccessKey lands.)
+  const toggleWake = useCallback(
+    (on: boolean) => {
+      const Ctor =
+        (
+          window as unknown as {
+            SpeechRecognition?: new () => SpeechRec;
+            webkitSpeechRecognition?: new () => SpeechRec;
+          }
+        ).SpeechRecognition ||
+        (window as unknown as { webkitSpeechRecognition?: new () => SpeechRec })
+          .webkitSpeechRecognition;
+      if (!Ctor) return false;
+
+      if (!on) {
+        wakeArmedRef.current = false;
+        setWakeArmed(false);
+        try {
+          wakeRef.current?.stop();
+        } catch {
+          /* noop */
+        }
+        return true;
+      }
+
+      wakeArmedRef.current = true;
+      setWakeArmed(true);
+      const rec = new Ctor();
+      rec.lang = "en-US";
+      rec.interimResults = false;
+      rec.continuous = true;
+      rec.onresult = (e) => {
+        const last = e.results[e.results.length - 1];
+        const heard = last[0].transcript || "";
+        if (/\bmarvis\b/i.test(heard)) {
+          // Take whatever follows "marvis" as the command.
+          const cmd = heard.replace(/.*\bmarvis\b[,.!?\s]*/i, "").trim();
+          if (cmd) ask(cmd);
+          else startListening(); // bare "Marvis" → open the mic for a command
+        }
+      };
+      rec.onerror = () => {};
+      rec.onend = () => {
+        // Web Speech stops itself periodically — restart while armed.
+        if (wakeArmedRef.current) {
+          try {
+            rec.start();
+          } catch {
+            /* already started */
+          }
+        }
+      };
+      wakeRef.current = rec;
+      try {
+        rec.start();
+      } catch {
+        /* noop */
+      }
+      return true;
+    },
+    [ask, startListening],
+  );
+
+  return {
+    state,
+    config,
+    transcript,
+    reply,
+    turns,
+    ask, // type-to-Marvis path (works with zero mic/keys)
+    startListening,
+    stopListening,
+    interrupt,
+    toggleWake,
+    wakeArmed,
+  };
+}
