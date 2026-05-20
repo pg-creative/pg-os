@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CockpitTerminal } from "./cockpit/CockpitTerminal";
-import { MarvisPresence } from "./cockpit/MarvisPresence";
+import { MarvisCorner } from "./cockpit/MarvisCorner";
 
 const C = {
   ink: "#13110D",
@@ -207,8 +207,8 @@ export function CockpitView() {
         the aesthetic is picked.
       </p>
 
-      {/* MARVIS — the orchestrator presence */}
-      <MarvisPresence />
+      {/* MARVIS — big corner presence + speech bubble (fixed overlay) */}
+      <MarvisCorner />
 
       {/* LAUNCH */}
       {daemon?.running && (

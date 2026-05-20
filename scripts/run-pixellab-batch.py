@@ -30,6 +30,14 @@ PROMPTS = [
     ("marvis-kitsune", "a small celestial nine-tailed fox spirit with flowing golden flame tails and amber eyes, ethereal, warm gold and cream, Studio Ghibli magic, dark navy background, centered", 64),
     ("marvis-lantern", "a small genie-like light spirit gently rising from an ornate glowing golden lantern, wisps of warm amber light, magical, Studio Ghibli, dark navy background, centered", 64),
     ("marvis-construct", "a small floating guardian construct of warm golden light with glowing runes orbiting it, magical automaton core, amber and cream, dark navy background, centered", 64),
+    # ── the wider concept menu ──
+    ("marvis-daemon", "a small shapeshifting animal soul-companion daemon spirit, a fox-ferret-like glowing familiar with warm ethereal aura, His Dark Materials energy, golden hour, Studio Ghibli, dark navy background, centered", 64),
+    ("marvis-calcifer", "a small living fire hearth spirit with two big round eyes and a wide grin, a dancing flame body, warm gold and orange, Howls Moving Castle Calcifer energy, dark navy background, centered", 64),
+    ("marvis-homunculus", "a tiny glowing homunculus spirit floating inside an alchemist glass flask of swirling amber and royal purple elixir, magical, dark navy background, centered", 64),
+    ("marvis-grimoire", "a floating sentient spellbook grimoire with one glowing amber eye on the cover and fluttering pages, ornate gold trim, magical companion, dark navy background, centered", 64),
+    ("marvis-astrolabe", "a floating brass astrolabe orrery with glowing amber celestial rings orbiting a small star core, cosmic navigator spirit, dark navy background, centered", 64),
+    ("marvis-drake", "a small cute guardian drake dragon companion with warm scales, tiny wings and glowing amber eyes, Studio Ghibli Haku energy, dark navy background, centered", 64),
+    ("marvis-alchemist", "a hooded alchemist mentor holding a glowing flask, cream and gold robe with royal purple accents, dignified serene, Studio Ghibli JRPG companion, dark navy background, full body, centered", 64),
 ]
 ACTIONS = ["idle", "talk"]  # animation states
 
