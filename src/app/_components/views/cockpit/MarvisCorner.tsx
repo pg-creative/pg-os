@@ -147,11 +147,11 @@ export function MarvisCorner({
         {/* big fox avatar */}
         <div
           style={{
-            height: 172,
+            height: 210,
             overflow: "hidden",
             position: "relative",
             background:
-              "radial-gradient(circle at 50% 30%, rgba(214,163,103,.12), transparent 70%)",
+              "radial-gradient(circle at 50% 38%, rgba(214,163,103,.14), transparent 72%)",
             flexShrink: 0,
           }}
         >
@@ -159,14 +159,14 @@ export function MarvisCorner({
             style={{
               position: "absolute",
               left: "50%",
-              top: 4,
+              top: 0,
               transform: "translateX(-50%)",
             }}
           >
             <CockpitLive2D
               state={m.state}
-              size={250}
-              zoom={2.1}
+              size={280}
+              zoom={1.42}
               align="top"
               modelUrl={modelUrl}
             />
