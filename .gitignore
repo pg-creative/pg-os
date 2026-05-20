@@ -52,3 +52,6 @@ public/audio/party.mp3
 public/audio/party.m4a
 public/audio/party.ogg
 public/audio/party.wav
+
+# Aesthetic bake-off MJ candidates (regenerable via scripts/run-mj-aesthetic.py; winner committed deliberately)
+public/art/

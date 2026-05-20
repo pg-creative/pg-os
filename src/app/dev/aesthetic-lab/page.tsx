@@ -405,10 +405,52 @@ export default function AestheticLab() {
             boxShadow: "0 30px 80px rgba(0,0,0,.5)",
           }}
         >
+          <HeroImg theme={t} time={time} />
           <Decor theme={t.key} time={time} />
           <Slice theme={t} time={time} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Painted hero backdrop (Midjourney, visual-style; per direction) ─────── */
+// Which of the 4 MJ candidates to use per direction (tuned after review).
+const HERO_PICK: Record<string, number> = {
+  nioh: 0,
+  ukiyoe: 0,
+  zen: 0,
+  ghibli: 0,
+  onmyoji: 0,
+};
+function HeroImg({ theme, time }: { theme: Theme; time: Time }) {
+  const src = `/art/aesthetic-2026-05-20/${theme.key}-hero_${HERO_PICK[theme.key] ?? 0}.png`;
+  // scrim: painting shows at the top, dissolves into the solid theme bg so text
+  // stays legible. Lighter themes (day/zen) get a gentler, paper-toned scrim.
+  const dark = time === "night" || (time === "dusk" && theme.key !== "zen");
+  return (
+    <div
+      style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden" }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: `url('${src}')`,
+          backgroundSize: "cover",
+          backgroundPosition: "center top",
+          opacity: theme.key === "zen" ? 0.5 : 0.85,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: dark
+            ? "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, var(--bg) 78%)"
+            : "linear-gradient(180deg, rgba(255,255,255,0.10) 0%, var(--bg) 80%)",
+        }}
+      />
     </div>
   );
 }
