@@ -67,7 +67,11 @@ export function MarvisCorner({
         >
           🦊
         </button>
-        <PartyMode active={m.party} onClose={() => m.setParty(false)} />
+        <PartyMode
+          active={m.party}
+          onClose={() => m.setParty(false)}
+          speak={m.speak}
+        />
       </>
     );
   }
@@ -271,7 +275,11 @@ export function MarvisCorner({
         </form>
       </div>
 
-      <PartyMode active={m.party} onClose={() => m.setParty(false)} />
+      <PartyMode
+        active={m.party}
+        onClose={() => m.setParty(false)}
+        speak={m.speak}
+      />
     </>
   );
 }

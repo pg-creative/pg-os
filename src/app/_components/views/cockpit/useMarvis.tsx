@@ -66,61 +66,83 @@ export function useMarvis() {
   }, []);
 
   // ── Speak: stream audio from the TTS route, fall back to Web Speech ──
-  const speak = useCallback(async (text: string) => {
-    // Stop anything already speaking — prevents two overlapping voices.
-    try {
-      audioRef.current?.pause();
-      audioRef.current = null;
-    } catch {
-      /* noop */
-    }
-    try {
-      window.speechSynthesis?.cancel();
-    } catch {
-      /* noop */
-    }
-    setState("speaking");
-    try {
-      const r = await fetch("/api/cockpit/voice/tts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (r.ok && r.headers.get("content-type")?.includes("audio")) {
-        const blob = await r.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        audio.onended = () => {
-          URL.revokeObjectURL(url);
+  // Resolves when the spoken line FINISHES (not when it starts) so callers can
+  // sequence around it — e.g. party mode waits for the intro line to end before
+  // starting the song, and ducks the music while a hype line plays.
+  const speak = useCallback(
+    (text: string) =>
+      new Promise<void>((resolve) => {
+        // Stop anything already speaking — prevents two overlapping voices.
+        try {
+          audioRef.current?.pause();
+          audioRef.current = null;
+        } catch {
+          /* noop */
+        }
+        try {
+          window.speechSynthesis?.cancel();
+        } catch {
+          /* noop */
+        }
+        setState("speaking");
+        // single-shot guard so a line never resolves twice
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
           setState("idle");
+          resolve();
         };
-        await audio.play();
-        return;
-      }
-    } catch {
-      /* fall through to web speech */
-    }
-    // Web Speech fallback (free, robotic — placeholder until ElevenLabs Creator)
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.05;
-      u.onend = () => setState("idle");
-      window.speechSynthesis.speak(u);
-    } catch {
-      setState("idle");
-    }
-  }, []);
+        (async () => {
+          try {
+            const r = await fetch("/api/cockpit/voice/tts", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+            if (r.ok && r.headers.get("content-type")?.includes("audio")) {
+              const blob = await r.blob();
+              const url = URL.createObjectURL(blob);
+              const audio = new Audio(url);
+              audioRef.current = audio;
+              audio.onended = () => {
+                URL.revokeObjectURL(url);
+                finish();
+              };
+              audio.onerror = finish;
+              // play() can reject (autoplay policy) — resolve so we never hang.
+              audio.play().catch(finish);
+              return;
+            }
+          } catch {
+            /* fall through to web speech */
+          }
+          // Web Speech fallback (free, robotic — placeholder until ElevenLabs)
+          try {
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 1.05;
+            u.onend = finish;
+            u.onerror = finish;
+            window.speechSynthesis.speak(u);
+          } catch {
+            finish();
+          }
+        })();
+      }),
+    [],
+  );
 
   // ── Think: stream Marvis's reply from the shared Copilot agent ──
   const ask = useCallback(
     async (userText: string) => {
       if (!userText.trim()) return;
       // 🎉 easter egg: "initialize party mode"
+      // PartyMode owns the audio choreography: it speaks the intro line, THEN
+      // starts the song, then drops hype lines (ducking the music). So here we
+      // only flip the flag + set the transcript bubble — no speak() collision.
       if (/initiali[sz]e party mode|party mode/i.test(userText)) {
         setParty(true);
         setReply("Initializing party mode. Hold onto something.");
-        speak("Initializing party mode. Hold onto something.");
         return;
       }
       setReply("");
@@ -296,6 +318,7 @@ export function useMarvis() {
     reply,
     turns,
     ask, // type-to-Marvis path (works with zero mic/keys)
+    speak, // exposed so PartyMode can choreograph intro + hype lines
     startListening,
     stopListening,
     interrupt,

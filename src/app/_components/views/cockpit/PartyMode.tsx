@@ -29,12 +29,33 @@ const AUDIO_SOURCES = [
   "/audio/party-default.mp3",
 ];
 
+// The fox announces party mode, THEN the song starts (so he isn't drowned out).
+const INTRO_LINE = "Initializing party mode. Hold onto something.";
+
+// Random hype the fox drops over the song; the music ducks while he talks.
+const HYPE_LINES = [
+  "Woo!",
+  "Oh yeah!",
+  "Party mode! We love party mode!",
+  "Foxy lady!",
+  "Turn it up!",
+  "This is my jam!",
+  "Yip yip yip!",
+  "Shake those tails!",
+  "Ain't no stoppin' us now!",
+  "Let's go!",
+  "Disco fox in the house!",
+  "Feel that groove!",
+];
+
 export function PartyMode({
   active,
   onClose,
+  speak,
 }: {
   active: boolean;
   onClose: () => void;
+  speak?: (text: string) => Promise<void>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eqRef = useRef<HTMLCanvasElement>(null);
@@ -141,17 +162,19 @@ export function PartyMode({
       setLabel(AUDIO_SOURCES[srcIdx]);
     });
 
-    // Play the element DIRECTLY (governed only by the autoplay policy, which
-    // the typed "party mode" + Enter satisfies). We do NOT route it through
-    // Web Audio for playback — creating a MediaElementSource reroutes output
-    // through the graph, and a suspended AudioContext would then mute it.
-    const play = () => {
+    // ── Choreography: the fox says the intro line FIRST, THEN the song starts,
+    // then he drops hype lines over the track (music ducked so he's audible). ──
+    let introDone = false;
+    let hypeTimer: number | null = null;
+
+    // Play the song element DIRECTLY (autoplay policy only — not routed through
+    // Web Audio, so a suspended AudioContext can't mute it). Gated on the intro.
+    const playSong = () => {
+      if (!introDone) return;
       audio.play().catch(() => {
-        /* autoplay blocked (e.g. voice-trigger, no gesture) — gesture listener
-           below will start it on the first interaction. */
+        /* autoplay blocked — a gesture (below) will start it on first interaction */
       });
     };
-    audio.addEventListener("canplay", play);
 
     // The equalizer analyser is attached lazily and ONLY once a gesture has the
     // context actually running — so attaching it (which reroutes the element)
@@ -181,17 +204,57 @@ export function PartyMode({
       }
     };
 
+    // Drop a random hype line every 12–20s, ducking the music while he talks.
+    const scheduleHype = () => {
+      if (disposed || !speak) return;
+      const say = speak; // capture so TS keeps the narrowing in the callback
+      hypeTimer = window.setTimeout(
+        async () => {
+          if (disposed) return;
+          const line =
+            HYPE_LINES[Math.floor(Math.random() * HYPE_LINES.length)];
+          const prevVol = audio.volume;
+          audio.volume = 0.22; // duck so the fox cuts through
+          try {
+            await say(line);
+          } catch {
+            /* noop */
+          }
+          if (!disposed) audio.volume = prevVol || 1;
+          scheduleHype();
+        },
+        12000 + Math.random() * 8000,
+      );
+    };
+
+    // Fox announces party mode, THEN the song + hype loop kick in.
+    const startParty = async () => {
+      if (speak) {
+        try {
+          await speak(INTRO_LINE);
+        } catch {
+          /* noop */
+        }
+      }
+      introDone = true;
+      if (disposed) return;
+      playSong();
+      scheduleHype();
+    };
+
     const onGesture = () => {
-      play();
+      playSong();
       attachAnalyser();
     };
     window.addEventListener("pointerdown", onGesture);
     window.addEventListener("keydown", onGesture);
+    audio.addEventListener("canplay", () => {
+      if (introDone) playSong();
+    });
 
     tryLoad();
-    play(); // attempt immediately (transient activation from the Enter)
-    // best-effort viz on the typed path — succeeds if still within activation:
-    attachAnalyser();
+    attachAnalyser(); // best-effort viz within the trigger's activation window
+    startParty(); // speak intro → start song → hype loop
 
     // equalizer draw loop
     const eq = eqRef.current;
@@ -221,6 +284,7 @@ export function PartyMode({
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
+      if (hypeTimer) clearTimeout(hypeTimer);
       window.removeEventListener("pointerdown", onGesture);
       window.removeEventListener("keydown", onGesture);
       try {
