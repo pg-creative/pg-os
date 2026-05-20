@@ -23,6 +23,8 @@
     "mermaid": "^11.15.0",
     "next": "16.2.4",
     "node-pty": "^1.1.0",
+    "pixi-live2d-display": "0.4.0",
+    "pixi.js": "6.5.10",
     "pngjs": "^7.0.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
