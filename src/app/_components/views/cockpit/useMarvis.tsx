@@ -67,6 +67,18 @@ export function useMarvis() {
 
   // ── Speak: stream audio from the TTS route, fall back to Web Speech ──
   const speak = useCallback(async (text: string) => {
+    // Stop anything already speaking — prevents two overlapping voices.
+    try {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    } catch {
+      /* noop */
+    }
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* noop */
+    }
     setState("speaking");
     try {
       const r = await fetch("/api/cockpit/voice/tts", {

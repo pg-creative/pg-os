@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * PartyMode — the "initialize party mode" easter egg. Confetti + strobing
- * light overlay + autoplaying disco ("Ain't No Stoppin' Us Now"). Triggered
- * by the voice/text command via useMarvis. Pure delight, zero purpose. 🎉
+ * PartyMode — "initialize party mode" 🎉. Heavy confetti + strobing lights +
+ * the disco track in a deliberately cheesy old-2009-YouTube player frame.
  */
 
 import { useEffect, useRef } from "react";
+
+const VIDEO_ID = "i2FW1WJc0lg"; // McFadden & Whitehead — Ain't No Stoppin' Us Now (Official Audio)
 
 export function PartyMode({
   active,
@@ -32,16 +33,18 @@ export function PartyMode({
       "#5B7BA1",
       "#B8536F",
       "#FDEFD2",
+      "#FFD23F",
+      "#06D6A0",
     ];
-    const bits = Array.from({ length: 220 }, () => ({
+    const bits = Array.from({ length: 480 }, () => ({
       x: Math.random() * c.width,
       y: Math.random() * -c.height,
-      r: 4 + Math.random() * 7,
-      vy: 2 + Math.random() * 4,
-      vx: -2 + Math.random() * 4,
+      r: 5 + Math.random() * 10,
+      vy: 2.5 + Math.random() * 5,
+      vx: -3 + Math.random() * 6,
       col: colors[Math.floor(Math.random() * colors.length)],
       rot: Math.random() * 6,
-      vr: -0.2 + Math.random() * 0.4,
+      vr: -0.3 + Math.random() * 0.6,
     }));
     let raf = 0;
     const draw = () => {
@@ -50,15 +53,15 @@ export function PartyMode({
         b.y += b.vy;
         b.x += b.vx;
         b.rot += b.vr;
-        if (b.y > c.height + 10) {
-          b.y = -10;
+        if (b.y > c.height + 12) {
+          b.y = -12;
           b.x = Math.random() * c.width;
         }
         x.save();
         x.translate(b.x, b.y);
         x.rotate(b.rot);
         x.fillStyle = b.col;
-        x.fillRect(-b.r / 2, -b.r / 2, b.r, b.r * 1.6);
+        x.fillRect(-b.r / 2, -b.r / 2, b.r, b.r * 1.5);
         x.restore();
       }
       raf = requestAnimationFrame(draw);
@@ -76,7 +79,6 @@ export function PartyMode({
   }, [active]);
 
   if (!active) return null;
-  const q = encodeURIComponent("Ain't No Stoppin Us Now McFadden Whitehead");
 
   return (
     <div
@@ -89,58 +91,159 @@ export function PartyMode({
     >
       <style>{`
         @keyframes partyhue { 0%{filter:hue-rotate(0deg)} 100%{filter:hue-rotate(360deg)} }
-        @keyframes partypulse { from{opacity:.35} to{opacity:.85} }
+        @keyframes partypulse { from{opacity:.3} to{opacity:.9} }
         .party-strobe {
           position:absolute; inset:0; mix-blend-mode:screen;
           background:
-            radial-gradient(circle at 18% 28%, rgba(214,163,103,.55), transparent 42%),
-            radial-gradient(circle at 82% 62%, rgba(184,83,111,.55), transparent 42%),
-            radial-gradient(circle at 50% 85%, rgba(91,123,161,.55), transparent 42%),
-            radial-gradient(circle at 65% 18%, rgba(124,154,110,.5), transparent 40%);
-          animation: partyhue 3s linear infinite, partypulse .5s ease-in-out infinite alternate;
+            radial-gradient(circle at 15% 25%, rgba(214,163,103,.6), transparent 40%),
+            radial-gradient(circle at 85% 60%, rgba(184,83,111,.6), transparent 40%),
+            radial-gradient(circle at 50% 88%, rgba(91,123,161,.6), transparent 40%),
+            radial-gradient(circle at 70% 15%, rgba(124,154,110,.55), transparent 38%),
+            radial-gradient(circle at 30% 70%, rgba(255,210,63,.5), transparent 38%);
+          animation: partyhue 3s linear infinite, partypulse .45s ease-in-out infinite alternate;
         }
+        .yt-logo { font-family: Arial, sans-serif; font-weight:bold; font-size:22px; }
+        .yt-logo b { background:#cc181e; color:#fff; padding:1px 6px; border-radius:5px; }
       `}</style>
       <div className="party-strobe" />
       <canvas ref={canvasRef} style={{ position: "absolute", inset: 0 }} />
+
       <div
         style={{
           position: "absolute",
-          top: 26,
+          top: 18,
           left: 0,
           right: 0,
           textAlign: "center",
           fontFamily: '"Iowan Old Style",Palatino,Georgia,serif',
-          fontSize: 52,
+          fontSize: 56,
           fontWeight: 600,
           color: "#FDEFD2",
-          textShadow: "0 2px 24px rgba(214,163,103,.9)",
-          letterSpacing: ".02em",
+          textShadow: "0 2px 26px rgba(214,163,103,.95)",
         }}
       >
         ✨ PARTY MODE ✨
       </div>
-      {/* autoplaying disco (top search result, no hardcoded video id) */}
-      <iframe
-        title="party music"
-        width="340"
-        height="191"
-        src={`https://www.youtube.com/embed?listType=search&list=${q}&autoplay=1`}
-        allow="autoplay; encrypted-media"
+
+      {/* cheesy old-2009-YouTube player */}
+      <div
         style={{
           position: "absolute",
-          right: 22,
-          top: 22,
-          border: "3px solid #D6A367",
-          borderRadius: 12,
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%,-50%)",
+          width: 600,
+          background: "#f9f9f9",
+          border: "1px solid #ccc",
+          borderRadius: 4,
+          boxShadow: "0 20px 60px rgba(0,0,0,.6)",
           pointerEvents: "auto",
-          boxShadow: "0 0 40px rgba(214,163,103,.6)",
+          fontFamily: "Arial, Helvetica, sans-serif",
         }}
-      />
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "8px 12px",
+            borderBottom: "1px solid #e3e3e3",
+            background: "#fff",
+          }}
+        >
+          <span className="yt-logo">
+            You<b>Tube</b>
+          </span>
+          <div
+            style={{
+              flex: 1,
+              border: "1px solid #ccc",
+              borderRadius: 2,
+              padding: "3px 6px",
+              color: "#999",
+              fontSize: 12,
+              background: "#fff",
+            }}
+          >
+            aint no stoppin us now
+          </div>
+          <span style={{ fontSize: 11, color: "#2793e6" }}>Sign In</span>
+        </div>
+        <div
+          style={{
+            background: "#000",
+            aspectRatio: "16/9",
+            position: "relative",
+          }}
+        >
+          <iframe
+            title="party"
+            src={`https://www.youtube.com/embed/${VIDEO_ID}?autoplay=1&rel=0`}
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+            style={{
+              width: "100%",
+              height: "100%",
+              border: 0,
+              display: "block",
+            }}
+          />
+        </div>
+        <div style={{ padding: "8px 12px", color: "#333" }}>
+          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1a1a1a" }}>
+            Ain&apos;t No Stoppin&apos; Us Now (1979) [HQ] 🕺
+          </div>
+          <div style={{ fontSize: 11, color: "#666", margin: "3px 0 8px" }}>
+            👁 2,153,089 views · ★★★★★ · Uploaded May 20, 2009 by{" "}
+            <span style={{ color: "#2793e6" }}>MarvisDiscoVEVO</span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              fontSize: 12,
+              color: "#555",
+              borderTop: "1px solid #eee",
+              paddingTop: 8,
+            }}
+          >
+            <span>👍 12,043</span>
+            <span>👎 87</span>
+            <span>💬 Comments (411)</span>
+            <span>⤴ Share</span>
+            <span
+              style={{
+                marginLeft: "auto",
+                background: "#cc181e",
+                color: "#fff",
+                padding: "4px 10px",
+                borderRadius: 2,
+                fontWeight: "bold",
+              }}
+            >
+              Subscribe
+            </span>
+          </div>
+          <div style={{ fontSize: 10.5, color: "#999", marginTop: 6 }}>
+            video not playing?{" "}
+            <a
+              href={`https://www.youtube.com/watch?v=${VIDEO_ID}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#2793e6" }}
+            >
+              ▶ watch on YouTube
+            </a>
+          </div>
+        </div>
+      </div>
+
       <button
         onClick={onClose}
         style={{
           position: "absolute",
-          bottom: 32,
+          bottom: 30,
           left: "50%",
           transform: "translateX(-50%)",
           pointerEvents: "auto",
@@ -148,7 +251,7 @@ export function PartyMode({
           border: "1px solid #D6A367",
           color: "#D6A367",
           borderRadius: 8,
-          padding: "10px 22px",
+          padding: "10px 24px",
           cursor: "pointer",
           fontFamily: "ui-monospace,monospace",
           fontSize: 12,
