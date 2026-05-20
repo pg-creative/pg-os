@@ -1,32 +1,44 @@
 "use client";
 
 /**
- * CockpitLive2D — a big, rigged VTuber-style face (Live2D) for Marvis.
- * Loads the Cubism runtime + a model via pixi-live2d-display, renders it large,
- * and drives mouth (lip-sync) + head-sway from Marvis state. Pass a real warm
- * model URL once picked; defaults to a free sample so you can feel the medium.
- *
- * Lip-sync: on `speaking`, ParamMouthOpenY is driven by a sine (placeholder for
- * real ElevenLabs audio-amplitude once the Creator plan is active).
+ * CockpitLive2D — a big rigged Live2D face for Marvis (lip-sync + head-sway,
+ * driven by state). pixi owns its OWN canvas inside a container div (NOT a
+ * React-managed <canvas>), so React StrictMode's double-mount can't destroy
+ * the canvas out from under it. Loads Cubism runtime + pixi-live2d-display lazily.
  */
 
 import { useEffect, useRef, useState } from "react";
 
 const CUBISM =
   "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js";
-// Free sample Cubism4 model (swap for a warm booth.pm/nizima model when picked).
 const SAMPLE =
   "https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/haru/haru_greeter_t03.model3.json";
 
-function loadScript(src: string): Promise<void> {
+// Resolve only once window.Live2DCubismCore actually EXISTS — not merely when
+// the <script> tag is present. The cubism4 plugin checks for the core at
+// module-eval time; importing it before the core is ready throws and caches a
+// broken module, failing every subsequent load. So we poll the real global.
+function loadCubismCore(): Promise<void> {
   return new Promise((res, rej) => {
-    if (document.querySelector(`script[src="${src}"]`)) return res();
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => res();
-    s.onerror = () => rej(new Error("script load failed"));
-    document.head.appendChild(s);
+    const w = window as unknown as { Live2DCubismCore?: unknown };
+    if (w.Live2DCubismCore) return res();
+    if (!document.querySelector(`script[src="${CUBISM}"]`)) {
+      const s = document.createElement("script");
+      s.src = CUBISM;
+      s.async = true;
+      s.onerror = () => rej(new Error("cubism core failed to load"));
+      document.head.appendChild(s);
+    }
+    const iv = setInterval(() => {
+      if (w.Live2DCubismCore) {
+        clearInterval(iv);
+        res();
+      }
+    }, 40);
+    setTimeout(() => {
+      clearInterval(iv);
+      if (!w.Live2DCubismCore) rej(new Error("cubism core load timeout"));
+    }, 10000);
   });
 }
 
@@ -40,10 +52,10 @@ export function CockpitLive2D({
   modelUrl?: string;
   state?: string;
   size?: number;
-  zoom?: number; // scale multiplier on top of fit (use >1 to fill / frame the face)
-  align?: "center" | "top"; // "top" frames the bust (head near top, body cropped below)
+  zoom?: number;
+  align?: "center" | "top";
 }) {
-  const ref = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -54,39 +66,43 @@ export function CockpitLive2D({
     let disposed = false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let app: any = null;
+    let canvas: HTMLCanvasElement | null = null;
+    setStatus("loading");
+
     (async () => {
       try {
-        await loadScript(CUBISM);
+        await loadCubismCore();
         const PIXI = await import("pixi.js");
-        // pixi-live2d-display@0.4 reads window.PIXI for ticker/loader integration.
         (window as unknown as { PIXI: unknown }).PIXI = PIXI;
         const { Live2DModel } = await import("pixi-live2d-display/cubism4");
-        if (disposed || !ref.current) return;
+        if (disposed || !hostRef.current) return;
 
+        // pixi creates + owns its own canvas → safe under StrictMode remounts.
         app = new PIXI.Application({
-          view: ref.current,
           width: size,
           height: size,
           backgroundAlpha: 0,
           antialias: true,
         });
+        canvas = app.view as HTMLCanvasElement;
+        canvas.style.width = `${size}px`;
+        canvas.style.height = `${size}px`;
+        hostRef.current.appendChild(canvas);
+
         const model = await Live2DModel.from(modelUrl);
         if (disposed) {
-          app.destroy();
+          app.destroy(true);
           return;
         }
         app.stage.addChild(model);
-        // Scale to fit + center via bounds.
+
         const b = model.getBounds();
         const sc = Math.min(size / b.width, size / b.height) * zoom;
         model.scale.set(sc);
         const bb = model.getBounds();
-        model.x += (size - bb.width) / 2 - bb.x; // center horizontally
-        if (align === "top") {
-          model.y += -bb.y + size * 0.04; // head near top; body crops below (bust framing)
-        } else {
-          model.y += (size - bb.height) / 2 - bb.y;
-        }
+        model.x += (size - bb.width) / 2 - bb.x;
+        if (align === "top") model.y += -bb.y + size * 0.04;
+        else model.y += (size - bb.height) / 2 - bb.y;
         setStatus("ready");
 
         let t = 0;
@@ -109,10 +125,12 @@ export function CockpitLive2D({
             /* model lacks these params */
           }
         });
-      } catch {
+      } catch (e) {
+        console.error("[Live2D] load failed:", e);
         if (!disposed) setStatus("error");
       }
     })();
+
     return () => {
       disposed = true;
       try {
@@ -120,17 +138,17 @@ export function CockpitLive2D({
       } catch {
         /* noop */
       }
+      try {
+        canvas?.remove();
+      } catch {
+        /* noop */
+      }
     };
-  }, [modelUrl, size]);
+  }, [modelUrl, size, zoom, align]);
 
   return (
     <div style={{ position: "relative", width: size, height: size }}>
-      <canvas
-        ref={ref}
-        width={size}
-        height={size}
-        style={{ width: size, height: size }}
-      />
+      <div ref={hostRef} style={{ width: size, height: size }} />
       {status !== "ready" && (
         <div
           style={{

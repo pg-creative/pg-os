@@ -14,7 +14,11 @@ import { PartyMode } from "./PartyMode";
 
 const FACE = 560; // big
 
-export function MarvisCorner({ modelUrl }: { modelUrl?: string }) {
+export function MarvisCorner({
+  modelUrl = "/live2d/fox/standard_fox.model3.json",
+}: {
+  modelUrl?: string;
+}) {
   const m = useMarvis();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
