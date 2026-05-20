@@ -41,3 +41,7 @@ scripts/ex-*.png
 scripts/mj-portrait-live.png
 scripts/mj-log-*.txt
 scripts/mj-state-*.json
+
+# Cockpit local binary assets
+public/live2d/
+public/agent-office/pixel
