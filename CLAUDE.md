@@ -44,7 +44,7 @@ Kickoff: 2026-04-21. **Production: https://pg-os.vercel.app** (stable, no auth g
 src/app/
 ├── layout.tsx                 ← ModeProvider + TabProvider
 ├── page.tsx                   ← Topbar + TabBar + active view routing
-├── globals.css                ← ~2150 lines: theme tokens, layout, views, a11y foundation, Tier 1 polish, Claude view styles
+├── globals.css                ← ~11,100 lines (TOO LARGE — chunk-read): theme tokens, type-scale tokens (--text-*/--type-scale, 12px floor), per-variant palettes, layout, views, a11y foundation, Tier 1 polish, Claude view styles
 ├── _components/
 │   ├── ModeProvider.tsx       ← Laputa Day/Twilight/Midnight auto-switch
 │   ├── useActiveTab.tsx       ← tab state + view transitions
