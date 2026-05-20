@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@notionhq/client": "^5.21.0",
+    "@paper-design/shaders-react": "^0.0.76",
     "@supabase/supabase-js": "^2.104.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
