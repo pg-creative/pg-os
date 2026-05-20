@@ -52,7 +52,7 @@ export function CockpitTerminal({
       term = new Terminal({
         fontFamily:
           '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace',
-        fontSize: 13,
+        fontSize: "var(--text-sm)",
         lineHeight: 1.2,
         cursorBlink: true,
         scrollback: 50000,
@@ -147,7 +147,7 @@ export function CockpitTerminal({
           gap: 8,
           padding: "6px 10px",
           fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-          fontSize: 10,
+          fontSize: "var(--text-2xs)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
           color: "#9C8B70",

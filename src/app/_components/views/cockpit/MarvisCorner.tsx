@@ -111,7 +111,7 @@ export function MarvisCorner({
           <span
             style={{
               fontFamily: "ui-monospace,monospace",
-              fontSize: 11,
+              fontSize: "var(--text-xs)",
               letterSpacing: ".2em",
               textTransform: "uppercase",
               color: C.amber,
@@ -122,7 +122,7 @@ export function MarvisCorner({
           <span
             style={{
               fontFamily: "ui-monospace,monospace",
-              fontSize: 9,
+              fontSize: "var(--text-2xs)",
               color:
                 m.state === "speaking"
                   ? C.amber
@@ -140,7 +140,7 @@ export function MarvisCorner({
             style={{
               cursor: "pointer",
               color: C.dim,
-              fontSize: 16,
+              fontSize: "var(--text-md)",
               lineHeight: 1,
             }}
           >
@@ -195,7 +195,7 @@ export function MarvisCorner({
             <div
               style={{
                 color: C.dim,
-                fontSize: 12.5,
+                fontSize: "var(--text-sm)",
                 fontStyle: "italic",
                 textAlign: "center",
                 padding: "12px 4px",
@@ -247,7 +247,7 @@ export function MarvisCorner({
               borderRadius: 8,
               padding: "9px 11px",
               color: C.cream,
-              fontSize: 13,
+              fontSize: "var(--text-sm)",
             }}
           />
           <button type="submit" title="send" style={btn(C.amber, false)}>
@@ -304,7 +304,7 @@ function Bubble({
         borderRadius: 12,
         padding: "8px 11px",
         color: "#EFE6D4",
-        fontSize: 13,
+        fontSize: "var(--text-sm)",
         lineHeight: 1.45,
         opacity: live ? 0.85 : 1,
         whiteSpace: "pre-wrap",
@@ -325,6 +325,6 @@ function btn(color: string, on: boolean): React.CSSProperties {
     borderRadius: 8,
     padding: "9px 11px",
     cursor: "pointer",
-    fontSize: 14,
+    fontSize: "var(--text-base)",
   };
 }

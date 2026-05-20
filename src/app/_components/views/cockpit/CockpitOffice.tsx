@@ -185,7 +185,7 @@ function Figure({
               position: "absolute",
               right: 0,
               bottom: 26,
-              fontSize: 15,
+              fontSize: "var(--text-base)",
               filter: "drop-shadow(0 0 6px #D6A367)",
             }}
           >
@@ -208,7 +208,7 @@ function Figure({
       <div
         style={{
           fontFamily: '"Iowan Old Style", Palatino, Georgia, serif',
-          fontSize: 13,
+          fontSize: "var(--text-sm)",
           color: "#FFF8E7",
           textShadow: "0 1px 4px rgba(0,0,0,.5)",
           maxWidth: 130,
@@ -222,7 +222,7 @@ function Figure({
       <div
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 9,
+          fontSize: "var(--text-2xs)",
           letterSpacing: ".1em",
           textTransform: "uppercase",
           color:

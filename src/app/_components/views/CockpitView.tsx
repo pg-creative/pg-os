@@ -176,7 +176,7 @@ export function CockpitView() {
             fontFamily: '"Iowan Old Style", Palatino, Georgia, serif',
             fontSize: 26,
             fontWeight: 500,
-            color: C.cream,
+            color: "var(--fg)",
             letterSpacing: "-0.01em",
           }}
         >
@@ -185,8 +185,8 @@ export function CockpitView() {
         <span
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: C.dim,
+            fontSize: "var(--text-xs)",
+            color: "var(--muted)",
           }}
         >
           {cards.length} live · {controllableCount} controllable
@@ -196,8 +196,8 @@ export function CockpitView() {
       <p
         style={{
           margin: "2px 0 18px",
-          fontSize: 12.5,
-          color: C.dim,
+          fontSize: "var(--text-sm)",
+          color: "var(--muted)",
           maxWidth: 620,
         }}
       >
@@ -232,7 +232,7 @@ export function CockpitView() {
               padding: "8px 11px",
               color: C.cream,
               fontFamily: "ui-monospace, monospace",
-              fontSize: 12,
+              fontSize: "var(--text-sm)",
             }}
           />
           <button onClick={launch} disabled={launching} style={btn(C.amber)}>
@@ -286,7 +286,9 @@ export function CockpitView() {
               token={daemon.token}
             />
           ) : (
-            <div style={{ padding: 28, color: C.dim, fontSize: 13 }}>
+            <div
+              style={{ padding: 28, color: C.dim, fontSize: "var(--text-sm)" }}
+            >
               <strong style={{ color: C.cream }}>{sel.projectLabel}</strong> is
               telemetry-only — it wasn’t launched through the cockpit, so
               there’s no shared PTY to attach to.{" "}
@@ -315,7 +317,7 @@ function DaemonPill({ daemon }: { daemon: DaemonInfo | null }) {
         alignItems: "center",
         gap: 6,
         fontFamily: "ui-monospace, monospace",
-        fontSize: 10,
+        fontSize: "var(--text-2xs)",
         letterSpacing: "0.1em",
         textTransform: "uppercase",
         color: up ? C.emerald : C.ruby,
@@ -382,7 +384,7 @@ function SessionCard({
         <span
           style={{
             fontFamily: '"Iowan Old Style", Palatino, Georgia, serif',
-            fontSize: 15,
+            fontSize: "var(--text-base)",
             fontWeight: 500,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -403,7 +405,7 @@ function SessionCard({
         <div
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 10,
+            fontSize: "var(--text-2xs)",
             color: C.dim,
           }}
         >
@@ -418,7 +420,7 @@ function SessionCard({
             display: "flex",
             justifyContent: "space-between",
             fontFamily: "ui-monospace, monospace",
-            fontSize: 10,
+            fontSize: "var(--text-2xs)",
             color: C.dim,
             marginBottom: 3,
           }}
@@ -445,7 +447,7 @@ function SessionCard({
       {/* current tool / last msg */}
       <div
         style={{
-          fontSize: 11.5,
+          fontSize: "var(--text-xs)",
           color: card.currentTool ? C.cream : C.dim,
           minHeight: 16,
         }}
@@ -469,7 +471,7 @@ function SessionCard({
           display: "flex",
           gap: 12,
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
+          fontSize: "var(--text-2xs)",
           color: C.dim,
           borderTop: `1px solid ${C.border}`,
           paddingTop: 7,
@@ -510,7 +512,7 @@ function Tag({
     <span
       style={{
         fontFamily: "ui-monospace, monospace",
-        fontSize: 9,
+        fontSize: "var(--text-2xs)",
         letterSpacing: "0.08em",
         textTransform: "uppercase",
         color,
@@ -532,7 +534,7 @@ function Empty({ text }: { text: string }) {
         padding: "48px 24px",
         textAlign: "center",
         color: C.dim,
-        fontSize: 13,
+        fontSize: "var(--text-sm)",
         fontStyle: "italic",
         border: `1px dashed ${C.border}`,
         borderRadius: 10,
@@ -550,7 +552,7 @@ function btn(color: string): React.CSSProperties {
     borderRadius: 6,
     color,
     fontFamily: "ui-monospace, monospace",
-    fontSize: 12,
+    fontSize: "var(--text-sm)",
     letterSpacing: "0.04em",
     padding: "8px 14px",
     cursor: "pointer",

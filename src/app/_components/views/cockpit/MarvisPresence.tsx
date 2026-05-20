@@ -79,7 +79,7 @@ export function MarvisPresence() {
           <span
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 11,
+              fontSize: "var(--text-xs)",
               letterSpacing: ".2em",
               textTransform: "uppercase",
               color: "#D6A367",
@@ -90,7 +90,7 @@ export function MarvisPresence() {
           <span
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 10,
+              fontSize: "var(--text-2xs)",
               color: "#9C8B70",
             }}
           >
@@ -101,7 +101,7 @@ export function MarvisPresence() {
               title="ElevenLabs needs the $11/mo Creator plan for the real Marvis voice. Using Web Speech until then."
               style={{
                 fontFamily: "ui-monospace, monospace",
-                fontSize: 9,
+                fontSize: "var(--text-2xs)",
                 color: "#9C8B70",
                 opacity: 0.7,
               }}
@@ -112,7 +112,7 @@ export function MarvisPresence() {
         </div>
         <div
           style={{
-            fontSize: 13.5,
+            fontSize: "var(--text-base)",
             color: "#EFE6D4",
             fontStyle: "italic",
             minHeight: 18,
@@ -151,7 +151,7 @@ export function MarvisPresence() {
             borderRadius: 6,
             padding: "7px 10px",
             color: "#EFE6D4",
-            fontSize: 12,
+            fontSize: "var(--text-sm)",
             width: 180,
           }}
         />
@@ -169,7 +169,7 @@ export function MarvisPresence() {
             borderRadius: 6,
             color: m.wakeArmed ? "#7C9A6E" : "#9C8B70",
             fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
+            fontSize: "var(--text-xs)",
             padding: "7px 10px",
             cursor: "pointer",
           }}
@@ -192,7 +192,7 @@ export function MarvisPresence() {
             borderRadius: 6,
             color: m.state === "listening" ? "#7C9A6E" : "#D6A367",
             fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
+            fontSize: "var(--text-xs)",
             padding: "7px 12px",
             cursor: "pointer",
           }}
@@ -210,7 +210,7 @@ export function MarvisPresence() {
               borderRadius: 6,
               color: "#B8536F",
               fontFamily: "ui-monospace, monospace",
-              fontSize: 11,
+              fontSize: "var(--text-xs)",
               padding: "7px 10px",
               cursor: "pointer",
             }}

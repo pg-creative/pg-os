@@ -156,14 +156,14 @@
 }
 
 .nameLabel {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--fg-2, #b8a78a);
 }
 
 .nameInput {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   background: transparent;
   border: none;
@@ -188,7 +188,7 @@
   background: transparent;
   color: var(--fg, #f5e9d6);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   min-height: 44px;
@@ -231,13 +231,13 @@
 }
 
 .sheetTitle {
-  font-size: 16px;
+  font-size: var(--text-md);
   font-weight: 700;
   margin: 0 0 4px;
 }
 
 .sheetSubtitle {
-  font-size: 12px;
+  font-size: var(--text-sm);
   opacity: 0.7;
   margin: 0 0 16px;
 }
@@ -247,7 +247,7 @@
 }
 
 .slotLabel {
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--fg-2, #b8a78a);
@@ -271,7 +271,7 @@
   background: rgba(0, 0, 0, 0.2);
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   text-align: left;
   cursor: pointer;
   min-height: 56px;
@@ -294,7 +294,7 @@
 .slotItem[data-locked="true"]::after {
   content: "earn from a chest";
   display: block;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.7;
@@ -314,7 +314,7 @@
   background: transparent;
   color: var(--fg, #f5e9d6);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   min-height: 44px;
@@ -329,7 +329,7 @@
 /* ---------- Inline name affordance (SoulBeingCard) ---------- */
 
 .avNameUnnamed {
-  font-size: 16px;
+  font-size: var(--text-md);
   font-style: italic;
   color: var(--fg-2, #b8a78a);
   background: transparent;
@@ -356,7 +356,7 @@
 }
 
 .avNameText {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--fg, #f5e9d6);
   user-select: none;
@@ -402,7 +402,7 @@
 }
 
 .avNamingSubhead {
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1.6;
   color: var(--fg-2, #b8a78a);
   margin: 0 0 22px;
@@ -445,7 +445,7 @@
 
 .avNamingError {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: #f0906a;
   font-style: italic;
 }
@@ -464,7 +464,7 @@
   background: linear-gradient(135deg, #f0b557 0%, #d4893a 100%);
   color: #1a0e04;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 700;
   cursor: pointer;
   min-height: 48px;
@@ -493,7 +493,7 @@
   background: transparent;
   color: var(--fg-2, #b8a78a);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   min-height: 44px;
   transition: border-color 140ms ease, color 140ms ease;
@@ -519,7 +519,7 @@
   border: none;
   color: rgba(240, 181, 87, 0.75);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-style: italic;
   cursor: pointer;
   text-align: left;
