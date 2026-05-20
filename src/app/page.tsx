@@ -106,8 +106,9 @@ export default function Page() {
           </div>
         </div>
 
-        <CaptureFAB />
-        <CopilotLauncher />
+        {/* On the cockpit, Marvis is the voice/assistant — hide the global FABs so they don't cover him */}
+        {active !== "cockpit" && <CaptureFAB />}
+        {active !== "cockpit" && <CopilotLauncher />}
         <CommandPalette />
         <AmbientIdle />
         <ToastDeck />

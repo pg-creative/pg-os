@@ -133,28 +133,7 @@ export function MarvisCorner({
           </div>
         </div>
 
-        {/* the big Live2D face */}
-        <div
-          style={{
-            pointerEvents: "auto",
-            width: 440,
-            height: FACE,
-            overflow: "hidden",
-            position: "relative",
-            filter: "drop-shadow(0 14px 40px rgba(0,0,0,.6))",
-            marginBottom: -10,
-          }}
-        >
-          <CockpitLive2D
-            state={m.state}
-            size={FACE}
-            zoom={2.0}
-            align="top"
-            modelUrl={modelUrl}
-          />
-        </div>
-
-        {/* controls */}
+        {/* controls — ABOVE the fox so they never cover him */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -163,7 +142,7 @@ export function MarvisCorner({
               setTyped("");
             }
           }}
-          style={{ pointerEvents: "auto", display: "flex", gap: 6, width: 360 }}
+          style={{ pointerEvents: "auto", display: "flex", gap: 6, width: 320 }}
         >
           <input
             value={typed}
@@ -198,6 +177,28 @@ export function MarvisCorner({
             🎙
           </button>
         </form>
+
+        {/* the big Live2D fox — bottom-most, nothing covers him */}
+        <div
+          style={{
+            pointerEvents: "auto",
+            width: 440,
+            height: FACE,
+            overflow: "hidden",
+            position: "relative",
+            filter: "drop-shadow(0 14px 40px rgba(0,0,0,.6))",
+            marginBottom: -12,
+            marginRight: -40,
+          }}
+        >
+          <CockpitLive2D
+            state={m.state}
+            size={FACE}
+            zoom={2.0}
+            align="top"
+            modelUrl={modelUrl}
+          />
+        </div>
       </div>
 
       <PartyMode active={m.party} onClose={() => m.setParty(false)} />
