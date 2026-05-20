@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cockpit Motion Study — living office + Marvis</title>
+<style>
+  /* ── Locked DNA: Ghibli cel + golden hour + JRPG accents ────────────── */
+  :root {
+    --ink: #13110D;
+    --panel: #1B1813;
+    --cream: #EFE6D4;
+    --dim: #9C8B70;
+    --amber: #D6A367;
+    --coral: #E8B4A8;
+    --emerald: #7C9A6E;
+    --ruby: #B8536F;
+    --sapphire: #5B7BA1;
+    --serif: "Iowan Old Style", Palatino, Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--cream);
+    font-family: var(--serif);
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #2C3E50 0%, transparent 60%),
+      radial-gradient(900px 600px at 50% 110%, #3a2a1c 0%, transparent 55%),
+      var(--ink);
+    overflow-x: hidden;
+  }
+  /* drifting golden particles */
+  .particles { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .particles i {
+    position: absolute; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--amber); opacity: .0; filter: blur(.3px);
+    animation: float 9s linear infinite;
+  }
+  @keyframes float {
+    0% { transform: translateY(20px); opacity: 0; }
+    15% { opacity: .55; }
+    85% { opacity: .4; }
+    100% { transform: translateY(-90vh); opacity: 0; }
+  }
+  header { position: relative; z-index: 2; padding: 28px 32px 6px; }
+  h1 { margin: 0; font-weight: 500; font-size: 28px; letter-spacing: -.01em; }
+  .sub { color: var(--dim); font-family: var(--mono); font-size: 11px; letter-spacing:.12em; text-transform: uppercase; margin-top: 6px; }
+  .note { color: var(--dim); font-size: 13px; max-width: 640px; margin: 10px 32px 0; position: relative; z-index: 2; }
+
+  /* ── Marvis: the orchestrator presence ──────────────────────────────── */
+  .marvis-wrap { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; margin: 26px 0 8px; }
+  .marvis {
+    width: 132px; height: 132px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 38%, #FBE8C8 0%, var(--amber) 42%, #8a5a2a 100%);
+    box-shadow: 0 0 40px rgba(214,163,103,.35), inset 0 0 30px rgba(255,255,255,.2);
+    position: relative; display: grid; place-items: center;
+    transition: box-shadow .4s ease;
+  }
+  /* breathing aura ring */
+  .marvis::before {
+    content:""; position: absolute; inset: -14px; border-radius: 50%;
+    border: 1.5px solid var(--amber); opacity: .35;
+    animation: aura 4s ease-in-out infinite;
+  }
+  @keyframes aura { 0%,100% { transform: scale(1); opacity:.18 } 50% { transform: scale(1.08); opacity:.4 } }
+  /* the "eye"/core */
+  .marvis .core { width: 54px; height: 54px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #fff 0%, var(--cream) 45%, var(--coral) 100%);
+    box-shadow: 0 0 18px rgba(255,240,210,.7); }
+  /* speaking: waveform bars */
+  .wave { display: flex; gap: 3px; height: 22px; align-items: center; margin-top: 14px; opacity: 0; transition: opacity .3s; }
+  .wave i { width: 3px; background: var(--amber); border-radius: 2px; height: 6px; }
+  .marvis-name { font-family: var(--mono); font-size: 11px; letter-spacing:.2em; text-transform: uppercase; color: var(--amber); margin-top: 12px; }
+  .marvis-line { font-size: 14px; font-style: italic; color: var(--cream); opacity:.0; transition: opacity .4s; min-height: 20px; margin-top: 4px; text-align:center; max-width: 460px; }
+
+  /* state: listening — gentle core pulse */
+  .marvis[data-state="listening"] .core { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.12);} }
+  /* state: thinking — slow shimmer sweep */
+  .marvis[data-state="thinking"] { box-shadow: 0 0 50px rgba(91,123,161,.5), inset 0 0 30px rgba(255,255,255,.2); }
+  .marvis[data-state="thinking"] .core { background: radial-gradient(circle at 50% 40%, #fff, var(--sapphire)); animation: think 2.2s ease-in-out infinite; }
+  @keyframes think { 0%,100%{ filter: brightness(1);} 50%{ filter: brightness(1.4);} }
+  /* state: speaking — wave on, core jitters */
+  .marvis[data-state="speaking"] .core { animation: speak .28s ease-in-out infinite; }
+  @keyframes speak { 0%,100%{ transform: scaleY(1);} 50%{ transform: scaleY(.86);} }
+
+  /* ── Agent characters ──────────────────────────────────────────────── */
+  .office { position: relative; z-index: 2; display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; padding: 28px 24px 12px; }
+  .agent { display: flex; flex-direction: column; align-items: center; gap: 9px; width: 120px; }
+  .figure {
+    position: relative; width: 78px; height: 96px;
+    transition: transform .3s ease, filter .5s ease;
+  }
+  /* cel-shaded robed silhouette via layered radial+clip */
+  .body {
+    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 62px; height: 78px;
+    background: linear-gradient(160deg, var(--emerald) 0%, #4f6a47 100%);
+    border-radius: 32px 32px 14px 14px / 46px 46px 14px 14px;
+    box-shadow: inset -6px -8px 14px rgba(0,0,0,.35), inset 6px 6px 12px rgba(255,255,255,.12);
+  }
+  .head {
+    position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    width: 34px; height: 34px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #f3dcc0, #d9b58c);
+    box-shadow: inset -3px -3px 6px rgba(0,0,0,.25);
+  }
+  /* prop in hand (tool) — appears in active */
+  .prop {
+    position: absolute; right: 2px; bottom: 26px; width: 22px; height: 22px;
+    display: grid; place-items: center; font-size: 15px;
+    opacity: 0; transform: scale(.6) rotate(-12deg); transition: opacity .25s, transform .25s;
+    filter: drop-shadow(0 0 6px var(--amber));
+  }
+  .name { font-size: 14px; color: var(--cream); text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  .statelabel { font-family: var(--mono); font-size: 9px; letter-spacing:.12em; text-transform: uppercase; color: var(--dim); }
+
+  /* IDLE — slow vertical drift */
+  .agent[data-state="idle"] .figure { animation: drift 4s ease-in-out infinite; }
+  @keyframes drift { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-2px);} }
+  .agent[data-state="idle"] .statelabel { color: var(--dim); }
+
+  /* ACTIVE — lean-in pop + saturated + prop in hand + amber rim */
+  .agent[data-state="active"] .figure { transform: translateY(-8px) scale(1.05); filter: saturate(1.25); }
+  .agent[data-state="active"] .prop { opacity: 1; transform: scale(1) rotate(0); }
+  .agent[data-state="active"] .body { box-shadow: inset -6px -8px 14px rgba(0,0,0,.3), 0 0 16px rgba(214,163,103,.55); }
+  .agent[data-state="active"] .statelabel { color: var(--amber); }
+
+  /* WAITING — breathing opacity, desaturated, cool */
+  .agent[data-state="waiting"] .figure { animation: breathe 2s ease-in-out infinite; filter: saturate(.55) brightness(.9); }
+  @keyframes breathe { 0%,100%{ opacity:.66;} 50%{ opacity:1;} }
+  .agent[data-state="waiting"] .statelabel { color: var(--sapphire); }
+
+  /* PERMISSION — alert ring pulse, ruby */
+  .agent[data-state="permission"] .figure::after {
+    content:""; position: absolute; inset: -8px; border-radius: 40px;
+    border: 2px solid var(--ruby); animation: alert 1s ease-in-out infinite;
+  }
+  @keyframes alert { 0%,100%{ transform: scale(1); opacity:.4;} 50%{ transform: scale(1.07); opacity:1;} }
+  .agent[data-state="permission"] .statelabel { color: var(--ruby); }
+
+  /* controls */
+  .bar { position: relative; z-index: 3; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 18px; }
+  .bar button {
+    font-family: var(--mono); font-size: 11px; letter-spacing:.06em; text-transform: uppercase;
+    background: transparent; border: 1px solid var(--amber); color: var(--amber);
+    border-radius: 6px; padding: 8px 14px; cursor: pointer; transition: background .15s;
+  }
+  .bar button:hover { background: rgba(214,163,103,.14); }
+  .legend { text-align:center; color: var(--dim); font-family: var(--mono); font-size: 10px; letter-spacing:.1em; padding-bottom: 36px; }
+</style>
+</head>
+<body>
+  <div class="particles" id="p"></div>
+
+  <header>
+    <h1>The office, alive</h1>
+    <div class="sub">cockpit motion study · feel it before Rive · idle → active → waiting → permission</div>
+  </header>
+  <p class="note">This is the <b>motion</b>, not the final art (Rive renders the painted characters later).
+  Each agent reacts to its live state; <b>Marvis</b> — the orchestrator — listens, thinks, and speaks.
+  Use the buttons to drive Marvis; the agents auto-cycle through their states.</p>
+
+  <div class="marvis-wrap">
+    <div class="marvis" id="marvis" data-state="listening">
+      <div class="core"></div>
+    </div>
+    <div class="wave" id="wave"></div>
+    <div class="marvis-name">◆ Marvis</div>
+    <div class="marvis-line" id="line"></div>
+  </div>
+
+  <div class="bar">
+    <button onclick="setMarvis('listening')">Listening</button>
+    <button onclick="setMarvis('thinking')">Thinking</button>
+    <button onclick="speak('Three sessions running. wayfarer is waiting on a permission — shall I pull it up?')">Speak</button>
+  </div>
+
+  <div class="office" id="office"></div>
+  <div class="legend">agents auto-cycle every 2.6s · prop-in-hand = current tool · ruby ring = needs your call</div>
+
+<script>
+  // particles
+  const P = document.getElementById('p');
+  for (let i=0;i<26;i++){ const s=document.createElement('i'); s.style.left=Math.random()*100+'vw'; s.style.animationDelay=(Math.random()*9)+'s'; s.style.animationDuration=(7+Math.random()*6)+'s'; P.appendChild(s); }
+
+  // agents — name, class, prop glyph
+  const AGENTS = [
+    { name:'personal-os', prop:'🔨', cls:'smith' },
+    { name:'wayfarer',    prop:'📖', cls:'ranger' },
+    { name:'content-engine', prop:'🪶', cls:'scribe' },
+    { name:'heros-chronicle', prop:'🗺️', cls:'sage' },
+    { name:'alchmy',      prop:'🏮', cls:'wayfarer' },
+  ];
+  const STATES = ['idle','active','waiting','permission'];
+  const office = document.getElementById('office');
+  AGENTS.forEach((a,i)=>{
+    const el = document.createElement('div');
+    el.className='agent'; el.dataset.state = STATES[i % STATES.length];
+    el.innerHTML = `<div class="figure"><div class="body"></div><div class="head"></div><div class="prop">${a.prop}</div></div>
+      <div class="name">${a.name}</div><div class="statelabel">${el.dataset.state}</div>`;
+    office.appendChild(el);
+  });
+  // auto-cycle states so PG can feel every transition
+  setInterval(()=>{
+    document.querySelectorAll('.agent').forEach((el)=>{
+      let n = STATES[(STATES.indexOf(el.dataset.state)+1)%STATES.length];
+      el.dataset.state = n;
+      el.querySelector('.statelabel').textContent = n;
+    });
+  }, 2600);
+
+  // Marvis
+  const marvis = document.getElementById('marvis');
+  const wave = document.getElementById('wave');
+  const line = document.getElementById('line');
+  for(let i=0;i<9;i++){ const b=document.createElement('i'); wave.appendChild(b); }
+  const bars = [...wave.children];
+  let waveTimer=null;
+  function setMarvis(s){ marvis.dataset.state=s; if(s!=='speaking'){ wave.style.opacity=0; line.style.opacity=0; clearInterval(waveTimer);} }
+  function speak(text){
+    marvis.dataset.state='speaking'; wave.style.opacity=1; line.textContent=text; line.style.opacity=1;
+    clearInterval(waveTimer);
+    // fake viseme-driven waveform — this is exactly where ElevenLabs phoneme timestamps will drive Rive mouth inputs
+    waveTimer = setInterval(()=>{ bars.forEach(b=> b.style.height = (5+Math.random()*18)+'px'); }, 90);
+    const dur = Math.min(6000, 1400 + text.length*38);
+    setTimeout(()=> setMarvis('listening'), dur);
+  }
+  setMarvis('listening');
+</script>
+</body>
+</html>
