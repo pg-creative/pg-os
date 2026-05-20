@@ -56,6 +56,7 @@ export function useMarvis() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [wakeArmed, setWakeArmed] = useState(false);
   const wakeArmedRef = useRef(false);
+  const [party, setParty] = useState(false); // 🎉 "initialize party mode"
 
   useEffect(() => {
     fetch("/api/cockpit/voice/config")
@@ -103,6 +104,13 @@ export function useMarvis() {
   const ask = useCallback(
     async (userText: string) => {
       if (!userText.trim()) return;
+      // 🎉 easter egg: "initialize party mode"
+      if (/initiali[sz]e party mode|party mode/i.test(userText)) {
+        setParty(true);
+        setReply("Initializing party mode. Hold onto something.");
+        speak("Initializing party mode. Hold onto something.");
+        return;
+      }
       setReply("");
       setState("thinking");
       const nextTurns: Turn[] = [...turns, { role: "user", text: userText }];
@@ -281,5 +289,7 @@ export function useMarvis() {
     interrupt,
     toggleWake,
     wakeArmed,
+    party,
+    setParty,
   };
 }
