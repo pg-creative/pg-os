@@ -6,8 +6,14 @@ import { PHASES } from "./emaki/theme";
 import { CityTemp } from "./LocationLive";
 import { LiveStamp } from "./LiveClock";
 
+const PHASE_MODES = [
+  { mode: "laputa-day", glyph: "☀", title: "Day · 陽光の庭" },
+  { mode: "laputa-twilight", glyph: "◐", title: "Twilight · 黄昏の刻" },
+  { mode: "laputa-midnight", glyph: "☾", title: "Night · 狐火の道" },
+] as const;
+
 export function EmakiShellBar() {
-  const { mode } = useMode();
+  const { mode, setMode, autoMode, setAutoMode } = useMode();
   const phase = phaseForMode(mode);
   const tk = PHASES[phase];
   const { active, setActive } = useActiveTab();
@@ -184,6 +190,50 @@ export function EmakiShellBar() {
           className="emaki-shellbar-actions"
           style={{ borderColor: tk.railBorder, color: tk.textMuted }}
         >
+          {/* Time-of-day phase toggle: click to lock day/twilight/night, AUTO to track the clock. */}
+          <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {PHASE_MODES.map((p) => {
+              const on = mode === p.mode && !autoMode;
+              return (
+                <button
+                  key={p.mode}
+                  type="button"
+                  title={p.title}
+                  onClick={() => setMode(p.mode)}
+                  style={{
+                    border: "none",
+                    background: on ? tk.pillActive : "transparent",
+                    color: on ? tk.foxfire : tk.textMuted,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    lineHeight: 1,
+                    padding: "4px 6px",
+                    borderRadius: 5,
+                  }}
+                >
+                  {p.glyph}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              title="Auto (follow the clock)"
+              onClick={() => setAutoMode(true)}
+              style={{
+                border: "none",
+                background: autoMode ? tk.pillActive : "transparent",
+                color: autoMode ? tk.foxfire : tk.textMuted,
+                cursor: "pointer",
+                fontFamily: "ui-monospace, monospace",
+                fontSize: 10,
+                letterSpacing: "0.1em",
+                padding: "4px 6px",
+                borderRadius: 5,
+              }}
+            >
+              AUTO
+            </button>
+          </span>
           <span className="emaki-shellbar-online">
             <span className="emaki-shellbar-online-pip" />
             ONLINE
