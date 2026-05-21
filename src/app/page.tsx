@@ -35,7 +35,7 @@ export default function Page() {
         {/* Global shell nav — the home-lab top bar, wired to all tabs. Replaces
             the legacy .topbar + TabBar (archived in _components/_legacy/). */}
         <EmakiShellBar />
-        <div className="shell">
+        <div className={`shell${active === "home" ? " shell-bleed" : ""}`}>
           {/* ACTIVE VIEW */}
           {active === "home" && (
             <>

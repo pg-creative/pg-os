@@ -184,6 +184,9 @@ body{
 
 /* ── Layout ─────────────────────────────────────────────────────────── */
 .shell{padding:20px 28px 28px;max-width:1920px;margin:0 auto;position:relative;z-index:2}
+/* Full-bleed tab section (Home + future redesigned tabs): edge-to-edge, no max-width,
+   content runs under the overlaid nav so the painted art covers everything. */
+.shell-bleed{padding:0;max-width:none;margin:0;position:relative;z-index:2}
 .topbar{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 18px;font-family:var(--mono),monospace;font-size:var(--text-2xs);letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
 .topbar .brand{color:var(--fg);display:flex;align-items:center;gap:10px}
 .topbar .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent);animation:pulse 2.4s ease-in-out infinite}

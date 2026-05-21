@@ -138,7 +138,9 @@ export function EmakiShellBar() {
       <nav
         className="emaki-shellbar"
         style={{
-          background: tk.railBg,
+          // Translucent frosted scrim so the painted art shows behind the bar
+          // (overlay look) while the nav stays legible (paired with backdrop blur).
+          background: `linear-gradient(to bottom, rgba(var(--scrim-rgb), 0.62) 0%, rgba(var(--scrim-rgb), 0.24) 100%)`,
           borderBottom: `1px solid ${tk.railBorder}`,
           ["--sb-gold" as never]: tk.gold,
           ["--sb-gold-bright" as never]: tk.goldBright,
