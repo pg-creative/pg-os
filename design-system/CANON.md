@@ -1,17 +1,19 @@
 # PG OS — Design Canon
 
-> **This is a compass, not a cage.** It records what the code *actually does* and
-> where to make taste decisions — it does **not** mandate one fixed look. The
-> aesthetic is allowed to evolve (a Japanese-direction bake-off is underway at
-> `/dev/aesthetic-lab`). Replaces the prescriptive `DESIGN-SYSTEM.md v0.1`
-> (archived 2026-05-20 in `_archive/` — it dictated a single "warm dark Ghibli"
-> look that fought the projects it was meant to serve).
+> **This is a compass, not a cage.** It records what the code actually does and
+> where to make taste decisions. It does **not** mandate one fixed look. As of
+> 2026-05-20 a direction IS locked for the home surface (Emaki x Laputa; see the
+> "Locked direction" section below), but this canon stays descriptive. Replaces the
+> prescriptive `DESIGN-SYSTEM.md v0.1` (archived 2026-05-20 in `_archive/`; it
+> dictated a single "warm dark Ghibli" look that fought the projects it served).
 
 ## The three layers
 
 1. **Process / taste (portable, project-agnostic)** → `~/.claude/rules/design-anti-generic.md`.
-   How to decide — build a falsifier, type does real work, max 2 accents, motion
-   restraint, em-dash ×2, value-forward voice. Travels across every PG project.
+   How to decide: build live switchable options including a falsification variant,
+   research-first lookup, and voice (NO em dashes anywhere, hard rule set 2026-05-20).
+   The prescriptive look-mandates (single-bento, max-accents, motion timing, font rules)
+   were scrapped 2026-05-20 as too restrictive. Travels across every PG project.
    Plus `~/.claude/rules/visual-style.md` for the *image-generation* DNA + Midjourney/DALL·E formulas.
 2. **Descriptive truth (this doc)** — what's actually in the code right now. Facts, not mandates.
 3. **Per-direction lock (when chosen)** — once a bake-off direction is picked, it
@@ -58,6 +60,17 @@ imagery as *atmosphere behind* information (gradient-scrim hero backdrops), not 
 
 ---
 
+## Locked direction (2026-05-20) — Emaki x Laputa
+PG locked the home-surface direction: a painted Japanese picture-scroll (emaki) wearing
+Laputa's crisp legibility, with a 3-phase time-responsive sky (day 陽光の庭 Laputa light-blue,
+twilight 黄昏の刻 sakura dusk, night 狐火の道 foxfire), the real Kitsu Live2D avatar, Noto Serif
+JP titles + clean sans for data. Key locked rule: blur, halos, and scrims are LUMINANCE-AWARE
+(phase tokens + CSS vars `--panel-blur`, `--hero-halo`); a dark-mode treatment silently breaks
+on the bright day sky. Approved prototype: `/dev/emaki-laputa`. Full lock (palettes, craft rules):
+`~/.claude/research/pgos-aesthetic-lock-2026-05.md`. Build plan: `docs/specs/redesign-2026-05-emaki-laputa.md`.
+The 6 legacy variants above are the PRE-lock state; the redesign migrates surfaces to the locked
+direction tab by tab.
+
 ## How this evolves
-Append facts here as they stabilize; don't pre-theorize a look. When PG locks a
-bake-off direction, write the per-direction lock (layer 3) and link it here.
+Append facts here as they stabilize. Don't pre-theorize a look. The per-direction lock (layer 3)
+is now written and linked above; update it if the direction is refined.

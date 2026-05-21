@@ -30,3 +30,22 @@ Studio Ghibli anime cel animation style, a fantasy floating castle at golden hou
 ```
 Heian-era onmyoji mysticism, a glowing golden Seiman five-point star spell-circle floating in a moonlit deep indigo night sky, paper ofuda talismans drifting on the wind, vermilion wax seals, gold-foil constellations, the elegant silhouette of a white nine-tailed kitsune fox spirit, flowing sumi-ink calligraphy, mystical and refined, NetEase Onmyoji game key-art style, atmospheric --ar 16:9
 ```
+
+### Emaki × Laputa — matched 3-phase time-responsive sky (one scene, 3 times of day)
+
+Anchor scene held constant across all three so the hero morphs cohesively through the day.
+
+-> `emaki-sky-day.png`
+```
+Studio Ghibli anime cel animation style, a floating Japanese shrine island with a great vermilion torii gate and a white nine-tailed kitsune fox spirit, drifting in a vast luminous sea of clouds at golden morning, Laputa Castle in the Sky atmosphere, brilliant blue sky with warm golden sunlight, soft coral and gold clouds, magical floating light particles, anime background art, cinematic wide establishing shot --v 7 --ar 16:9
+```
+
+-> `emaki-sky-twilight.png`
+```
+Studio Ghibli anime cel animation style, the same floating Japanese shrine island with a great vermilion torii gate and a white nine-tailed kitsune fox spirit, drifting in a sea of clouds at cherry-blossom twilight, drifting sakura petals on the wind, dusk sky of soft pink rose-gold and lavender, blossoming cherry trees, warm twilight glow, magical floating petals and light particles, anime background art, cinematic wide shot --v 7 --ar 16:9
+```
+
+-> `emaki-sky-night.png`
+```
+Studio Ghibli anime cel animation meets dark sumi-e ink painting, the same floating Japanese shrine island with a great vermilion torii gate and a glowing white nine-tailed kitsune fox spirit, in a deep mystical night sea of clouds, floating orange foxfire embers, gold-foil constellations, deep indigo and ink-black sky with warm amber foxfire glow, Onmyoji mysticism, atmospheric haze, anime background art, cinematic wide shot --v 7 --ar 16:9
+```
