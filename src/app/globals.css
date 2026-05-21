@@ -139,7 +139,7 @@
 /* hundreds of raw 8–11px font sizes that made the OS unreadable. Dial the     */
 /* whole OS up/down by changing --type-scale (or set it on <html>).            */
 :root {
-  --type-scale: 1;
+  --type-scale: 1.12; /* legibility lift (2026-05-21): bump the whole OS up ~12% */
   --text-2xs: calc(12px * var(--type-scale)); /* micro labels / eyebrows (was 8–10px) */
   --text-xs:  calc(13px * var(--type-scale)); /* small labels / meta (was 10–11px) */
   --text-sm:  calc(14px * var(--type-scale)); /* minimum readable body (was 12–13px) */

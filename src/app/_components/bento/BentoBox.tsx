@@ -79,11 +79,11 @@ export function BentoBox({
               <span
                 style={{
                   fontFamily: "var(--mono), ui-monospace, monospace",
-                  fontSize: "var(--text-2xs)",
-                  letterSpacing: "0.18em",
+                  fontSize: "var(--text-xs)",
+                  letterSpacing: "0.16em",
                   textTransform: "uppercase",
-                  color: tk.eyebrowText,
-                  fontWeight: 600,
+                  color: tk.gold,
+                  fontWeight: 700,
                 }}
               >
                 {eyebrow}
@@ -121,8 +121,9 @@ export function BentoBox({
             minHeight: 0,
             overflowY: scroll ? "auto" : "visible",
             color: tk.textPrimary,
-            fontSize: "var(--text-sm)",
-            lineHeight: 1.5,
+            fontSize: "var(--text-base)",
+            fontWeight: 450,
+            lineHeight: 1.55,
           }}
         >
           {children}

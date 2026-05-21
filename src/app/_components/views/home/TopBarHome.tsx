@@ -8,15 +8,14 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { PHASES, Phase, phaseForHour } from "../../emaki/theme";
+import { PHASES } from "../../emaki/theme";
+import { useMode } from "../../ModeProvider";
+import { phaseForMode } from "../../bento/emakiContext";
 import {
   EMAKI_CSS,
   useEmakiVars,
   KintsugiSeam,
   WashiPanel,
-  GlyphSun,
-  GlyphDusk,
-  GlyphMoon,
 } from "../../emaki/materials";
 
 /* ── Mock data ── */
@@ -837,7 +836,10 @@ const LOCAL_CSS = `
 /* ── Page ── */
 
 export default function TopBarHome() {
-  const [phase, setPhase] = useState<Phase>("night");
+  // Phase comes from the GLOBAL theme (ModeProvider), so Home follows the
+  // day/twilight/night toggle and its modules retint with everything else.
+  const { mode } = useMode();
+  const phase = phaseForMode(mode);
   const [clockStr, setClockStr] = useState("");
   const [datestamp, setDatestamp] = useState("");
   const [greeting, setGreeting] = useState("");
@@ -858,10 +860,6 @@ export default function TopBarHome() {
   const [AGENTS, setAgents] = useState(MOCK_AGENTS);
 
   useEmakiVars(phase);
-
-  useEffect(() => {
-    setPhase(phaseForHour(new Date().getHours()));
-  }, []);
 
   // ── Fetch real data, map to the band shapes, keep mock as fallback ──
   useEffect(() => {
@@ -1599,53 +1597,7 @@ export default function TopBarHome() {
           <div style={{ height: 80 }} />
         </main>
 
-        {/* Phase toggle — top-right */}
-        <div
-          className="el-toggle"
-          style={{
-            background: tk.toggleBg,
-            borderColor: tk.divider,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-          }}
-        >
-          {(["day", "twilight", "night"] as Phase[]).map((p) => (
-            <button
-              key={p}
-              className="el-toggle-btn"
-              type="button"
-              onClick={() => setPhase(p)}
-              aria-pressed={phase === p}
-              style={{
-                background: phase === p ? PHASES[p].pillActive : "transparent",
-                color:
-                  phase === p ? PHASES[p].pillTextActive : tk.pillTextInactive,
-              }}
-            >
-              {p === "day" ? (
-                <GlyphSun
-                  color={
-                    phase === p ? PHASES[p].pillTextActive : tk.pillTextInactive
-                  }
-                />
-              ) : p === "twilight" ? (
-                <GlyphDusk
-                  color={
-                    phase === p ? PHASES[p].pillTextActive : tk.pillTextInactive
-                  }
-                />
-              ) : (
-                <GlyphMoon
-                  color={
-                    phase === p ? PHASES[p].pillTextActive : tk.pillTextInactive
-                  }
-                />
-              )}
-              {PHASES[p].phaseName}
-            </button>
-          ))}
-        </div>
-
+        {/* Phase toggle now lives in the GLOBAL EmakiShellBar. */}
         {/* Kitsu now mounts globally in page.tsx (persistent on every tab). */}
       </div>
     </>
