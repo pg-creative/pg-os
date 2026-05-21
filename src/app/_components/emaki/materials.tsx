@@ -9,16 +9,21 @@
  *   PaintedBackdrop({ phase }) - full-bleed sky + parallax + overlay/vignette
  *   WashiPanel                 - frosted/solid surface with kintsugi + ink-rule
  *   KintsugiSeam               - the gold jagged divider line
- *   FoxfireLayer({ phase })    - drifting orbs + (twilight) sakura petals
+ *   FoxfireLayer({ phase })    - drifting orbs + per-phase ambient animation
  *   GlyphSun / GlyphDusk / GlyphMoon - SVG phase icons for toggle buttons
  *
  * Luminance-aware behavior:
  *   day   : panelBg is nearly opaque washi; no blur, no dark halo
  *   night : frosted blur(10px) on panels; heavy text-shadow halo for legibility
  *   twilight: same frosted treatment as night
+ *
+ * Per-phase ambient animations (CSS-only, prefers-reduced-motion guarded):
+ *   day      : drifting leaves in the wind + slow soft clouds
+ *   twilight : falling sakura petals (existing, unchanged)
+ *   night    : twinkling + drifting stars + foxfire embers
  */
 
-import React, { useEffect, CSSProperties } from "react";
+import React, { useEffect, useRef, CSSProperties } from "react";
 import { Phase, PHASES, PhaseTokens } from "./theme";
 
 /* ── CSS vars helper ── */
@@ -69,6 +74,138 @@ const PETALS = [
   { left: "58%", size: 4, dur: 9, delay: 0.8 },
   { left: "74%", size: 6, dur: 11, delay: 2.2 },
   { left: "88%", size: 5, dur: 8.5, delay: 4.5 },
+];
+
+/* ── Day leaves: drifting organic shapes blown by wind ── */
+const LEAVES = [
+  { left: "5%", size: 8, dur: 12, delay: 0, swing: 28 },
+  { left: "18%", size: 7, dur: 15, delay: 2.1, swing: -22 },
+  { left: "33%", size: 9, dur: 11, delay: 4.8, swing: 34 },
+  { left: "47%", size: 6, dur: 14, delay: 1.3, swing: -18 },
+  { left: "62%", size: 8, dur: 13, delay: 3.5, swing: 26 },
+  { left: "76%", size: 7, dur: 16, delay: 0.7, swing: -30 },
+  { left: "89%", size: 9, dur: 10, delay: 5.2, swing: 20 },
+  { left: "54%", size: 6, dur: 17, delay: 6.0, swing: -24 },
+];
+
+/* ── Day clouds: slow soft drifters in the background ── */
+const CLOUDS = [
+  { top: "8%", width: 140, height: 38, dur: 38, delay: 0, opacity: 0.28 },
+  { top: "18%", width: 100, height: 28, dur: 50, delay: 12, opacity: 0.2 },
+  { top: "6%", width: 180, height: 48, dur: 62, delay: 26, opacity: 0.18 },
+  { top: "24%", width: 120, height: 32, dur: 44, delay: 7, opacity: 0.22 },
+];
+
+/* ── Night stars: twinkling points of light ── */
+const STARS = [
+  {
+    top: "4%",
+    left: "12%",
+    size: 2,
+    twinkDur: 3.2,
+    twinkDelay: 0,
+    driftDur: 22,
+    driftDelay: 0,
+  },
+  {
+    top: "9%",
+    left: "34%",
+    size: 1.5,
+    twinkDur: 4.1,
+    twinkDelay: 0.8,
+    driftDur: 28,
+    driftDelay: 5,
+  },
+  {
+    top: "3%",
+    left: "56%",
+    size: 2.5,
+    twinkDur: 2.8,
+    twinkDelay: 1.6,
+    driftDur: 18,
+    driftDelay: 2,
+  },
+  {
+    top: "7%",
+    left: "74%",
+    size: 1.5,
+    twinkDur: 5.0,
+    twinkDelay: 2.4,
+    driftDur: 32,
+    driftDelay: 9,
+  },
+  {
+    top: "14%",
+    left: "88%",
+    size: 2,
+    twinkDur: 3.6,
+    twinkDelay: 0.5,
+    driftDur: 25,
+    driftDelay: 4,
+  },
+  {
+    top: "18%",
+    left: "22%",
+    size: 1.5,
+    twinkDur: 4.4,
+    twinkDelay: 3.1,
+    driftDur: 30,
+    driftDelay: 7,
+  },
+  {
+    top: "22%",
+    left: "45%",
+    size: 2,
+    twinkDur: 2.6,
+    twinkDelay: 1.9,
+    driftDur: 20,
+    driftDelay: 1,
+  },
+  {
+    top: "11%",
+    left: "65%",
+    size: 3,
+    twinkDur: 6.2,
+    twinkDelay: 0.3,
+    driftDur: 35,
+    driftDelay: 12,
+  },
+  {
+    top: "5%",
+    left: "92%",
+    size: 1.5,
+    twinkDur: 3.9,
+    twinkDelay: 4.0,
+    driftDur: 24,
+    driftDelay: 6,
+  },
+  {
+    top: "16%",
+    left: "7%",
+    size: 2,
+    twinkDur: 4.7,
+    twinkDelay: 2.7,
+    driftDur: 28,
+    driftDelay: 3,
+  },
+  {
+    top: "25%",
+    left: "80%",
+    size: 1.5,
+    twinkDur: 3.3,
+    twinkDelay: 1.2,
+    driftDur: 19,
+    driftDelay: 8,
+  },
+  {
+    top: "2%",
+    left: "50%",
+    size: 2.5,
+    twinkDur: 5.5,
+    twinkDelay: 3.8,
+    driftDur: 40,
+    driftDelay: 15,
+  },
 ];
 
 /* ── Shared CSS (animations + component classes) ── */
@@ -145,7 +282,7 @@ export const EMAKI_CSS = `
     100% { transform: translate(0,0) scale(1); opacity: 0.50; }
   }
 
-  /* Sakura petals (twilight) */
+  /* Sakura petals (twilight) — unchanged */
   .el-petal {
     position: absolute;
     top: -10px;
@@ -161,10 +298,95 @@ export const EMAKI_CSS = `
     100% { transform: translateY(100vh) rotate(360deg) translateX(30px); opacity: 0; }
   }
 
-  /* Reduced motion */
+  /* ── Day: leaves drifting in the wind ── */
+  .el-leaf {
+    position: absolute;
+    top: -14px;
+    pointer-events: none;
+    border-radius: 50% 10% 50% 10%;
+    animation:
+      el-leaf-fall var(--leaf-dur, 13s) ease-in-out infinite var(--leaf-delay, 0s);
+    will-change: transform, opacity;
+  }
+  @keyframes el-leaf-fall {
+    0%   { transform: translateY(-14px) rotate(0deg)   translateX(0px);                           opacity: 0;    }
+    6%   { opacity: 0.80; }
+    30%  { transform: translateY(28vh)  rotate(120deg)  translateX(var(--leaf-swing, 24px));       opacity: 0.72; }
+    60%  { transform: translateY(58vh)  rotate(240deg)  translateX(calc(var(--leaf-swing, 24px) * -0.6)); opacity: 0.60; }
+    92%  { opacity: 0.40; }
+    100% { transform: translateY(100vh) rotate(400deg)  translateX(calc(var(--leaf-swing, 24px) * 0.3));  opacity: 0;    }
+  }
+
+  /* ── Day: slow drifting clouds ── */
+  .el-cloud {
+    position: absolute;
+    left: -20%;
+    pointer-events: none;
+    border-radius: 50%;
+    filter: blur(14px);
+    animation: el-cloud-drift var(--cloud-dur, 45s) linear infinite var(--cloud-delay, 0s);
+    will-change: transform;
+  }
+  @keyframes el-cloud-drift {
+    0%   { transform: translateX(0);    }
+    100% { transform: translateX(130vw);}
+  }
+
+  /* ── Night: twinkling stars ── */
+  .el-star {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    animation:
+      el-star-twinkle var(--star-twink-dur, 4s) ease-in-out infinite var(--star-twink-delay, 0s),
+      el-star-drift   var(--star-drift-dur, 26s) ease-in-out infinite var(--star-drift-delay, 0s);
+    will-change: transform, opacity;
+  }
+  @keyframes el-star-twinkle {
+    0%   { opacity: 0.20; transform: scale(0.85); }
+    50%  { opacity: 1.00; transform: scale(1.30); }
+    100% { opacity: 0.20; transform: scale(0.85); }
+  }
+  @keyframes el-star-drift {
+    0%   { translate: 0px   0px; }
+    33%  { translate: 4px  -3px; }
+    66%  { translate: -3px  2px; }
+    100% { translate: 0px   0px; }
+  }
+
+  /* ── Pointer parallax layers (JS-driven via inline style) ── */
+  .el-parallax-mid {
+    position: absolute;
+    inset: -6%;
+    background-size: cover;
+    background-position: center top;
+    opacity: 0.38;
+    pointer-events: none;
+    will-change: transform;
+    transition: opacity 0.8s ease;
+  }
+  .el-parallax-near {
+    position: absolute;
+    inset: -4%;
+    background-size: cover;
+    background-position: center top;
+    opacity: 0.18;
+    pointer-events: none;
+    will-change: transform;
+    transition: opacity 0.8s ease;
+    filter: blur(0.5px);
+  }
+
+  /* Reduced motion: disable all ambient animations */
   @media (prefers-reduced-motion: reduce) {
-    .el-orb { animation: none; }
-    .el-petal { animation: none; }
+    .el-orb    { animation: none; }
+    .el-petal  { animation: none; }
+    .el-leaf   { animation: none; }
+    .el-cloud  { animation: none; }
+    .el-star   { animation: none; }
+    .el-parallax-mid  { transform: none !important; }
+    .el-parallax-near { transform: none !important; }
+    .el-parallax-far  { transform: none !important; }
   }
 
   /* Nav rail: Laputa sleek */
@@ -616,24 +838,81 @@ interface PaintedBackdropProps {
 }
 
 /**
- * Full-bleed backdrop: far parallax layer + solid color base + sky image
+ * Full-bleed backdrop: multi-layer parallax + solid base + sky image
  * + overlay gradient + ambient wash. Sits at z-index 0 behind everything.
+ *
+ * Pointer parallax: three depth layers respond to mousemove at different
+ * rates (far=2px, mid=5px, near=9px), throttled via requestAnimationFrame.
+ * Disabled automatically by prefers-reduced-motion via CSS class.
  */
 export function PaintedBackdrop({ phase }: PaintedBackdropProps) {
   const tk: PhaseTokens = PHASES[phase];
+
+  const farRef = useRef<HTMLDivElement>(null);
+  const midRef = useRef<HTMLDivElement>(null);
+  const nearRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const cx = window.innerWidth / 2;
+        const cy = window.innerHeight / 2;
+        const dx = (e.clientX - cx) / cx; // -1..1
+        const dy = (e.clientY - cy) / cy;
+        if (farRef.current)
+          farRef.current.style.transform = `scale(1.04) translate(${dx * 2}px, ${dy * 2}px)`;
+        if (midRef.current)
+          midRef.current.style.transform = `translate(${dx * 5}px, ${dy * 5}px)`;
+        if (nearRef.current)
+          nearRef.current.style.transform = `translate(${dx * 9}px, ${dy * 9}px)`;
+      });
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   return (
     <>
+      {/* Far layer: blurred, dark, slow parallax */}
       <div
+        ref={farRef}
         className="el-parallax-far"
         style={{
           backgroundImage: `url('${tk.backdropImg}')`,
           opacity: phase === "day" ? 0.07 : 0.11,
         }}
       />
+      {/* Solid color base */}
       <div className="el-backdrop" style={{ background: tk.bg }} />
+      {/* Primary sky image */}
       <div
         className="el-backdrop-img"
         style={{ backgroundImage: `url('${tk.backdropImg}')` }}
+      />
+      {/* Mid parallax: same image, tinted, medium depth */}
+      <div
+        ref={midRef}
+        className="el-parallax-mid"
+        style={{
+          backgroundImage: `url('${tk.backdropImg}')`,
+          opacity: phase === "day" ? 0.12 : 0.2,
+          mixBlendMode: phase === "day" ? "multiply" : "screen",
+        }}
+      />
+      {/* Near parallax: same image, fastest layer, subtle */}
+      <div
+        ref={nearRef}
+        className="el-parallax-near"
+        style={{
+          backgroundImage: `url('${tk.backdropImg}')`,
+          opacity: phase === "day" ? 0.06 : 0.1,
+          mixBlendMode: phase === "day" ? "multiply" : "screen",
+        }}
       />
       <div className="el-overlay" style={{ background: tk.overlayGradient }} />
       <div className="el-ambient" style={{ background: tk.ambientWash }} />
@@ -648,16 +927,36 @@ interface FoxfireLayerProps {
 }
 
 /**
- * Drifting kodama orbs + foxfire embers. Twilight phase also shows
- * falling sakura petals. Honors prefers-reduced-motion via CSS class.
+ * Drifting kodama orbs + foxfire embers + per-phase signature ambient:
+ *   day      : wind-blown leaves + slow drifting clouds
+ *   twilight : falling sakura petals (unchanged, exact original)
+ *   night    : twinkling drifting stars
+ * All CSS-only (transform/opacity), prefers-reduced-motion guarded via CSS.
  */
 export function FoxfireLayer({ phase }: FoxfireLayerProps) {
   const tk: PhaseTokens = PHASES[phase];
+
+  /* Leaf colors vary by phase for natural look */
+  const leafColors =
+    phase === "day"
+      ? ["#6a9a2a", "#8ab840", "#4e7a18", "#a0c040", "#5c8820", "#7ab030"]
+      : [
+          "#a07840",
+          "#c09050",
+          "#806030",
+          "#b08840",
+        ]; /* warm autumn for other phases */
+
+  /* Star glow color from phase tokens */
+  const starColor = tk.foxfire;
+  const starGlow = tk.orbGlow;
+
   return (
     <>
+      {/* Orbs: all phases */}
       {ORBS.map((orb, i) => (
         <div
-          key={i}
+          key={`orb-${i}`}
           className="el-orb"
           style={{
             top: orb.top,
@@ -671,10 +970,12 @@ export function FoxfireLayer({ phase }: FoxfireLayerProps) {
           }}
         />
       ))}
+
+      {/* Twilight: sakura petals (unchanged) */}
       {phase === "twilight" &&
         PETALS.map((p, i) => (
           <div
-            key={i}
+            key={`petal-${i}`}
             className="el-petal"
             style={{
               left: p.left,
@@ -682,6 +983,64 @@ export function FoxfireLayer({ phase }: FoxfireLayerProps) {
               height: p.size,
               ["--pet-dur" as string]: `${p.dur}s`,
               ["--pet-delay" as string]: `${p.delay}s`,
+            }}
+          />
+        ))}
+
+      {/* Day: wind-blown leaves */}
+      {phase === "day" &&
+        LEAVES.map((lf, i) => (
+          <div
+            key={`leaf-${i}`}
+            className="el-leaf"
+            style={{
+              left: lf.left,
+              width: lf.size,
+              height: lf.size * 0.7,
+              background: leafColors[i % leafColors.length],
+              ["--leaf-dur" as string]: `${lf.dur}s`,
+              ["--leaf-delay" as string]: `${lf.delay}s`,
+              ["--leaf-swing" as string]: `${lf.swing}px`,
+              opacity: 0.82,
+            }}
+          />
+        ))}
+
+      {/* Day: slow soft clouds */}
+      {phase === "day" &&
+        CLOUDS.map((cl, i) => (
+          <div
+            key={`cloud-${i}`}
+            className="el-cloud"
+            style={{
+              top: cl.top,
+              width: cl.width,
+              height: cl.height,
+              background: "rgba(255,252,245,0.9)",
+              opacity: cl.opacity,
+              ["--cloud-dur" as string]: `${cl.dur}s`,
+              ["--cloud-delay" as string]: `${cl.delay}s`,
+            }}
+          />
+        ))}
+
+      {/* Night: twinkling drifting stars */}
+      {phase === "night" &&
+        STARS.map((st, i) => (
+          <div
+            key={`star-${i}`}
+            className="el-star"
+            style={{
+              top: st.top,
+              left: st.left,
+              width: st.size,
+              height: st.size,
+              background: starColor,
+              boxShadow: `0 0 ${st.size * 3}px ${starGlow}, 0 0 ${st.size * 6}px ${starGlow}55`,
+              ["--star-twink-dur" as string]: `${st.twinkDur}s`,
+              ["--star-twink-delay" as string]: `${st.twinkDelay}s`,
+              ["--star-drift-dur" as string]: `${st.driftDur}s`,
+              ["--star-drift-delay" as string]: `${st.driftDelay}s`,
             }}
           />
         ))}
