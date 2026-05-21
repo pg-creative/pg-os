@@ -10,6 +10,7 @@ import { CityTemp } from "./_components/LocationLive";
 import { HomeModeToggle } from "./_components/HomeModeToggle";
 import { AmbientParticles } from "./_components/AmbientParticles";
 import { TabBar } from "./_components/TabBar";
+import { EmakiBackdrop } from "./_components/emaki/EmakiBackdrop";
 import { CaptureFAB } from "./_components/CaptureFAB";
 import { BrandModePicker } from "./_components/BrandModePicker";
 import { CopilotLauncher } from "./_components/Copilot/CopilotPanel";
@@ -39,6 +40,7 @@ export default function Page() {
   return (
     <BridgeModeProvider>
       <NowProvider>
+        <EmakiBackdrop />
         <AmbientParticles />
         <div className="shell">
           {/* TOP BAR */}

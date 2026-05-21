@@ -5,59 +5,61 @@
 /* (light powder-blue lineage, AAA legibility). Howl's / Totoro / Mononoke */
 /* = optional warm-dark alts. All share spacing, radius, motion.           */
 
-/* ── Laputa Day (6am–6pm — powder blue, coral accents, cream parchment) ─ */
+/* ── Laputa Day = Emaki "陽光の庭" (warm parchment, emerald ink, gold) ─────
+   Remapped 2026-05-21 to the locked Emaki x Laputa palette (theme.ts PHASES.day)
+   so every token-based surface inherits the painted-world look. */
 :root[data-variant="laputa-day"] {
-  --bg-0:#E8F0F7; --bg-1:#DEE7F2; --bg-2:#CED9E6;
-  --fg:#1A2533; --fg-dim:#28333F; --muted:#41505F;
-  --accent:#3F6FA8; --accent-2:#D87C52; --accent-3:#789BBE;
-  --panel:rgba(255,255,255,0.78); --panel-solid:#F4F8FC;
-  --border:rgba(63,111,168,0.36); --border-soft:rgba(40,60,82,0.14);
-  --success:#5C8A55; --danger:#B0432C;
+  --bg-0:#ECE2CE; --bg-1:#E3D7BE; --bg-2:#D6C8A8;
+  --fg:#120D04; --fg-dim:#2E2008; --muted:#4A3410;
+  --accent:#1A5C3A; --accent-2:#8C5C08; --accent-3:#B87818;
+  --panel:rgba(252,248,240,0.97); --panel-solid:#FAF4E8;
+  --border:rgba(140,100,30,0.38); --border-soft:rgba(110,72,12,0.16);
+  --success:#1A5C3A; --danger:#B0432C;
   --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
   --body:"Inter",system-ui,-apple-system,sans-serif;
   --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
-  --hero-0:url("/hero-laputa.png");
+  --hero-0:url("/art/aesthetic-2026-05-20/emaki-sky-day_0.png");
   --hero-url:var(--hero-0);
   --avatar-text:#FFFFFF;
-  --particle-1:#3F6FA8; --particle-2:#FFFFFF; --particle-3:#A8C2DA;
-  --banner-gradient: linear-gradient(100deg, rgba(244,248,252,0.92) 0%, rgba(244,248,252,0.62) 35%, rgba(244,248,252,0.10) 70%, rgba(244,248,252,0) 100%);
-  --scrim-rgb: 232, 240, 247;
+  --particle-1:#8C5C08; --particle-2:#FCF8F0; --particle-3:#1A5C3A;
+  --banner-gradient: linear-gradient(100deg, rgba(250,244,232,0.92) 0%, rgba(250,244,232,0.62) 35%, rgba(250,244,232,0.10) 70%, rgba(250,244,232,0) 100%);
+  --scrim-rgb: 236, 226, 206;
 }
-/* ── Laputa Twilight (6pm–9pm — deep blue, amber, soft golden bands) ──── */
+/* ── Laputa Twilight = Emaki "黄昏の刻" (indigo/plum, rose accent, gold) ──── */
 :root[data-variant="laputa-twilight"] {
-  --bg-0:#1F3252; --bg-1:#17294A; --bg-2:#122240;
-  --fg:#F0F5FC; --fg-dim:#DDE7F4; --muted:#BDCEE3;
-  --accent:#92BFEF; --accent-2:#F2B585; --accent-3:#C2D5EA;
-  --panel:rgba(23,41,74,0.70); --panel-solid:#15253F;
-  --border:rgba(146,191,239,0.45); --border-soft:rgba(180,200,220,0.18);
+  --bg-0:#160A22; --bg-1:#0E0816; --bg-2:#1E1230;
+  --fg:#F4E8F8; --fg-dim:#C8A8D8; --muted:#C0A8D0;
+  --accent:#E0A0D0; --accent-2:#C88840; --accent-3:#A05888;
+  --panel:rgba(28,14,38,0.90); --panel-solid:#1C0E26;
+  --border:rgba(210,130,170,0.22); --border-soft:rgba(210,130,170,0.12);
   --success:#9FCB99; --danger:#F09F80;
   --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
   --body:"Inter",system-ui,-apple-system,sans-serif;
   --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
-  --hero-0:url("/hero-laputa-twilight.png");
+  --hero-0:url("/art/aesthetic-2026-05-20/emaki-sky-twilight_0.png");
   --hero-url:var(--hero-0);
-  --avatar-text:#0F1D30;
-  --particle-1:#92BFEF; --particle-2:#F5E1C8; --particle-3:#F2B585;
-  --banner-gradient: linear-gradient(100deg, rgba(21,37,63,0.92) 0%, rgba(21,37,63,0.62) 35%, rgba(21,37,63,0.12) 70%, rgba(21,37,63,0) 100%);
-  --scrim-rgb: 18, 30, 50;
+  --avatar-text:#1C0E26;
+  --particle-1:#E0A0D0; --particle-2:#F4E8F8; --particle-3:#C88840;
+  --banner-gradient: linear-gradient(100deg, rgba(28,14,38,0.92) 0%, rgba(28,14,38,0.62) 35%, rgba(28,14,38,0.12) 70%, rgba(28,14,38,0) 100%);
+  --scrim-rgb: 14, 8, 22;
 }
-/* ── Laputa Midnight (9pm–6am — ink, golden embers, deep starlight) ───── */
+/* ── Laputa Midnight = Emaki "狐火の道" (warm ink, foxfire amber, gold) ───── */
 :root[data-variant="laputa-midnight"] {
-  --bg-0:#091433; --bg-1:#0F1D45; --bg-2:#15275A;
-  --fg:#EEF3FB; --fg-dim:#D6E1F2; --muted:#ADC0DE;
-  --accent:#5E82E8; --accent-2:#F5C29A; --accent-3:#8AA0DC;
-  --panel:rgba(15,29,69,0.72); --panel-solid:#0C1A40;
-  --border:rgba(94,130,232,0.46); --border-soft:rgba(160,180,210,0.18);
-  --success:#9CC1E6; --danger:#F09F80;
+  --bg-0:#0A0806; --bg-1:#120D08; --bg-2:#1A120C;
+  --fg:#EFE4C8; --fg-dim:#B8A882; --muted:#B0A075;
+  --accent:#E8A840; --accent-2:#C8981C; --accent-3:#A06C18;
+  --panel:rgba(22,16,8,0.90); --panel-solid:#160F08;
+  --border:rgba(210,168,80,0.20); --border-soft:rgba(210,168,80,0.12);
+  --success:#8FC078; --danger:#E0695A;
   --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
   --body:"Inter",system-ui,-apple-system,sans-serif;
   --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
-  --hero-0:url("/hero-laputa-night.png");
+  --hero-0:url("/art/aesthetic-2026-05-20/emaki-sky-night_0.png");
   --hero-url:var(--hero-0);
-  --avatar-text:#FFFFFF;
-  --particle-1:#5E82E8; --particle-2:#F5F1E0; --particle-3:#8AA0DC;
-  --banner-gradient: linear-gradient(100deg, rgba(12,26,64,0.94) 0%, rgba(12,26,64,0.62) 35%, rgba(12,26,64,0.12) 70%, rgba(12,26,64,0) 100%);
-  --scrim-rgb: 5, 10, 25;
+  --avatar-text:#160F08;
+  --particle-1:#F0C060; --particle-2:#EFE4C8; --particle-3:#E8A020;
+  --banner-gradient: linear-gradient(100deg, rgba(22,16,8,0.94) 0%, rgba(22,16,8,0.62) 35%, rgba(22,16,8,0.12) 70%, rgba(22,16,8,0) 100%);
+  --scrim-rgb: 10, 8, 6;
 }
 /* ── Howl's Golden Hour (alt — warm amber, deep blue accents) ─────────── */
 :root[data-variant="howls"] {
@@ -116,20 +118,20 @@
 /* Default until ModeProvider mounts — matches Laputa Day (light blue daytime). */
 :root { color-scheme: light dark; }
 :root:not([data-variant]) {
-  --bg-0:#E8F0F7; --bg-1:#DEE7F2; --bg-2:#CED9E6;
-  --fg:#1A2533; --fg-dim:#28333F; --muted:#41505F;
-  --accent:#3F6FA8; --accent-2:#D87C52; --accent-3:#789BBE;
-  --panel:rgba(255,255,255,0.78); --panel-solid:#F4F8FC;
-  --border:rgba(63,111,168,0.36); --border-soft:rgba(40,60,82,0.14);
-  --success:#5C8A55; --danger:#B0432C;
+  --bg-0:#ECE2CE; --bg-1:#E3D7BE; --bg-2:#D6C8A8;
+  --fg:#120D04; --fg-dim:#2E2008; --muted:#4A3410;
+  --accent:#1A5C3A; --accent-2:#8C5C08; --accent-3:#B87818;
+  --panel:rgba(252,248,240,0.97); --panel-solid:#FAF4E8;
+  --border:rgba(140,100,30,0.38); --border-soft:rgba(110,72,12,0.16);
+  --success:#1A5C3A; --danger:#B0432C;
   --serif:"Playfair Display","Cormorant Garamond",Georgia,serif;
   --body:"Inter",system-ui,sans-serif;
   --mono:"JetBrains Mono",Menlo,monospace;
-  --hero-0:url("/hero-laputa.png"); --hero-url:var(--hero-0);
+  --hero-0:url("/art/aesthetic-2026-05-20/emaki-sky-day_0.png"); --hero-url:var(--hero-0);
   --avatar-text:#FFFFFF;
-  --particle-1:#3F6FA8; --particle-2:#FFFFFF; --particle-3:#A8C2DA;
-  --banner-gradient: linear-gradient(100deg, rgba(244,248,252,0.92) 0%, rgba(244,248,252,0.62) 35%, rgba(244,248,252,0.10) 70%, rgba(244,248,252,0) 100%);
-  --scrim-rgb: 232, 240, 247;
+  --particle-1:#8C5C08; --particle-2:#FCF8F0; --particle-3:#1A5C3A;
+  --banner-gradient: linear-gradient(100deg, rgba(250,244,232,0.92) 0%, rgba(250,244,232,0.62) 35%, rgba(250,244,232,0.10) 70%, rgba(250,244,232,0) 100%);
+  --scrim-rgb: 236, 226, 206;
 }
 /* ── Type scale (legibility foundation, 2026-05-20) ─────────────────────── */
 /* One readability knob (--type-scale) + a token ladder with a hard floor:    */
