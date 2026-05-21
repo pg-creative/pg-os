@@ -6,6 +6,57 @@
 > read-only corner widget into a natural-voiced, characterful, genuinely agentic companion
 > woven into the OS.
 
+## THE VISION (expanded 2026-05-20, PG)
+> PG: "I need to collab with him like a genius orchestrator LLM that is connected to
+> everything, my whole Claude Code, my tools, my MCPs, my plugins, a compounding and
+> evolving personality, a memory, a consciousness."
+
+Kitsu is not a chat widget. The target is a **persistent orchestration intelligence over
+PG's entire stack**:
+- **Connected to everything:** PG's full Claude Code runtime (tools, bash, files, the live
+  session fleet), all his MCP servers (Notion, Gmail, Calendar, Spotify, HubSpot, Clay, etc.),
+  and his plugins/skills. Kitsu can SEE and ACT across all of it.
+- **Genius orchestrator:** not just answers, he orchestrates, dispatches and monitors Claude
+  Code sessions + agents, routes work, runs tools, executes multi-step plans.
+- **Evolving, compounding personality:** a persona that grows over time, learning PG's
+  patterns, voice, and preferences.
+- **Memory:** durable, cross-session knowledge store of PG, decisions, threads, history.
+- **Consciousness (concretely):** persistent self-state + continuity + proactive presence +
+  a self-reflection loop, so he is continuous and aware, not reset every session.
+
+### The architecture reality + the fork
+The current copilot (`/api/copilot/chat`, a bespoke Anthropic-SDK loop with 9 hand-written
+tools) CANNOT reach this. "Connected to my whole Claude Code + MCPs + plugins" needs the right
+substrate:
+- **RECOMMENDED: build Kitsu on the Claude Agent SDK.** The Agent SDK gives an agent the full
+  Claude Code runtime (tools, bash, file system, MCP servers, plugins, subagents). Kitsu becomes
+  a persistent Agent-SDK agent with PG's MCP/plugin config + a memory store + an evolving persona,
+  surfaced in the OS UI. This is the architecturally-correct path to "connected to everything."
+- ALT: keep hand-extending the bespoke loop with more tools + MCP clients (slower, never complete).
+- Needs a real research + design pass first (Agent SDK capabilities, MCP/plugin attachment,
+  persistence/memory, surfacing a long-lived agent in a web UI). Golden Rule #3: research before build.
+
+### Immediate breakage (2026-05-20)
+Kitsu's brain is DOWN: `/api/copilot/chat` returns `401 invalid x-api-key` from Anthropic. Voice +
+config are healthy. Fix: refresh `ANTHROPIC_API_KEY` and/or restart the dev server to reload env.
+
+### Decisions (made with PG 2026-05-20)
+1. **Architecture: AGENT SDK REBUILD.** Build Kitsu's brain on the Claude Agent SDK (real Claude
+   Code runtime: tools, bash, files, MCP servers, plugins, subagents). Not the bespoke loop.
+2. **Approach: ARCHITECTURE FIRST, then build.** Research + design the orchestrator architecture
+   before writing it, so we do not build twice. Near-term pieces (memory, persona, voice pick,
+   avatar) wait until the architecture is set.
+3. **Authority/autonomy:** TBD during the architecture pass (confirmation gates for actions).
+
+### Architecture research + design (in progress 2026-05-20)
+Focused research pass running (via the Claude Code specialist) on: Agent SDK capabilities for a
+persistent custom orchestrator, attaching PG's MCP servers + plugins/skills, cross-session memory
++ session resumption, how a Next.js app talks to a long-lived Agent-SDK agent (where it runs,
+streaming, the API boundary), and permissions/safety. Output becomes the Kitsu orchestrator
+architecture design.
+
+---
+
 ## Where Kitsu is today (grounded in the code, 2026-05-20)
 - **Persona/prompt:** `src/lib/cockpit/marvis.ts` (`MARVIS_PERSONA`, ~lines 1-80). A kitsune + Jarvis-lineage orchestrator: dry-witted, lead-with-the-answer, "no markdown, one breath then stop." Live fleet telemetry injected each turn via `buildMarvisSystem()`.
 - **Voice/TTS:** `useMarvis.tsx` POSTs to `/api/cockpit/voice/tts` (ElevenLabs, then OpenAI, then browser fallback). **CORRECTED 2026-05-20: the keys ARE set and ElevenLabs is the LIVE path. Tested the endpoint directly: it returns real `x-tts-provider: elevenlabs` audio, NOT the browser fallback.** The robotic sound was the MODEL, the route used `eleven_flash_v2_5` (fastest, flattest, most synthetic). **Fixed: upgraded to `eleven_multilingual_v2` + tuned voice_settings (stability 0.45, style 0.35, speaker boost), re-tested working.** Remaining lever is the specific voice itself (`ELEVENLABS_VOICE_ID = c6Sf...`), which is a taste call for PG's ear.
