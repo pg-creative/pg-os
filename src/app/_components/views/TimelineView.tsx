@@ -2,6 +2,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TimelineFilters } from "../TimelineFilters";
 import { TimelineRow } from "../TimelineRow";
+import { TabShell } from "../bento/TabShell";
+import { BentoBox } from "../bento/BentoBox";
+import { useEmaki } from "../bento/emakiContext";
 
 export type TimelineSource =
   | "ship"
@@ -201,63 +204,179 @@ export function TimelineView() {
     }
   }, [data, filterParam, loadingMore]);
 
-  const allRows = useMemo(() => [...(data?.rows ?? []), ...olderRows], [data, olderRows]);
+  const allRows = useMemo(
+    () => [...(data?.rows ?? []), ...olderRows],
+    [data, olderRows],
+  );
   const counts = data?.counts ?? {};
+  const total = counts.total ?? allRows.length;
+
+  const eyebrow = `CHRONICLE // ${WINDOW_DAYS}-DAY WINDOW`;
 
   return (
-    <div className="view view-timeline timeline-view">
-      <div className="view-header">
-        <h1 className="view-title">
-          Timeline · <em>fourteen</em> days
-        </h1>
-        <div className="view-sub">EVERY SURFACE · ONE THREAD</div>
-      </div>
+    <TabShell
+      title="Timeline"
+      eyebrow={eyebrow}
+      actions={
+        <TimelineFilters
+          selected={filters}
+          counts={counts}
+          onToggle={handleToggle}
+        />
+      }
+    >
+      <TimelineFeed
+        loading={loading}
+        error={error}
+        allRows={allRows}
+        newIds={newIds}
+        hasMore={data?.hasMore ?? false}
+        loadingMore={loadingMore}
+        loadOlder={loadOlder}
+        total={total}
+      />
+    </TabShell>
+  );
+}
 
-      <TimelineFilters selected={filters} counts={counts} onToggle={handleToggle} />
+// Inner component so useEmaki() runs inside EmakiProvider (TabShell wraps it)
+function TimelineFeed({
+  loading,
+  error,
+  allRows,
+  newIds,
+  hasMore,
+  loadingMore,
+  loadOlder,
+  total,
+}: {
+  loading: boolean;
+  error: string | null;
+  allRows: TimelineRow[];
+  newIds: Set<string>;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadOlder: () => void;
+  total: number;
+}) {
+  const { tk } = useEmaki();
 
-      {loading ? (
-        <div className="timeline-loading" role="status">
-          loading the thread…
+  if (loading) {
+    return (
+      <BentoBox cols={12} eyebrow="01 // EVENTS" kanji="時系列">
+        <div
+          role="status"
+          style={{
+            color: tk.textMuted,
+            fontStyle: "italic",
+            padding: "20px 0",
+            textAlign: "center",
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+          }}
+        >
+          loading the thread...
         </div>
-      ) : error ? (
-        <div className="timeline-error" role="alert">
+      </BentoBox>
+    );
+  }
+
+  if (error) {
+    return (
+      <BentoBox cols={12} eyebrow="01 // ERROR" kanji="時系列">
+        <div
+          role="alert"
+          style={{
+            color: tk.foxfire,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            padding: "20px 0",
+            textAlign: "center",
+          }}
+        >
           timeline unavailable — {error}
         </div>
-      ) : allRows.length === 0 ? (
-        <div className="timeline-empty">
-          <p className="timeline-empty-text">
-            <em>Nothing</em> yet. Stay tuned.
-          </p>
+      </BentoBox>
+    );
+  }
+
+  if (allRows.length === 0) {
+    return (
+      <BentoBox cols={12} eyebrow="01 // EVENTS" kanji="時系列">
+        <div
+          style={{
+            color: tk.textMuted,
+            fontStyle: "italic",
+            padding: "20px 0",
+            textAlign: "center",
+            fontSize: "var(--text-sm)",
+          }}
+        >
+          Nothing yet. Stay tuned.
+        </div>
+      </BentoBox>
+    );
+  }
+
+  return (
+    <BentoBox
+      cols={12}
+      eyebrow="01 // EVENTS"
+      kanji="時系列"
+      count={`${total} events`}
+      scroll
+      style={{ maxHeight: "calc(100vh - 260px)", minHeight: 320 }}
+    >
+      <ol
+        role="feed"
+        aria-busy={loadingMore}
+        aria-label="Unified activity timeline"
+        style={{ listStyle: "none", margin: 0, padding: 0 }}
+      >
+        {allRows.map((row) => (
+          <TimelineRow key={row.id} row={row} isNew={newIds.has(row.id)} />
+        ))}
+      </ol>
+
+      {hasMore ? (
+        <div style={{ paddingTop: 16, textAlign: "center" }}>
+          <button
+            type="button"
+            onClick={loadOlder}
+            disabled={loadingMore}
+            style={{
+              background: "transparent",
+              border: `1px solid ${tk.divider}`,
+              borderRadius: 6,
+              color: loadingMore ? tk.textMuted : tk.accent,
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              padding: "6px 18px",
+              cursor: loadingMore ? "default" : "pointer",
+              opacity: loadingMore ? 0.6 : 1,
+              transition: "opacity 160ms ease",
+            }}
+          >
+            {loadingMore ? "loading older..." : "load older"}
+          </button>
         </div>
       ) : (
-        <>
-          <ol
-            className="timeline-feed"
-            role="feed"
-            aria-busy={loadingMore}
-            aria-label="Unified activity timeline"
-          >
-            {allRows.map((row) => (
-              <TimelineRow key={row.id} row={row} isNew={newIds.has(row.id)} />
-            ))}
-          </ol>
-
-          {data?.hasMore ? (
-            <div className="timeline-loadmore-wrap">
-              <button
-                type="button"
-                className="timeline-loadmore"
-                onClick={loadOlder}
-                disabled={loadingMore}
-              >
-                {loadingMore ? "loading older…" : "load older"}
-              </button>
-            </div>
-          ) : (
-            <div className="timeline-end">end of the 14-day window.</div>
-          )}
-        </>
+        <div
+          style={{
+            paddingTop: 16,
+            textAlign: "center",
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-2xs)",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: tk.textMuted,
+          }}
+        >
+          end of the 14-day window.
+        </div>
       )}
-    </div>
+    </BentoBox>
   );
 }

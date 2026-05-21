@@ -1,7 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useMode } from "../ModeProvider";
-import { type BrandMode, MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
+import {
+  type BrandMode,
+  MODE_CONFIG,
+  applyModeFilter,
+} from "../../../lib/modes";
 import { Skeleton } from "../Skeleton";
 import { createBrowserSupabaseClient } from "../../../lib/realtimeBrowser";
 import { subscribeMultipleTables } from "../../../lib/realtime";
@@ -10,6 +14,9 @@ import type { RealtimeConfig } from "../../api/realtime/config/route";
 import { DecideDialog } from "../flow/DecideDialog";
 import { TriageMode } from "../flow/TriageMode";
 import { showToast } from "../Toast";
+import { TabShell } from "../bento/TabShell";
+import { BentoBox } from "../bento/BentoBox";
+import { useEmaki } from "../bento/emakiContext";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,28 +68,25 @@ function relTime(ms: number): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function streakClass(n: number): string {
-  if (n >= 7) return "fl-streak ember";
-  if (n >= 3) return "fl-streak gold";
-  if (n >= 1) return "fl-streak amber";
-  return "fl-streak muted";
-}
-
-function waitClass(createdAt: number): string {
-  const days = Math.floor((Date.now() - createdAt) / 86_400_000);
-  if (days >= 14) return "fl-qwait ember";
-  if (days >= 7) return "fl-qwait amber";
-  return "fl-qwait muted";
-}
-
 function waitLabel(createdAt: number): string {
   const days = Math.floor((Date.now() - createdAt) / 86_400_000);
   return `waiting ${days}d`;
 }
 
-// ── Ship Log Card ─────────────────────────────────────────────────────────────
+function waitColor(
+  createdAt: number,
+  tk: ReturnType<typeof useEmaki>["tk"],
+): string {
+  const days = Math.floor((Date.now() - createdAt) / 86_400_000);
+  if (days >= 14) return tk.foxfire;
+  if (days >= 7) return tk.gold;
+  return tk.textMuted;
+}
 
-function ShipLogCard({ brand }: { brand: BrandMode | null }) {
+// ── Ship Log Tile ─────────────────────────────────────────────────────────────
+
+function ShipLogTile({ brand }: { brand: BrandMode | null }) {
+  const { tk } = useEmaki();
   const [shipsData, setShipsData] = useState<ShipsData | null>(null);
   const [text, setText] = useState("");
   const [context, setContext] = useState("");
@@ -101,12 +105,14 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
     }
   }, []);
 
-  useEffect(() => { fetchShips(); }, [fetchShips]);
+  useEffect(() => {
+    fetchShips();
+  }, [fetchShips]);
 
-  // ── Realtime: subscribe to PG OS `ships` + `queue_items` ─────────────────
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
-    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null =
+      null;
     let destroyed = false;
 
     async function setupRealtime() {
@@ -114,23 +120,25 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
         const res = await fetch("/api/realtime/config");
         if (!res.ok) return;
         const cfg: RealtimeConfig = await res.json();
-        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return; // graceful no-op
+        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return;
 
-        const client = await createBrowserSupabaseClient(cfg.pgosUrl, cfg.pgosPublishableKey);
+        const client = await createBrowserSupabaseClient(
+          cfg.pgosUrl,
+          cfg.pgosPublishableKey,
+        );
         if (!client || destroyed) return;
 
         supabaseClient = client;
         channel = subscribeMultipleTables({
           client,
           channelName: "flow-realtime",
-          tables: [
-            { table: "ships" },
-            { table: "queue_items" },
-          ],
-          onchange: () => { void fetchShips(); },
+          tables: [{ table: "ships" }, { table: "queue_items" }],
+          onchange: () => {
+            void fetchShips();
+          },
         });
       } catch {
-        // Realtime is best-effort — never surface errors to the user.
+        // Realtime is best-effort.
       }
     }
 
@@ -144,7 +152,6 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
     };
   }, [fetchShips]);
 
-  // Auto-grow textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -158,12 +165,10 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
   const handleSubmit = useCallback(async () => {
     if (!text.trim()) return;
 
-    // Optimistic UI: insert a synthetic ship row immediately so the user
-    // sees their submission in the list. If the request fails we'll restore.
     const trimmed = text.trim();
     const ctx = context || null;
     const optimisticShip: Ship = {
-      id: -Date.now(), // negative id signals "pending" / not real yet
+      id: -Date.now(),
       text: trimmed,
       context: ctx,
       created_at: Date.now(),
@@ -198,12 +203,14 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
       setTimeout(() => setConfirmed(false), 2000);
       await fetchShips();
     } catch (e) {
-      // Roll back the optimistic insert + restore the input
       setText(prevText);
       setContext(prevContext);
       setShipsData((prev) =>
         prev
-          ? { ...prev, ships: prev.ships.filter((s) => s.id !== optimisticShip.id) }
+          ? {
+              ...prev,
+              ships: prev.ships.filter((s) => s.id !== optimisticShip.id),
+            }
           : prev,
       );
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -219,96 +226,225 @@ function ShipLogCard({ brand }: { brand: BrandMode | null }) {
         handleSubmit();
       }
     },
-    [handleSubmit]
+    [handleSubmit],
   );
 
   const streak = shipsData?.streak ?? 0;
   const velocity = shipsData?.velocity ?? 0;
   const shippedToday = shipsData?.shippedToday ?? false;
   const allShips = shipsData?.ships.slice(0, 30) ?? [];
-  // Filter ships by brand mode (match context field against mode's project ids)
-  const recent = applyModeFilter(allShips, brand, "context" as keyof Ship).slice(0, 10);
+  const recent = applyModeFilter(
+    allShips,
+    brand,
+    "context" as keyof Ship,
+  ).slice(0, 10);
+
+  const inputStyle: React.CSSProperties = {
+    background: "rgba(0,0,0,0.18)",
+    border: `1px solid ${tk.divider}`,
+    borderRadius: 6,
+    color: tk.textPrimary,
+    fontFamily: "var(--serif), Georgia, serif",
+    fontSize: "var(--text-sm)",
+    padding: "8px 12px",
+    outline: "none",
+    resize: "none" as const,
+    width: "100%",
+    boxSizing: "border-box" as const,
+  };
 
   return (
-    <div className="card">
-      <div className="card-label">
-        <span>01 // SHIP LOG</span>
-        <span className="fl-tag-live">LIVE</span>
-      </div>
-
-      {/* Input area */}
-      <div className="fl-input-area">
-        <textarea
-          ref={textareaRef}
-          className="fl-ship-input"
-          placeholder="What left your hands today?"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={2}
+    <BentoBox
+      cols={6}
+      eyebrow="01 // SHIP LOG"
+      kanji="出"
+      count={<LivePill />}
+      scroll
+    >
+      {/* Input */}
+      <textarea
+        ref={textareaRef}
+        placeholder="What left your hands today?"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        rows={2}
+        disabled={submitting}
+        style={inputStyle}
+      />
+      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+        <select
+          value={context}
+          onChange={(e) => setContext(e.target.value)}
           disabled={submitting}
-        />
-        <div className="fl-input-row">
-          <select
-            className="fl-ship-context"
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
-            disabled={submitting}
-          >
-            {PROJECTS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-          <button
-            className={`fl-btn fl-btn-primary fl-submit spring-hover${confirmed ? " fl-confirm" : ""}`}
-            onClick={handleSubmit}
-            disabled={submitting || !text.trim()}
-          >
-            {confirmed ? "shipped ✓" : submitting ? "…" : "SHIP →"}
-          </button>
-        </div>
-        {error && <span className="flow-error">{error}</span>}
+          style={{
+            ...inputStyle,
+            width: "auto",
+            flex: 1,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+          }}
+        >
+          {PROJECTS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !text.trim()}
+          style={{
+            background: confirmed ? "rgba(124,154,110,0.25)" : "transparent",
+            border: `1px solid ${confirmed ? "#7C9A6E" : tk.accent}`,
+            borderRadius: 6,
+            color: confirmed ? "#7C9A6E" : tk.accent,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            letterSpacing: "0.08em",
+            padding: "6px 14px",
+            cursor: submitting || !text.trim() ? "default" : "pointer",
+            opacity: submitting || !text.trim() ? 0.45 : 1,
+            transition: "all 200ms ease",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {confirmed ? "shipped ✓" : submitting ? "..." : "SHIP →"}
+        </button>
       </div>
+      {error && (
+        <div
+          style={{
+            color: tk.foxfire,
+            fontSize: "var(--text-xs)",
+            marginTop: 4,
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       {/* Stats row */}
-      <div className="fl-streak-row">
-        <span className={streakClass(streak)}>{streak} day streak</span>
-        <span className="fl-velocity">Velocity · {velocity.toFixed(1)}/wk</span>
-        <span className={`fl-today${shippedToday ? " done" : " pending"}`}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          borderTop: `1px solid ${tk.divider}`,
+          paddingTop: 10,
+          marginTop: 4,
+          flexWrap: "wrap",
+        }}
+      >
+        <StreakPill streak={streak} tk={tk} />
+        <span
+          style={{
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            color: tk.textMuted,
+          }}
+        >
+          {velocity.toFixed(1)}/wk
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            color: shippedToday ? "#7C9A6E" : tk.textMuted,
+            marginLeft: "auto",
+          }}
+        >
           {shippedToday ? "Today ✓" : "Not today yet"}
         </span>
       </div>
 
-      {/* Recent ships */}
+      {/* Ship list */}
       {shipsData === null && !error ? (
-        <ul className="fl-ships fl-ships-loading">
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
           {Array.from({ length: 4 }).map((_, i) => (
-            <li key={i} className="fl-ship">
+            <li
+              key={i}
+              style={{ display: "flex", flexDirection: "column", gap: 4 }}
+            >
               <Skeleton variant="text" width="70%" height={14} />
               <Skeleton variant="text" width="20%" height={11} />
             </li>
           ))}
         </ul>
       ) : (
-        <ul className="fl-ships">
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
           {recent.map((s) => (
-            <li key={s.id} className={`fl-ship${s.id < 0 ? " fl-ship-pending" : ""}`}>
-              <span className="fl-ship-text">{s.text}</span>
-              <span className="fl-ship-meta">
-                {s.context && <span className="fl-ship-ctx">{s.context}</span>}
-                <span className="fl-ship-time">{s.id < 0 ? "saving…" : relTime(s.created_at)}</span>
-              </span>
+            <li
+              key={s.id}
+              style={{
+                opacity: s.id < 0 ? 0.6 : 1,
+                transition: "opacity 200ms ease",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "var(--text-sm)",
+                  color: tk.textPrimary,
+                  lineHeight: 1.4,
+                }}
+              >
+                {s.text}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginTop: 3,
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-2xs)",
+                  color: tk.textMuted,
+                }}
+              >
+                {s.context && (
+                  <span
+                    style={{
+                      color: tk.gold,
+                      border: `1px solid ${tk.gold}`,
+                      borderRadius: 3,
+                      padding: "0 5px",
+                      opacity: 0.8,
+                    }}
+                  >
+                    {s.context}
+                  </span>
+                )}
+                <span>{s.id < 0 ? "saving..." : relTime(s.created_at)}</span>
+              </div>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </BentoBox>
   );
 }
 
-// ── Approval Queue Card ───────────────────────────────────────────────────────
+// ── Approval Queue Tile ───────────────────────────────────────────────────────
 
-function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
+function ApprovalQueueTile({ brand }: { brand: BrandMode | null }) {
+  const { tk } = useEmaki();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -331,12 +467,14 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
     }
   }, []);
 
-  useEffect(() => { fetchQueue(); }, [fetchQueue]);
+  useEffect(() => {
+    fetchQueue();
+  }, [fetchQueue]);
 
-  // ── Realtime: subscribe to PG OS `queue_items` ───────────────────────────
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
-    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null =
+      null;
     let destroyed = false;
 
     async function setupRealtime() {
@@ -344,9 +482,12 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
         const res = await fetch("/api/realtime/config");
         if (!res.ok) return;
         const cfg: RealtimeConfig = await res.json();
-        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return; // graceful no-op
+        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return;
 
-        const client = await createBrowserSupabaseClient(cfg.pgosUrl, cfg.pgosPublishableKey);
+        const client = await createBrowserSupabaseClient(
+          cfg.pgosUrl,
+          cfg.pgosPublishableKey,
+        );
         if (!client || destroyed) return;
 
         supabaseClient = client;
@@ -354,10 +495,12 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
           client,
           channelName: "queue-realtime",
           tables: [{ table: "queue_items" }],
-          onchange: () => { void fetchQueue(); },
+          onchange: () => {
+            void fetchQueue();
+          },
         });
       } catch {
-        // Realtime is best-effort — never surface errors to the user.
+        // Realtime is best-effort.
       }
     }
 
@@ -371,21 +514,27 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
     };
   }, [fetchQueue]);
 
-  const handleDismiss = useCallback(async (item: QueueItem) => {
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    try {
-      const res = await fetch(`/api/queue?id=${encodeURIComponent(item.id)}&decision=dismissed`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Delete failed");
-      showToast({ kind: "success", title: "Dismissed", body: item.title });
-    } catch (e) {
-      showToast({
-        kind: "error",
-        title: "Dismiss failed",
-        body: e instanceof Error ? e.message : "unknown error",
-      });
-      await fetchQueue();
-    }
-  }, [fetchQueue]);
+  const handleDismiss = useCallback(
+    async (item: QueueItem) => {
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      try {
+        const res = await fetch(
+          `/api/queue?id=${encodeURIComponent(item.id)}&decision=dismissed`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) throw new Error("Delete failed");
+        showToast({ kind: "success", title: "Dismissed", body: item.title });
+      } catch (e) {
+        showToast({
+          kind: "error",
+          title: "Dismiss failed",
+          body: e instanceof Error ? e.message : "unknown error",
+        });
+        await fetchQueue();
+      }
+    },
+    [fetchQueue],
+  );
 
   const handleDecide = useCallback((item: QueueItem) => {
     setDecideItem(item);
@@ -396,12 +545,11 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
     setDecideItem(null);
   }, []);
 
-  // ── Filter + sort pipeline ───────────────────────────────────────────────
-  // 1. Brand-mode project filter (existing)
-  // 2. Source dropdown (e.g. "session-skill-scanner-weekly")
-  // 3. Search match against title (case-insensitive)
-  // 4. Sort by oldest-first (default — surfaces stalest items) or newest-first
-  const brandFiltered = applyModeFilter(items, brand, "source" as keyof QueueItem);
+  const brandFiltered = applyModeFilter(
+    items,
+    brand,
+    "source" as keyof QueueItem,
+  );
 
   const sources = useMemo(() => {
     const set = new Set<string>();
@@ -413,10 +561,16 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
     const q = search.trim().toLowerCase();
     let list = brandFiltered;
     if (sourceFilter) list = list.filter((i) => i.source === sourceFilter);
-    if (q) list = list.filter((i) => i.title.toLowerCase().includes(q) || (i.note?.toLowerCase().includes(q) ?? false));
-    list = [...list].sort((a, b) => sort === "oldest"
-      ? a.created_at - b.created_at
-      : b.created_at - a.created_at,
+    if (q)
+      list = list.filter(
+        (i) =>
+          i.title.toLowerCase().includes(q) ||
+          (i.note?.toLowerCase().includes(q) ?? false),
+      );
+    list = [...list].sort((a, b) =>
+      sort === "oldest"
+        ? a.created_at - b.created_at
+        : b.created_at - a.created_at,
     );
     return list;
   }, [brandFiltered, sourceFilter, search, sort]);
@@ -424,78 +578,139 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
   const count = filteredItems.length;
   const totalCount = brandFiltered.length;
 
-  return (
-    <div className="card">
-      <div className="card-label">
-        <span>02 // APPROVAL QUEUE</span>
-        <span className="fl-tag-count">
-          {count === totalCount ? `${count} WAITING` : `${count} / ${totalCount}`}
-        </span>
-      </div>
+  const controlStyle: React.CSSProperties = {
+    background: "rgba(0,0,0,0.18)",
+    border: `1px solid ${tk.divider}`,
+    borderRadius: 6,
+    color: tk.textPrimary,
+    fontFamily: "var(--mono), ui-monospace, monospace",
+    fontSize: "var(--text-xs)",
+    padding: "5px 10px",
+    outline: "none",
+  };
 
-      {/* Filter + sort + triage launcher */}
+  return (
+    <BentoBox
+      cols={6}
+      eyebrow="02 // APPROVAL QUEUE"
+      kanji="決"
+      count={
+        count === totalCount ? `${count} WAITING` : `${count} / ${totalCount}`
+      }
+      scroll
+    >
+      {/* Controls */}
       {!loading && totalCount > 0 && (
-        <div className="fl-q-controls">
+        <div
+          style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 4 }}
+        >
           <input
             type="text"
-            className="fl-q-search"
-            placeholder="Search queue…"
+            placeholder="Search queue..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search queue"
+            style={{ ...controlStyle, flex: 1, minWidth: 120 }}
           />
           {sources.length > 1 && (
             <select
-              className="fl-q-source"
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
               aria-label="Filter by source"
+              style={controlStyle}
             >
               <option value="">All sources</option>
               {sources.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
           )}
           <button
             type="button"
-            className="fl-q-sort"
-            onClick={() => setSort((s) => (s === "oldest" ? "newest" : "oldest"))}
+            onClick={() =>
+              setSort((s) => (s === "oldest" ? "newest" : "oldest"))
+            }
             title="Toggle sort order"
+            style={{
+              ...controlStyle,
+              cursor: "pointer",
+              color: tk.textMuted,
+            }}
           >
-            {sort === "oldest" ? "Oldest first ↑" : "Newest first ↓"}
+            {sort === "oldest" ? "Oldest ↑" : "Newest ↓"}
           </button>
           <button
             type="button"
-            className="fl-q-triage spring-hover"
             onClick={() => setTriageOpen(true)}
             disabled={count === 0}
+            style={{
+              ...controlStyle,
+              cursor: count === 0 ? "default" : "pointer",
+              color: tk.accent,
+              border: `1px solid ${tk.accent}`,
+              opacity: count === 0 ? 0.4 : 1,
+              whiteSpace: "nowrap",
+            }}
           >
             Triage {count} →
           </button>
         </div>
       )}
 
-      {error && <span className="flow-error">{error}</span>}
+      {error && (
+        <div
+          style={{
+            color: tk.foxfire,
+            fontSize: "var(--text-xs)",
+            marginBottom: 8,
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       {loading && (
-        <ul className="fl-queue fl-queue-loading">
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {Array.from({ length: 3 }).map((_, i) => (
-            <li key={i} className="fl-qitem">
+            <div
+              key={i}
+              style={{ display: "flex", flexDirection: "column", gap: 4 }}
+            >
               <Skeleton variant="text" width="60%" height={14} />
-              <div style={{ height: 8 }} />
               <Skeleton variant="text" width="35%" height={11} />
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
       {!loading && totalCount === 0 && (
-        <p className="fl-empty">Queue is empty. Nothing waiting on you.</p>
+        <div
+          style={{
+            color: tk.textMuted,
+            fontStyle: "italic",
+            fontSize: "var(--text-sm)",
+            textAlign: "center",
+            padding: "20px 0",
+          }}
+        >
+          Queue is empty. Nothing waiting on you.
+        </div>
       )}
 
       {!loading && totalCount > 0 && count === 0 && (
-        <p className="fl-empty">No items match the current filter.</p>
+        <div
+          style={{
+            color: tk.textMuted,
+            fontStyle: "italic",
+            fontSize: "var(--text-sm)",
+            textAlign: "center",
+            padding: "12px 0",
+          }}
+        >
+          No items match the current filter.
+        </div>
       )}
 
       {count > 0 && (
@@ -504,11 +719,8 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
           onDecide={handleDecide}
           onDismiss={handleDismiss}
           onTriageGroup={(groupItems) => {
-            setItems((prev) => prev); // no-op state read so memoization aligns
+            setItems((prev) => prev);
             setTriageOpen(true);
-            // The triage modal reads from filteredItems, so we'd need group
-            // scoping. Simplest path: temporarily narrow source filter to the
-            // group's source so the triage list = the group.
             const src = groupItems[0]?.source ?? "";
             setSourceFilter(src);
           }}
@@ -526,20 +738,25 @@ function ApprovalQueueCard({ brand }: { brand: BrandMode | null }) {
       {triageOpen && (
         <TriageMode
           initialItems={filteredItems}
-          onClose={() => { setTriageOpen(false); fetchQueue(); }}
-          onResolved={(id) => setItems((prev) => prev.filter((i) => i.id !== id))}
+          onClose={() => {
+            setTriageOpen(false);
+            fetchQueue();
+          }}
+          onResolved={(id) =>
+            setItems((prev) => prev.filter((i) => i.id !== id))
+          }
         />
       )}
-    </div>
+    </BentoBox>
   );
 }
 
 // ── Source-grouped queue list ────────────────────────────────────────────────
-// Pin session-skill-scanner-weekly first (PG's largest source — usually batch-
-// decidable P1s), then sort remaining groups by descending count, with no-source
-// items last as "OTHER".
 
-const PINNED_SOURCES = ["session-skill-scanner-weekly", "session-skill-scanner-daily"];
+const PINNED_SOURCES = [
+  "session-skill-scanner-weekly",
+  "session-skill-scanner-daily",
+];
 const COLLAPSE_THRESHOLD = 5;
 
 interface QueueGroupsProps {
@@ -549,7 +766,12 @@ interface QueueGroupsProps {
   onTriageGroup: (items: QueueItem[]) => void;
 }
 
-function QueueGroups({ items, onDecide, onDismiss, onTriageGroup }: QueueGroupsProps) {
+function QueueGroups({
+  items,
+  onDecide,
+  onDismiss,
+  onTriageGroup,
+}: QueueGroupsProps) {
   const groups = useMemo(() => {
     const buckets = new Map<string, QueueItem[]>();
     for (const item of items) {
@@ -568,8 +790,10 @@ function QueueGroups({ items, onDecide, onDismiss, onTriageGroup }: QueueGroupsP
     }
     const others = Array.from(buckets.entries())
       .map(([source, items]) => ({ source, items }))
-      .sort((a, b) => b.items.length - a.items.length || a.source.localeCompare(b.source));
-    // "(other)" sinks to the bottom regardless of count.
+      .sort(
+        (a, b) =>
+          b.items.length - a.items.length || a.source.localeCompare(b.source),
+      );
     const otherIdx = others.findIndex((g) => g.source === "(other)");
     if (otherIdx >= 0) {
       const [other] = others.splice(otherIdx, 1);
@@ -579,7 +803,7 @@ function QueueGroups({ items, onDecide, onDismiss, onTriageGroup }: QueueGroupsP
   }, [items]);
 
   return (
-    <div className="fl-q-groups">
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {groups.map((g) => (
         <QueueGroupSection
           key={g.source}
@@ -604,55 +828,181 @@ interface QueueGroupSectionProps {
   onTriageGroup: (items: QueueItem[]) => void;
 }
 
-function QueueGroupSection({ source, items, defaultOpen, onDecide, onDismiss, onTriageGroup }: QueueGroupSectionProps) {
+function QueueGroupSection({
+  source,
+  items,
+  defaultOpen,
+  onDecide,
+  onDismiss,
+  onTriageGroup,
+}: QueueGroupSectionProps) {
+  const { tk } = useEmaki();
   const [open, setOpen] = useState(defaultOpen);
-  const oldest = Math.max(...items.map((i) => Math.floor((Date.now() - i.created_at) / 86_400_000)));
-  const oldestCls = oldest >= 14 ? "fl-q-group-stale" : oldest >= 7 ? "fl-q-group-aged" : "fl-q-group-fresh";
+  const oldest = Math.max(
+    ...items.map((i) => Math.floor((Date.now() - i.created_at) / 86_400_000)),
+  );
+  const staleColor =
+    oldest >= 14 ? tk.foxfire : oldest >= 7 ? tk.gold : tk.textMuted;
 
   return (
-    <section className={`fl-q-group ${oldestCls}${open ? " is-open" : ""}`}>
-      <header className="fl-q-group-head">
+    <section
+      style={{
+        border: `1px solid ${tk.divider}`,
+        borderRadius: 6,
+        overflow: "hidden",
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "7px 10px",
+          background: "rgba(0,0,0,0.12)",
+          borderBottom: open ? `1px solid ${tk.divider}` : "none",
+        }}
+      >
         <button
           type="button"
-          className="fl-q-group-toggle"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flex: 1,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            textAlign: "left",
+          }}
         >
-          <span className="fl-q-group-chev" aria-hidden="true">{open ? "▾" : "▸"}</span>
-          <span className="fl-q-group-source">{source.toUpperCase()}</span>
-          <span className="fl-q-group-count">{items.length}</span>
+          <span
+            style={{ color: tk.textMuted, fontSize: "var(--text-xs)" }}
+            aria-hidden="true"
+          >
+            {open ? "▾" : "▸"}
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: tk.textSub,
+              flex: 1,
+            }}
+          >
+            {source}
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              color: tk.textMuted,
+            }}
+          >
+            {items.length}
+          </span>
           {oldest > 0 && (
-            <span className="fl-q-group-age">oldest {oldest}d</span>
+            <span
+              style={{
+                fontFamily: "var(--mono), ui-monospace, monospace",
+                fontSize: "var(--text-2xs)",
+                color: staleColor,
+              }}
+            >
+              oldest {oldest}d
+            </span>
           )}
         </button>
         <button
           type="button"
-          className="fl-q-group-triage"
-          onClick={(e) => { e.stopPropagation(); onTriageGroup(items); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTriageGroup(items);
+          }}
           title={`Triage all ${items.length} ${source} items`}
+          style={{
+            background: "none",
+            border: `1px solid ${tk.divider}`,
+            borderRadius: 4,
+            color: tk.textMuted,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-2xs)",
+            letterSpacing: "0.06em",
+            padding: "2px 8px",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
         >
           Triage {items.length} →
         </button>
       </header>
+
       {open && (
-        <ul className="fl-queue">
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {items.map((item) => (
-            <li key={item.id} className="fl-qitem">
-              <div className="fl-qmeta-row">
-                <span className="fl-qtitle">{item.title}</span>
-              </div>
-              <div className="fl-qbottom">
-                <span className={waitClass(item.created_at)}>{waitLabel(item.created_at)}</span>
-                <div className="fl-qactions">
+            <li
+              key={item.id}
+              style={{
+                padding: "9px 12px",
+                borderBottom: `1px solid ${tk.divider}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "var(--text-sm)",
+                  color: tk.textPrimary,
+                  lineHeight: 1.4,
+                }}
+              >
+                {item.title}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--mono), ui-monospace, monospace",
+                    fontSize: "var(--text-2xs)",
+                    color: waitColor(item.created_at, tk),
+                  }}
+                >
+                  {waitLabel(item.created_at)}
+                </span>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                   <button
-                    className="fl-btn fl-btn-danger spring-hover"
                     onClick={() => onDismiss(item)}
+                    style={{
+                      background: "none",
+                      border: `1px solid rgba(184,83,111,0.5)`,
+                      borderRadius: 4,
+                      color: "#B8536F",
+                      fontFamily: "var(--mono), ui-monospace, monospace",
+                      fontSize: "var(--text-2xs)",
+                      letterSpacing: "0.06em",
+                      padding: "2px 8px",
+                      cursor: "pointer",
+                    }}
                   >
                     DISMISS
                   </button>
                   <button
-                    className="fl-btn fl-btn-primary spring-hover"
                     onClick={() => onDecide(item)}
+                    style={{
+                      background: "none",
+                      border: `1px solid ${tk.accent}`,
+                      borderRadius: 4,
+                      color: tk.accent,
+                      fontFamily: "var(--mono), ui-monospace, monospace",
+                      fontSize: "var(--text-2xs)",
+                      letterSpacing: "0.06em",
+                      padding: "2px 8px",
+                      cursor: "pointer",
+                    }}
                   >
                     DECIDE →
                   </button>
@@ -666,30 +1016,85 @@ function QueueGroupSection({ source, items, defaultOpen, onDecide, onDismiss, on
   );
 }
 
+// ── Small metric pills ────────────────────────────────────────────────────────
+
+function LivePill() {
+  const { tk } = useEmaki();
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-2xs)",
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color: "#7C9A6E",
+        border: "1px solid rgba(124,154,110,0.4)",
+        borderRadius: 999,
+        padding: "2px 8px",
+        background: "rgba(124,154,110,0.08)",
+      }}
+    >
+      <span
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: "50%",
+          background: "#7C9A6E",
+        }}
+      />
+      LIVE
+    </span>
+  );
+}
+
+function StreakPill({
+  streak,
+  tk,
+}: {
+  streak: number;
+  tk: ReturnType<typeof useEmaki>["tk"];
+}) {
+  const color =
+    streak >= 7
+      ? tk.foxfire
+      : streak >= 3
+        ? tk.gold
+        : streak >= 1
+          ? tk.accent
+          : tk.textMuted;
+  const glyph = streak >= 7 ? "★" : streak >= 3 ? "●" : streak >= 1 ? "◐" : "○";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-xs)",
+        color,
+      }}
+    >
+      <span aria-hidden>{glyph}</span>
+      {streak} day streak
+    </span>
+  );
+}
+
 // ── View ──────────────────────────────────────────────────────────────────────
 
 export function FlowView() {
   const { brand } = useMode();
   const brandCfg = brand ? MODE_CONFIG[brand] : null;
 
+  const eyebrow = `SHIP · DECIDE · THE TWO SPINES${brandCfg ? ` // ${brandCfg.glyph} ${brandCfg.label}` : ""}`;
+
   return (
-    <div className="view view-flow">
-      <div className="view-header">
-        <h1 className="view-title">Flow</h1>
-        <div className="view-sub">SHIP · DECIDE · THE TWO SPINES</div>
-      </div>
-
-      {brandCfg && (
-        <div className="cm-filter-hint">
-          <span className="cm-filter-glyph">{brandCfg.glyph}</span>
-          {" "}filtered by {brandCfg.label}
-        </div>
-      )}
-
-      <div className="view-grid two-col">
-        <ShipLogCard brand={brand} />
-        <ApprovalQueueCard brand={brand} />
-      </div>
-    </div>
+    <TabShell title="Flow" eyebrow={eyebrow}>
+      <ShipLogTile brand={brand} />
+      <ApprovalQueueTile brand={brand} />
+    </TabShell>
   );
 }

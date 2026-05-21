@@ -16,6 +16,9 @@ import { HabitEditorDrawer } from "../Habits/HabitEditorDrawer";
 import { NewHabitButton } from "../Habits/HabitEditorButton";
 import type { HabitCardResult } from "../Habits/HabitCard";
 import type { Habit, SeasonStatus, Tier } from "../Habits/types";
+import { TabShell } from "../bento/TabShell";
+import { BentoBox } from "../bento/BentoBox";
+import { useEmaki } from "../bento/emakiContext";
 
 interface JournalEntry {
   entry_date: string;
@@ -43,8 +46,17 @@ interface Week {
 }
 
 type ApiData =
-  | { connected: false; hint: string; status: { connected: false; url: string | null; hasKey: boolean } }
-  | { connected: true; snapshot: Snapshot; week: Week | null; season: SeasonStatus | null };
+  | {
+      connected: false;
+      hint: string;
+      status: { connected: false; url: string | null; hasKey: boolean };
+    }
+  | {
+      connected: true;
+      snapshot: Snapshot;
+      week: Week | null;
+      season: SeasonStatus | null;
+    };
 
 const MIRROR_PROMPTS = [
   "Are you being who you said you wanted to be this week?",
@@ -83,7 +95,6 @@ export function HabitsView() {
   const lastTierRef = useRef<Tier | null>(null);
   const { brand } = useMode();
 
-  // Habit editor drawer state
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
 
@@ -96,7 +107,10 @@ export function HabitsView() {
       const json = await res.json();
       setData(json);
       if (json.connected && json.season) {
-        if (lastTierRef.current && tierIdx(json.season.tier) > tierIdx(lastTierRef.current)) {
+        if (
+          lastTierRef.current &&
+          tierIdx(json.season.tier) > tierIdx(lastTierRef.current)
+        ) {
           setRankUp({ from: lastTierRef.current, to: json.season.tier });
         }
         lastTierRef.current = json.season.tier;
@@ -112,10 +126,10 @@ export function HabitsView() {
     fetchData();
   }, [fetchData]);
 
-  // ── Realtime: subscribe to HC habits + habit_completions ─────────────────
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
-    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null =
+      null;
     let destroyed = false;
 
     async function setupRealtime() {
@@ -123,23 +137,25 @@ export function HabitsView() {
         const res = await fetch("/api/realtime/config");
         if (!res.ok) return;
         const cfg: RealtimeConfig = await res.json();
-        if (!cfg.hcUrl || !cfg.hcPublishableKey) return; // graceful no-op
+        if (!cfg.hcUrl || !cfg.hcPublishableKey) return;
 
-        const client = await createBrowserSupabaseClient(cfg.hcUrl, cfg.hcPublishableKey);
+        const client = await createBrowserSupabaseClient(
+          cfg.hcUrl,
+          cfg.hcPublishableKey,
+        );
         if (!client || destroyed) return;
 
         supabaseClient = client;
         channel = subscribeMultipleTables({
           client,
           channelName: "habits-realtime",
-          tables: [
-            { table: "habits" },
-            { table: "habit_completions" },
-          ],
-          onchange: () => { void fetchData(); },
+          tables: [{ table: "habits" }, { table: "habit_completions" }],
+          onchange: () => {
+            void fetchData();
+          },
         });
       } catch {
-        // Realtime is best-effort — never surface errors to the user.
+        // Realtime is best-effort
       }
     }
 
@@ -165,7 +181,7 @@ export function HabitsView() {
             habits: applyHabitTagFilter(
               data.snapshot.habits as HabitWithTags[],
               brand,
-              "tags" as keyof HabitWithTags
+              "tags" as keyof HabitWithTags,
             ) as Habit[],
           },
         }
@@ -186,28 +202,36 @@ export function HabitsView() {
     setEditingHabit(null);
   }
 
+  // Build eyebrow: streak/season status when data is available
+  const eyebrow = (() => {
+    if (!filteredData?.connected) return "HABITS // SEASON · ANCHORS · WEEKLY";
+    const s = filteredData.season;
+    if (!s) return "HABITS // SEASON · ANCHORS · WEEKLY";
+    return `HABITS // ${s.tier} · ${s.xp_earned} / ${s.xp_target} XP · day ${s.days_elapsed}`;
+  })();
+
   return (
-    <div className="view view-habits">
-      <div className="view-header">
-        <h1 className="view-title">Habits</h1>
-        <div className="view-sub">SEASON · ANCHORS · WEEKLY</div>
-        <NewHabitButton onClick={openNewHabit} />
-      </div>
-
+    <TabShell
+      title="Habits"
+      eyebrow={eyebrow}
+      actions={<NewHabitButton onClick={openNewHabit} />}
+    >
       {brandCfg && (
-        <div className="cm-filter-hint">
-          <span className="cm-filter-glyph">{brandCfg.glyph}</span>
-          {" "}filtered by {brandCfg.label}
-        </div>
+        <BentoBox cols={12} eyebrow="// FILTER">
+          <FilterHint brandCfg={brandCfg} />
+        </BentoBox>
       )}
 
-      {loading && !filteredData && <LoadingCard />}
-      {fetchError && <div className="card"><div className="card-label">ERROR</div><p>{fetchError}</p><button className="fl-btn-primary" onClick={fetchData}>Retry</button></div>}
+      {loading && !filteredData && <LoadingTiles />}
+
+      {fetchError && <ErrorTile error={fetchError} onRetry={fetchData} />}
+
       {!loading && !fetchError && filteredData && !filteredData.connected && (
-        <SetupCard hint={filteredData.hint} onRetry={fetchData} />
+        <SetupTile hint={filteredData.hint} onRetry={fetchData} />
       )}
+
       {!loading && !fetchError && filteredData && filteredData.connected && (
-        <ConnectedView
+        <ConnectedTiles
           snapshot={filteredData.snapshot}
           week={filteredData.week}
           season={filteredData.season}
@@ -219,7 +243,11 @@ export function HabitsView() {
       <RitualGate />
 
       {rankUp && (
-        <RankUpModal from={rankUp.from} to={rankUp.to} onDone={() => setRankUp(null)} />
+        <RankUpModal
+          from={rankUp.from}
+          to={rankUp.to}
+          onDone={() => setRankUp(null)}
+        />
       )}
 
       {editorOpen && (
@@ -229,60 +257,147 @@ export function HabitsView() {
           onSaved={fetchData}
         />
       )}
-    </div>
+    </TabShell>
   );
 }
 
-function SetupCard({ hint, onRetry }: { hint: string; onRetry: () => void }) {
+function FilterHint({
+  brandCfg,
+}: {
+  brandCfg: { glyph: string; label: string };
+}) {
+  const { tk } = useEmaki();
   return (
-    <div className="card hc-setup">
-      <div className="card-label">
-        00 // HC NOT CONNECTED <span className="hb-tag">SETUP NEEDED</span>
-      </div>
-      <p className="hc-setup-body">
-        {hint || "Habits + journal live in your Hero's Chronicle Supabase. To wire PG OS to HC, add HC_SUPABASE_SERVICE_ROLE_KEY to your .env.local."}
+    <span style={{ color: tk.textSub, fontSize: "var(--text-sm)" }}>
+      <span style={{ marginRight: 6 }}>{brandCfg.glyph}</span>
+      filtered by {brandCfg.label}
+    </span>
+  );
+}
+
+function ErrorTile({ error, onRetry }: { error: string; onRetry: () => void }) {
+  const { tk } = useEmaki();
+  return (
+    <BentoBox cols={12} eyebrow="// ERROR">
+      <p style={{ color: tk.textSub, marginBottom: 12 }}>{error}</p>
+      <button
+        onClick={onRetry}
+        style={{
+          background: "transparent",
+          border: `1px solid ${tk.accent}`,
+          borderRadius: 6,
+          color: tk.accent,
+          fontFamily: "var(--mono), ui-monospace, monospace",
+          fontSize: "var(--text-xs)",
+          padding: "6px 14px",
+          cursor: "pointer",
+          letterSpacing: "0.08em",
+        }}
+      >
+        Retry
+      </button>
+    </BentoBox>
+  );
+}
+
+function SetupTile({ hint, onRetry }: { hint: string; onRetry: () => void }) {
+  const { tk } = useEmaki();
+  return (
+    <BentoBox cols={12} eyebrow="00 // HC NOT CONNECTED">
+      <p style={{ color: tk.textSub, marginBottom: 10 }}>
+        {hint ||
+          "Habits + journal live in your Hero's Chronicle Supabase. Add HC_SUPABASE_SERVICE_ROLE_KEY to .env.local to connect."}
       </p>
-      <pre className="hc-setup-code">HC_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here</pre>
-      <div className="hc-setup-actions">
-        <a className="fl-btn-primary hc-setup-link" href="https://supabase.com/dashboard/project/ystqevehdgoonhpjmgis/settings/api" target="_blank" rel="noreferrer">open Supabase dashboard →</a>
-        <button className="fl-btn-secondary" onClick={onRetry}>Retry connection</button>
+      <pre
+        style={{
+          fontFamily: "var(--mono), ui-monospace, monospace",
+          fontSize: "var(--text-xs)",
+          color: tk.textMuted,
+          background: "rgba(0,0,0,0.18)",
+          borderRadius: 6,
+          padding: "8px 12px",
+          marginBottom: 12,
+          overflowX: "auto",
+        }}
+      >
+        HC_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+      </pre>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <a
+          href="https://supabase.com/dashboard/project/ystqevehdgoonhpjmgis/settings/api"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            background: "transparent",
+            border: `1px solid ${tk.accent}`,
+            borderRadius: 6,
+            color: tk.accent,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            padding: "6px 14px",
+            letterSpacing: "0.08em",
+            textDecoration: "none",
+          }}
+        >
+          open Supabase dashboard
+        </a>
+        <button
+          onClick={onRetry}
+          style={{
+            background: "transparent",
+            border: `1px solid ${tk.divider}`,
+            borderRadius: 6,
+            color: tk.textSub,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            padding: "6px 14px",
+            cursor: "pointer",
+            letterSpacing: "0.08em",
+          }}
+        >
+          Retry connection
+        </button>
       </div>
-    </div>
+    </BentoBox>
   );
 }
 
-function LoadingCard() {
+function LoadingTiles() {
+  const { tk } = useEmaki();
   return (
-    <div className="ht-layout">
-      <div className="card">
-        <div className="card-label">01 // SEASON</div>
-        <div style={{ height: 12 }} />
+    <>
+      <BentoBox cols={4} eyebrow="01 // SEASON">
         <Skeleton variant="text" width="55%" height={20} />
         <div style={{ height: 14 }} />
         <Skeleton variant="pill" width="100%" height={10} />
         <div style={{ height: 10 }} />
         <Skeleton variant="text" width="40%" height={11} />
-      </div>
-      <div className="card">
-        <div className="card-label">02 // ANCHORS</div>
-        <div style={{ height: 12 }} />
+      </BentoBox>
+      <BentoBox cols={8} eyebrow="02 // ANCHORS">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0" }}>
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "8px 0",
+              borderBottom: i < 2 ? `1px solid ${tk.divider}` : undefined,
+            }}
+          >
             <Skeleton variant="avatar" width={28} height={28} />
             <Skeleton variant="text" width="60%" height={14} />
           </div>
         ))}
-      </div>
-      <div className="card">
-        <div className="card-label">03 // WEEKLY</div>
-        <div style={{ height: 12 }} />
+      </BentoBox>
+      <BentoBox cols={12} eyebrow="03 // WEEKLY">
         <Skeleton variant="text" lines={3} />
-      </div>
-    </div>
+      </BentoBox>
+    </>
   );
 }
 
-function ConnectedView({
+function ConnectedTiles({
   snapshot,
   week,
   season,
@@ -295,15 +410,18 @@ function ConnectedView({
   onRefetch: () => void;
   onEditHabit: (habit: Habit) => void;
 }) {
-  void onEditHabit; // available for future per-card edit buttons; wired through here
-  const mirrorPrompt = MIRROR_PROMPTS[new Date().getDay() % MIRROR_PROMPTS.length];
+  void onEditHabit;
+  const mirrorPrompt =
+    MIRROR_PROMPTS[new Date().getDay() % MIRROR_PROMPTS.length];
 
-  // Bucket: anchors = no weekly_target (treated as daily). Weekly = has weekly_target.
   const anchors = snapshot.habits.filter((h) => !h.weekly_target);
   const weekly = snapshot.habits.filter((h) => !!h.weekly_target);
 
   const onComplete = useCallback(
-    async (habit: Habit, actualValue: number | null): Promise<HabitCardResult | void> => {
+    async (
+      habit: Habit,
+      actualValue: number | null,
+    ): Promise<HabitCardResult | void> => {
       try {
         const res = await fetch("/api/habits", {
           method: "POST",
@@ -318,15 +436,17 @@ function ConnectedView({
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!json.ok) throw new Error("complete failed");
-        // Fire refetch but compute the burst from the local data we know.
         const baseXP = habit.xp_per_completion;
         let mult = 1.0;
-        if (habit.target_value && habit.target_value > 0 && actualValue != null) {
+        if (
+          habit.target_value &&
+          habit.target_value > 0 &&
+          actualValue != null
+        ) {
           mult = Math.min(1.5, Math.max(1.0, actualValue / habit.target_value));
         }
         const earned = Math.round(baseXP * mult);
         const bonus = mult > 1.0;
-        // Trigger refresh after a tick so the +XP burst gets to render.
         setTimeout(onRefetch, 100);
         return { ok: true, earnedXP: earned, bonus };
       } catch (e) {
@@ -339,29 +459,65 @@ function ConnectedView({
   );
 
   return (
-    <div className="ht-layout">
-      {season && <SeasonTierCard season={season} />}
-
-      {anchors.length === 0 && weekly.length === 0 && (
-        <div className="card"><div className="card-label">01 // TODAY · HABITS</div><p className="hb-empty">No habits configured in HC yet.</p></div>
+    <>
+      {season && (
+        <BentoBox cols={4} eyebrow="01 // SEASON">
+          <SeasonTierCard season={season} />
+        </BentoBox>
       )}
 
-      {anchors.length > 0 && <AnchorRow habits={anchors} onComplete={onComplete} />}
+      {anchors.length === 0 && weekly.length === 0 && (
+        <BentoBox cols={season ? 8 : 12} eyebrow="01 // TODAY · HABITS">
+          <EmptyHints />
+        </BentoBox>
+      )}
 
-      {weekly.length > 0 && <WeeklyGrid habits={weekly} onComplete={onComplete} />}
+      {anchors.length > 0 && (
+        <BentoBox
+          cols={season ? 8 : 12}
+          eyebrow="02 // ANCHORS"
+          scroll={anchors.length > 6}
+        >
+          <AnchorRow habits={anchors} onComplete={onComplete} />
+        </BentoBox>
+      )}
 
-      <JournalCard snapshot={snapshot} onRefetch={onRefetch} />
-      <WeekCard week={week} mirrorPrompt={mirrorPrompt} />
-    </div>
+      {weekly.length > 0 && (
+        <BentoBox cols={12} eyebrow="03 // WEEKLY" scroll={weekly.length > 5}>
+          <WeeklyGrid habits={weekly} onComplete={onComplete} />
+        </BentoBox>
+      )}
+
+      <JournalTile snapshot={snapshot} onRefetch={onRefetch} />
+      <WeekTile week={week} mirrorPrompt={mirrorPrompt} />
+    </>
   );
 }
 
-function JournalCard({ snapshot }: { snapshot: Snapshot; onRefetch: () => void }) {
+function EmptyHints() {
+  const { tk } = useEmaki();
+  return (
+    <p style={{ color: tk.textMuted, fontStyle: "italic" }}>
+      No habits configured in HC yet.
+    </p>
+  );
+}
+
+function JournalTile({
+  snapshot,
+}: {
+  snapshot: Snapshot;
+  onRefetch: () => void;
+}) {
+  const { tk } = useEmaki();
   const existing = snapshot.journal;
-  const initMoodIdx = existing?.energy_level != null
-    ? MOOD_OPTS.findIndex((o) => o[2] === existing.energy_level)
-    : -1;
-  const [moodIdx, setMoodIdx] = useState<number | null>(initMoodIdx >= 0 ? initMoodIdx : null);
+  const initMoodIdx =
+    existing?.energy_level != null
+      ? MOOD_OPTS.findIndex((o) => o[2] === existing.energy_level)
+      : -1;
+  const [moodIdx, setMoodIdx] = useState<number | null>(
+    initMoodIdx >= 0 ? initMoodIdx : null,
+  );
   const [text, setText] = useState(existing?.raw_text ?? "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -393,7 +549,7 @@ function JournalCard({ snapshot }: { snapshot: Snapshot; onRefetch: () => void }
         setSaving(false);
       }
     },
-    [snapshot.date]
+    [snapshot.date],
   );
 
   function handleTextChange(val: string) {
@@ -416,73 +572,172 @@ function JournalCard({ snapshot }: { snapshot: Snapshot; onRefetch: () => void }
   }
 
   return (
-    <div className="card">
-      <div className="card-label">02 // TODAY · JOURNAL</div>
-
-      <div className="hb-mood">
+    <BentoBox cols={6} eyebrow="04 // TODAY · JOURNAL">
+      <div
+        style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}
+      >
         {MOOD_OPTS.map(([emoji, label], i) => (
           <button
             key={i}
-            className={`hb-mood-btn${moodIdx === i ? " selected" : ""}`}
             onClick={() => handleMoodClick(i)}
             title={label}
             aria-label={label}
+            style={{
+              fontSize: 22,
+              background: moodIdx === i ? `rgba(0,0,0,0.22)` : "transparent",
+              border: `1px solid ${moodIdx === i ? tk.accent : tk.divider}`,
+              borderRadius: 8,
+              padding: "4px 8px",
+              cursor: "pointer",
+              transition: "border-color 140ms ease, background 140ms ease",
+              lineHeight: 1,
+            }}
           >
             {emoji}
           </button>
         ))}
       </div>
 
-      {moodIdx != null && <div className="hb-mood-current">Energy: {MOOD_OPTS[moodIdx][1]} ({MOOD_OPTS[moodIdx][2]} / 10)</div>}
+      {moodIdx != null && (
+        <div
+          style={{
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            color: tk.gold,
+            marginBottom: 10,
+            letterSpacing: "0.06em",
+          }}
+        >
+          Energy: {MOOD_OPTS[moodIdx][1]} ({MOOD_OPTS[moodIdx][2]} / 10)
+        </div>
+      )}
 
       <textarea
-        className="hb-journal-input"
         placeholder="One line reflection (optional)"
         value={text}
         onChange={(e) => handleTextChange(e.target.value)}
         onBlur={handleBlur}
         rows={3}
+        style={{
+          width: "100%",
+          background: "rgba(0,0,0,0.14)",
+          border: `1px solid ${tk.divider}`,
+          borderRadius: 8,
+          color: tk.textPrimary,
+          fontFamily: "var(--serif), Georgia, serif",
+          fontSize: "var(--text-base)",
+          padding: "10px 12px",
+          resize: "none",
+          outline: "none",
+          boxSizing: "border-box",
+          lineHeight: 1.6,
+        }}
       />
 
-      {saving && <span className="hb-save-status">saving…</span>}
-      {saveError && <span className="hb-save-error">{saveError}</span>}
-    </div>
+      {saving && (
+        <span
+          style={{
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-2xs)",
+            color: tk.textMuted,
+            letterSpacing: "0.1em",
+          }}
+        >
+          saving...
+        </span>
+      )}
+      {saveError && (
+        <span
+          style={{
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-2xs)",
+            color: tk.foxfire,
+          }}
+        >
+          {saveError}
+        </span>
+      )}
+    </BentoBox>
   );
 }
 
-function WeekCard({ week, mirrorPrompt }: { week: Week | null; mirrorPrompt: string }) {
-  return (
-    <div className="card hb-mirror">
-      <div className="card-label">03 // THIS WEEK</div>
+function WeekTile({
+  week,
+  mirrorPrompt,
+}: {
+  week: Week | null;
+  mirrorPrompt: string;
+}) {
+  const { tk } = useEmaki();
 
+  return (
+    <BentoBox cols={6} eyebrow="05 // THIS WEEK">
       {week ? (
-        <div className="hb-stats">
-          <div className="hb-stat">
-            <span className="hb-stat-num">{week.shipsThisWeek}</span>
-            <span className="hb-stat-label">Ships</span>
-          </div>
-          <div className="hb-stat">
-            <span className="hb-stat-num">{week.habitsCompletedThisWeek}</span>
-            <span className="hb-stat-label">Habits done</span>
-          </div>
-          <div className="hb-stat">
-            <span className="hb-stat-num">{week.daysJournaled} / 7</span>
-            <span className="hb-stat-label">Days journaled</span>
-          </div>
-          <div className="hb-stat">
-            <span className="hb-stat-num">
-              {week.avgMood != null ? week.avgMood.toFixed(1) + " / 10" : "—"}
-            </span>
-            <span className="hb-stat-label">Avg mood</span>
-          </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "12px 20px",
+            marginBottom: 16,
+          }}
+        >
+          {[
+            ["Ships", week.shipsThisWeek],
+            ["Habits done", week.habitsCompletedThisWeek],
+            ["Days journaled", `${week.daysJournaled} / 7`],
+            [
+              "Avg mood",
+              week.avgMood != null ? `${week.avgMood.toFixed(1)} / 10` : "—",
+            ],
+          ].map(([label, val]) => (
+            <div key={String(label)}>
+              <div
+                style={{
+                  fontFamily: "var(--serif), Georgia, serif",
+                  fontSize: "var(--text-xl)",
+                  fontWeight: 600,
+                  color: tk.gold,
+                  lineHeight: 1.1,
+                }}
+              >
+                {val}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-2xs)",
+                  color: tk.textMuted,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginTop: 2,
+                }}
+              >
+                {label}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
-        <p className="hb-empty">No week data yet.</p>
+        <p
+          style={{ color: tk.textMuted, fontStyle: "italic", marginBottom: 16 }}
+        >
+          No week data yet.
+        </p>
       )}
 
-      <p className="hb-prompt">
-        <em>{mirrorPrompt}</em>
+      <p
+        style={{
+          fontFamily: "var(--serif), Georgia, serif",
+          fontSize: "var(--text-sm)",
+          color: tk.textSub,
+          fontStyle: "italic",
+          borderTop: `1px solid ${tk.divider}`,
+          paddingTop: 12,
+          margin: 0,
+        }}
+      >
+        {mirrorPrompt}
       </p>
-    </div>
+    </BentoBox>
   );
 }
