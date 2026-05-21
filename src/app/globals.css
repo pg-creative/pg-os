@@ -390,8 +390,17 @@ body{
   gap:2px;
   padding:0 6px;
   margin-bottom:18px;
-  border-bottom:1px solid var(--border-soft);
+  border-bottom:none;
   position:relative;
+}
+/* Kintsugi seam: a gilded gradient hairline under the tab bar (Emaki signature) */
+.tabbar::after{
+  content:"";
+  position:absolute;
+  left:6px; right:6px; bottom:0;
+  height:1px;
+  background:linear-gradient(90deg, transparent, var(--border), var(--accent-2), var(--border), transparent);
+  opacity:0.75;
 }
 .tabbar .tab{
   background:transparent;
@@ -416,7 +425,7 @@ body{
   position:absolute;
   left:14px; right:14px; bottom:-1px;
   height:2px;
-  background:var(--accent);
+  background:linear-gradient(90deg, var(--accent), var(--accent-2));
   border-radius:1px;
   transform:scaleX(0);
   transform-origin:center;
