@@ -16,18 +16,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CockpitTerminal } from "./cockpit/CockpitTerminal";
-
-const C = {
-  ink: "#13110D",
-  panel: "#1B1813",
-  cream: "#EFE6D4",
-  dim: "#9C8B70",
-  amber: "#D6A367",
-  emerald: "#7C9A6E",
-  ruby: "#B8536F",
-  sapphire: "#5B7BA1",
-  border: "rgba(214,163,103,0.16)",
-};
+import { TabShell } from "../bento/TabShell";
+import { BentoBox } from "../bento/BentoBox";
+import { useEmaki } from "../bento/emakiContext";
 
 type Telemetry = {
   sessionId: string;
@@ -155,189 +146,162 @@ export function CockpitView() {
   const controllableCount = cards.filter((c) => c.controllable).length;
   const sel = cards.find((c) => c.sessionId === selected) || null;
 
+  const eyebrow = `FLEET // ${cards.length} live · ${controllableCount} controllable`;
+
   return (
-    <div
-      style={{ padding: "20px 22px 64px", maxWidth: 1320, margin: "0 auto" }}
+    <TabShell
+      title="Cockpit"
+      eyebrow={eyebrow}
+      actions={
+        <LaunchControls
+          daemon={daemon}
+          newCwd={newCwd}
+          setNewCwd={setNewCwd}
+          launching={launching}
+          launch={launch}
+        />
+      }
     >
-      {/* HEADER */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 14,
-          flexWrap: "wrap",
-          marginBottom: 4,
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: '"Iowan Old Style", Palatino, Georgia, serif',
-            fontSize: 26,
-            fontWeight: 500,
-            color: "var(--fg)",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          Cockpit
-        </h1>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: "var(--text-xs)",
-            color: "var(--muted)",
-          }}
-        >
-          {cards.length} live · {controllableCount} controllable
-        </span>
-        <DaemonPill daemon={daemon} />
-      </div>
-      <p
-        style={{
-          margin: "2px 0 18px",
-          fontSize: "var(--text-sm)",
-          color: "var(--muted)",
-          maxWidth: 620,
-        }}
-      >
-        Every live Claude Code session, with status-bar telemetry. Sessions
-        launched here are tmux-backed — type into them from the browser or
-        attach in Ghostty. The painted agent-office + voice layer arrives once
-        the aesthetic is picked.
-      </p>
-
-      {/* Kitsu now mounts globally in page.tsx (persistent bottom-right on every tab). */}
-
-      {/* LAUNCH */}
-      {daemon?.running && (
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 18,
-            flexWrap: "wrap",
-          }}
-        >
-          <input
-            value={newCwd}
-            onChange={(e) => setNewCwd(e.target.value)}
-            placeholder="project path (default: ~)  e.g. /Users/pg/CEREBRUM/personal-os"
-            style={{
-              flex: "1 1 380px",
-              background: C.panel,
-              border: `1px solid ${C.border}`,
-              borderRadius: 6,
-              padding: "8px 11px",
-              color: C.cream,
-              fontFamily: "ui-monospace, monospace",
-              fontSize: "var(--text-sm)",
-            }}
-          />
-          <button onClick={launch} disabled={launching} style={btn(C.amber)}>
-            {launching ? "launching…" : "+ New session"}
-          </button>
-        </div>
-      )}
-
-      {/* GRID */}
-      {!loaded ? (
-        <Empty text="reading sessions…" />
-      ) : cards.length === 0 ? (
-        <Empty text="no live Claude Code sessions. Launch one above (or run claude in a terminal — it'll appear as telemetry-only)." />
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {cards.map((c) => (
-            <SessionCard
-              key={c.sessionId}
-              card={c}
-              selected={c.sessionId === selected}
-              onSelect={() =>
-                setSelected(c.sessionId === selected ? null : c.sessionId)
-              }
-            />
-          ))}
-        </div>
-      )}
-
-      {/* TERMINAL PANE */}
-      {sel && (
-        <div
-          style={{
-            marginTop: 20,
-            border: `1px solid ${C.border}`,
-            borderRadius: 10,
-            overflow: "hidden",
-            background: C.ink,
-            height: 420,
-          }}
-        >
-          {sel.controllable && daemon?.running && daemon.token ? (
-            <CockpitTerminal
-              sessionId={sel.sessionId}
-              wsBase={daemon.wsBase}
-              token={daemon.token}
-            />
-          ) : (
-            <div
-              style={{ padding: 28, color: C.dim, fontSize: "var(--text-sm)" }}
-            >
-              <strong style={{ color: C.cream }}>{sel.projectLabel}</strong> is
-              telemetry-only — it wasn’t launched through the cockpit, so
-              there’s no shared PTY to attach to.{" "}
-              {daemon?.running
-                ? "Launch a new session here to get two-way control."
-                : "Start the daemon to enable two-way control: node scripts/cockpit-daemon.mjs"}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      <SessionGrid
+        cards={cards}
+        loaded={loaded}
+        selected={selected}
+        setSelected={setSelected}
+      />
+      {sel && <TerminalTile sel={sel} daemon={daemon} />}
+    </TabShell>
   );
 }
 
-function DaemonPill({ daemon }: { daemon: DaemonInfo | null }) {
-  const up = !!daemon?.running;
+// Separated so useEmaki() can run inside EmakiProvider (TabShell wraps it)
+function LaunchControls({
+  daemon,
+  newCwd,
+  setNewCwd,
+  launching,
+  launch,
+}: {
+  daemon: DaemonInfo | null;
+  newCwd: string;
+  setNewCwd: (v: string) => void;
+  launching: boolean;
+  launch: () => void;
+}) {
+  const { tk } = useEmaki();
+
+  if (!daemon?.running) {
+    return <DaemonPill daemon={daemon} tk={tk} />;
+  }
+
   return (
-    <span
-      title={
-        up
-          ? `daemon on :${daemon?.port}`
-          : "daemon down — run: node scripts/cockpit-daemon.mjs"
-      }
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        fontFamily: "ui-monospace, monospace",
-        fontSize: "var(--text-2xs)",
-        letterSpacing: "0.1em",
-        textTransform: "uppercase",
-        color: up ? C.emerald : C.ruby,
-        border: `1px solid ${up ? "rgba(124,154,110,0.4)" : "rgba(184,83,111,0.4)"}`,
-        borderRadius: 999,
-        padding: "2px 9px",
-      }}
-    >
-      <span
+    <>
+      <DaemonPill daemon={daemon} tk={tk} />
+      <input
+        value={newCwd}
+        onChange={(e) => setNewCwd(e.target.value)}
+        placeholder="project path (default: ~)"
+        onKeyDown={(e) => e.key === "Enter" && launch()}
         style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: up ? C.emerald : C.ruby,
+          background: "rgba(0,0,0,0.18)",
+          border: `1px solid ${tk.divider}`,
+          borderRadius: 6,
+          padding: "6px 11px",
+          color: tk.textPrimary,
+          fontFamily: "var(--mono), ui-monospace, monospace",
+          fontSize: "var(--text-xs)",
+          width: 280,
+          outline: "none",
         }}
       />
-      daemon {up ? "live" : "down"}
-    </span>
+      <button
+        onClick={launch}
+        disabled={launching}
+        style={{
+          background: "transparent",
+          border: `1px solid ${tk.accent}`,
+          borderRadius: 6,
+          color: tk.accent,
+          fontFamily: "var(--mono), ui-monospace, monospace",
+          fontSize: "var(--text-xs)",
+          letterSpacing: "0.08em",
+          padding: "6px 14px",
+          cursor: launching ? "default" : "pointer",
+          opacity: launching ? 0.6 : 1,
+          transition: "opacity 160ms ease",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {launching ? "launching..." : "+ New session"}
+      </button>
+    </>
   );
 }
 
-function SessionCard({
+function SessionGrid({
+  cards,
+  loaded,
+  selected,
+  setSelected,
+}: {
+  cards: Card[];
+  loaded: boolean;
+  selected: string | null;
+  setSelected: (id: string | null) => void;
+}) {
+  const { tk } = useEmaki();
+
+  if (!loaded) {
+    return (
+      <BentoBox cols={12} eyebrow="01 // FLEET">
+        <div
+          style={{
+            color: tk.textMuted,
+            fontStyle: "italic",
+            padding: "20px 0",
+            textAlign: "center",
+          }}
+        >
+          reading sessions...
+        </div>
+      </BentoBox>
+    );
+  }
+
+  if (cards.length === 0) {
+    return (
+      <BentoBox cols={12} eyebrow="01 // FLEET">
+        <div
+          style={{
+            color: tk.textMuted,
+            fontStyle: "italic",
+            padding: "20px 0",
+            textAlign: "center",
+          }}
+        >
+          no live Claude Code sessions. Launch one above, or run claude in a
+          terminal — it will appear as telemetry-only.
+        </div>
+      </BentoBox>
+    );
+  }
+
+  return (
+    <>
+      {cards.map((c) => (
+        <SessionTile
+          key={c.sessionId}
+          card={c}
+          selected={c.sessionId === selected}
+          onSelect={() =>
+            setSelected(c.sessionId === selected ? null : c.sessionId)
+          }
+        />
+      ))}
+    </>
+  );
+}
+
+function SessionTile({
   card,
   selected,
   onSelect,
@@ -346,80 +310,90 @@ function SessionCard({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { tk } = useEmaki();
   const pct = Math.max(0, Math.min(100, Math.round(card.contextUsedPct)));
-  const barColor = pct < 60 ? C.emerald : pct < 85 ? C.amber : C.ruby;
   const running = card.activityStatus === "running" || card.ageMs < 60_000;
 
+  // Context bar color: green/amber/red gradient using emaki tokens
+  const barColor = pct < 60 ? "#7C9A6E" : pct < 85 ? tk.accent : "#B8536F";
+
+  // Running dot glow using emaki foxfire for running, muted for idle
+  const dotColor = running ? tk.foxfire : tk.textMuted;
+  const dotShadow = running ? `0 0 6px ${tk.foxfireGlow}` : "none";
+
   return (
-    <button
+    <BentoBox
+      cols={4}
       onClick={onSelect}
       style={{
-        textAlign: "left",
-        background: selected ? "rgba(214,163,103,0.08)" : C.panel,
-        border: `1px solid ${selected ? C.amber : C.border}`,
-        borderRadius: 10,
-        padding: 14,
-        cursor: "pointer",
-        color: C.cream,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        transition: "border-color 160ms ease, background 160ms ease",
+        outline: selected ? `1.5px solid ${tk.accent}` : undefined,
+        transition: "outline-color 160ms ease",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Title row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 6,
+        }}
+      >
         <span
           title={running ? "running" : "idle"}
           style={{
             width: 8,
             height: 8,
             borderRadius: "50%",
-            background: running ? C.emerald : C.dim,
-            boxShadow: running ? `0 0 6px ${C.emerald}` : "none",
+            background: dotColor,
+            boxShadow: dotShadow,
             flexShrink: 0,
           }}
         />
         <span
           style={{
-            fontFamily: '"Iowan Old Style", Palatino, Georgia, serif',
+            fontFamily: "var(--serif), Georgia, serif",
             fontSize: "var(--text-base)",
             fontWeight: 500,
+            color: tk.textPrimary,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
+            flex: 1,
           }}
         >
           {card.projectLabel}
         </span>
-        <span style={{ flex: 1 }} />
         {card.controllable ? (
-          <Tag color={C.amber}>◆ control</Tag>
+          <ControlTag color={tk.gold}>control</ControlTag>
         ) : (
-          <Tag color={C.dim}>telemetry</Tag>
+          <ControlTag color={tk.textMuted}>telemetry</ControlTag>
         )}
       </div>
 
+      {/* Branch */}
       {card.branch && (
         <div
           style={{
-            fontFamily: "ui-monospace, monospace",
+            fontFamily: "var(--mono), ui-monospace, monospace",
             fontSize: "var(--text-2xs)",
-            color: C.dim,
+            color: tk.textMuted,
+            marginBottom: 6,
           }}
         >
-          ⌥ {card.worktree || card.branch}
+          {card.worktree || card.branch}
         </div>
       )}
 
-      {/* context bar */}
-      <div>
+      {/* Context bar */}
+      <div style={{ marginBottom: 6 }}>
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            fontFamily: "ui-monospace, monospace",
+            fontFamily: "var(--mono), ui-monospace, monospace",
             fontSize: "var(--text-2xs)",
-            color: C.dim,
+            color: tk.textMuted,
             marginBottom: 3,
           }}
         >
@@ -430,49 +404,56 @@ function SessionCard({
         </div>
         <div
           style={{
-            height: 5,
-            background: "rgba(255,255,255,0.06)",
-            borderRadius: 3,
+            height: 4,
+            background: tk.divider,
+            borderRadius: 2,
             overflow: "hidden",
           }}
         >
           <div
-            style={{ width: `${pct}%`, height: "100%", background: barColor }}
+            style={{
+              width: `${pct}%`,
+              height: "100%",
+              background: barColor,
+              transition: "width 600ms ease",
+            }}
           />
         </div>
       </div>
 
-      {/* current tool / last msg */}
+      {/* Current tool / last msg */}
       <div
         style={{
           fontSize: "var(--text-xs)",
-          color: card.currentTool ? C.cream : C.dim,
+          color: card.currentTool ? tk.textSub : tk.textMuted,
           minHeight: 16,
+          marginBottom: 6,
         }}
       >
         {card.currentTool ? (
           <span>
-            <span style={{ color: C.amber }}>▸</span> {card.currentTool}
+            <span style={{ color: tk.foxfire }}>▸</span> {card.currentTool}
           </span>
         ) : card.lastUserMsg ? (
           <span style={{ opacity: 0.75 }}>
-            “{truncate(card.lastUserMsg, 64)}”
+            "{truncate(card.lastUserMsg, 64)}"
           </span>
         ) : (
           <span style={{ opacity: 0.5 }}>idle</span>
         )}
       </div>
 
-      {/* footer stats */}
+      {/* Footer stats */}
       <div
         style={{
           display: "flex",
-          gap: 12,
-          fontFamily: "ui-monospace, monospace",
+          gap: 10,
+          fontFamily: "var(--mono), ui-monospace, monospace",
           fontSize: "var(--text-2xs)",
-          color: C.dim,
-          borderTop: `1px solid ${C.border}`,
-          paddingTop: 7,
+          color: tk.textMuted,
+          borderTop: `1px solid ${tk.divider}`,
+          paddingTop: 6,
+          flexWrap: "wrap",
         }}
       >
         <span title="session cost">${card.costUsd.toFixed(2)}</span>
@@ -488,18 +469,100 @@ function SessionCard({
         )}
         {(card.linesAdded || card.linesRemoved) && (
           <span title="lines changed">
-            <span style={{ color: C.emerald }}>+{card.linesAdded ?? 0}</span>{" "}
-            <span style={{ color: C.ruby }}>−{card.linesRemoved ?? 0}</span>
+            <span style={{ color: "#7C9A6E" }}>+{card.linesAdded ?? 0}</span>{" "}
+            <span style={{ color: "#B8536F" }}>-{card.linesRemoved ?? 0}</span>
           </span>
         )}
-        {card.thinking && <span title="extended thinking on">✦</span>}
-        {card.fastMode && <span title="fast mode">⚡</span>}
+        {card.thinking && <span title="extended thinking on">&#10022;</span>}
+        {card.fastMode && <span title="fast mode">&#9889;</span>}
       </div>
-    </button>
+    </BentoBox>
   );
 }
 
-function Tag({
+function TerminalTile({
+  sel,
+  daemon,
+}: {
+  sel: Card;
+  daemon: DaemonInfo | null;
+}) {
+  const { tk } = useEmaki();
+
+  return (
+    <BentoBox
+      cols={12}
+      eyebrow={`// ${sel.projectLabel}`}
+      style={{ height: 420, padding: 0, overflow: "hidden" }}
+    >
+      {sel.controllable && daemon?.running && daemon.token ? (
+        <CockpitTerminal
+          sessionId={sel.sessionId}
+          wsBase={daemon.wsBase}
+          token={daemon.token}
+        />
+      ) : (
+        <div
+          style={{
+            padding: "28px 24px",
+            color: tk.textMuted,
+            fontSize: "var(--text-sm)",
+          }}
+        >
+          <strong style={{ color: tk.textPrimary }}>{sel.projectLabel}</strong>{" "}
+          is telemetry-only — it was not launched through the cockpit, so there
+          is no shared PTY to attach to.{" "}
+          {daemon?.running
+            ? "Launch a new session here to get two-way control."
+            : "Start the daemon to enable two-way control: node scripts/cockpit-daemon.mjs"}
+        </div>
+      )}
+    </BentoBox>
+  );
+}
+
+function DaemonPill({
+  daemon,
+  tk,
+}: {
+  daemon: DaemonInfo | null;
+  tk: ReturnType<typeof useEmaki>["tk"];
+}) {
+  const up = !!daemon?.running;
+  const color = up ? "#7C9A6E" : "#B8536F";
+  const borderColor = up ? "rgba(124,154,110,0.4)" : "rgba(184,83,111,0.4)";
+
+  return (
+    <span
+      title={
+        up
+          ? `daemon on :${daemon?.port}`
+          : "daemon down — run: node scripts/cockpit-daemon.mjs"
+      }
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-2xs)",
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color,
+        border: `1px solid ${borderColor}`,
+        borderRadius: 999,
+        padding: "3px 9px",
+        background: "rgba(0,0,0,0.12)",
+      }}
+    >
+      <span
+        style={{ width: 6, height: 6, borderRadius: "50%", background: color }}
+      />
+      daemon {up ? "live" : "down"}
+    </span>
+  );
+}
+
+function ControlTag({
   color,
   children,
 }: {
@@ -509,7 +572,7 @@ function Tag({
   return (
     <span
       style={{
-        fontFamily: "ui-monospace, monospace",
+        fontFamily: "var(--mono), ui-monospace, monospace",
         fontSize: "var(--text-2xs)",
         letterSpacing: "0.08em",
         textTransform: "uppercase",
@@ -518,6 +581,7 @@ function Tag({
         borderRadius: 4,
         padding: "1px 6px",
         opacity: 0.85,
+        flexShrink: 0,
       }}
     >
       {children}
@@ -525,38 +589,6 @@ function Tag({
   );
 }
 
-function Empty({ text }: { text: string }) {
-  return (
-    <div
-      style={{
-        padding: "48px 24px",
-        textAlign: "center",
-        color: C.dim,
-        fontSize: "var(--text-sm)",
-        fontStyle: "italic",
-        border: `1px dashed ${C.border}`,
-        borderRadius: 10,
-      }}
-    >
-      {text}
-    </div>
-  );
-}
-
-function btn(color: string): React.CSSProperties {
-  return {
-    background: "transparent",
-    border: `1px solid ${color}`,
-    borderRadius: 6,
-    color,
-    fontFamily: "ui-monospace, monospace",
-    fontSize: "var(--text-sm)",
-    letterSpacing: "0.04em",
-    padding: "8px 14px",
-    cursor: "pointer",
-  };
-}
-
 function truncate(s: string, n: number) {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
+  return s.length > n ? `${s.slice(0, n)}...` : s;
 }
