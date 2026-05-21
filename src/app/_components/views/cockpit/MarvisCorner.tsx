@@ -212,6 +212,28 @@ export function MarvisCorner({
           {(m.state === "thinking" || m.state === "speaking") && m.reply && (
             <Bubble role="assistant" text={m.reply} live />
           )}
+          {/* tool-activity indicator: shows while Kitsu is using a tool */}
+          {m.state === "thinking" && m.activeTool && (
+            <div
+              style={{
+                alignSelf: "flex-start",
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                color: C.amber,
+                fontFamily: "ui-monospace,monospace",
+                fontSize: "var(--text-2xs)",
+                letterSpacing: ".04em",
+                opacity: 0.85,
+                padding: "2px 2px",
+              }}
+            >
+              <span className="kitsu-tool-dot" aria-hidden>
+                ◇
+              </span>
+              checking {m.activeTool}…
+            </div>
+          )}
           {m.state === "listening" && (
             <Bubble role="user" text={m.transcript || "listening…"} live />
           )}

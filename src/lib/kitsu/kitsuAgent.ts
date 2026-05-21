@@ -18,12 +18,33 @@
  *   - Captures session_id from the init system message and supports resume.
  */
 
-import { query, createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
+import {
+  query,
+  createSdkMcpServer,
+  tool,
+} from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { executeTool, type ToolInput } from "@/lib/copilotTools";
 import { buildMarvisSystem } from "@/lib/cockpit/marvis";
 import { buildMarvisFleet } from "@/lib/cockpit/marvisFleet";
+import { getTokens, isExpired, refreshAndStore } from "@/lib/tokenStore";
+import {
+  fetchSpotifyNowPlaying,
+  spotifyCommand,
+  refreshSpotifyToken,
+} from "@/lib/spotify";
+
+// Resolve a fresh Spotify access token (refreshing if expired). Mirrors the
+// logic in /api/spotify/command so Kitsu can read + control playback directly.
+async function getSpotifyAccessToken(): Promise<string | null> {
+  const current = await getTokens("spotify");
+  if (!current?.refreshToken) return null;
+  const tokens = isExpired(current)
+    ? await refreshAndStore("spotify", refreshSpotifyToken)
+    : current;
+  return tokens.accessToken ?? null;
+}
 
 // ── Event types yielded by streamKitsu ───────────────────────────────────────
 
@@ -45,6 +66,7 @@ const READ_ONLY_TOOLS = new Set([
   "mcp__kitsu-tools__read_vitals",
   "mcp__kitsu-tools__read_signals",
   "mcp__kitsu-tools__read_recent_archive",
+  "mcp__kitsu-tools__read_spotify",
   // Claude Code built-in read tools
   "Read",
   "Glob",
@@ -56,9 +78,9 @@ const READ_ONLY_TOOLS = new Set([
 
 // These are explicitly disallowed (Claude shouldn't see them at all).
 const DISALLOWED_TOOLS = [
-  "Bash",   // Too broad; allow individual safe reads via Read/Glob/Grep instead
-  "Write",  // Files require PG approval
-  "Edit",   // Files require PG approval
+  "Bash", // Too broad; allow individual safe reads via Read/Glob/Grep instead
+  "Write", // Files require PG approval
+  "Edit", // Files require PG approval
   "NotebookEdit",
 ];
 
@@ -87,10 +109,17 @@ function buildKitsuMcpServer() {
     async (args) => {
       try {
         const result = await executeTool("read_ships", args as ToolInput);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -106,10 +135,17 @@ function buildKitsuMcpServer() {
     async () => {
       try {
         const result = await executeTool("read_queue", {});
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -130,10 +166,17 @@ function buildKitsuMcpServer() {
     async (args) => {
       try {
         const result = await executeTool("read_calendar", args as ToolInput);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -149,10 +192,17 @@ function buildKitsuMcpServer() {
     async () => {
       try {
         const result = await executeTool("read_vitals", {});
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -176,10 +226,17 @@ function buildKitsuMcpServer() {
     async (args) => {
       try {
         const result = await executeTool("read_signals", args as ToolInput);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -202,11 +259,21 @@ function buildKitsuMcpServer() {
     },
     async (args) => {
       try {
-        const result = await executeTool("read_recent_archive", args as ToolInput);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        const result = await executeTool(
+          "read_recent_archive",
+          args as ToolInput,
+        );
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -237,10 +304,17 @@ function buildKitsuMcpServer() {
     async (args) => {
       try {
         const result = await executeTool("propose_action", args as ToolInput);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -256,15 +330,24 @@ function buildKitsuMcpServer() {
       context: z
         .string()
         .optional()
-        .describe("Project context (e.g. 'personal-os', 'heros-chronicle', 'metrasens')"),
+        .describe(
+          "Project context (e.g. 'personal-os', 'heros-chronicle', 'metrasens')",
+        ),
     },
     async (args) => {
       try {
         const result = await executeTool("add_ship", args as ToolInput);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -287,10 +370,105 @@ function buildKitsuMcpServer() {
     async (args) => {
       try {
         const result = await executeTool("add_queue_item", args as ToolInput);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
       } catch (err) {
         return {
-          content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  const readSpotify = tool(
+    "read_spotify",
+    "Read what is playing on Spotify right now: track, artist, album, and " +
+      "whether playback is active. Use to know PG's current listening context.",
+    {},
+    async () => {
+      try {
+        const token = await getSpotifyAccessToken();
+        if (!token) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  playing: false,
+                  error: "Spotify not connected",
+                }),
+              },
+            ],
+          };
+        }
+        const now = await fetchSpotifyNowPlaying(token);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(now) }],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+    { annotations: { readOnlyHint: true } },
+  );
+
+  const controlSpotify = tool(
+    "control_spotify",
+    "Control Spotify playback: play, pause, skip to next, or go to previous " +
+      "track. This is a real action on PG's active device. Use when PG asks to " +
+      "start, stop, or change the music.",
+    {
+      action: z
+        .enum(["play", "pause", "next", "previous"])
+        .describe("Playback action to perform"),
+    },
+    async (args) => {
+      try {
+        const token = await getSpotifyAccessToken();
+        if (!token) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: "Spotify not connected",
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        const result = await spotifyCommand(
+          token,
+          (args as { action: "play" | "pause" | "next" | "previous" }).action,
+        );
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -310,6 +488,8 @@ function buildKitsuMcpServer() {
       proposeAction,
       addShip,
       addQueueItem,
+      readSpotify,
+      controlSpotify,
     ],
   });
 }
@@ -337,6 +517,12 @@ const canUseTool: Parameters<typeof query>[0]["options"] extends infer O
 
   // propose_action is safe: writes only to local queue
   if (toolName === "mcp__kitsu-tools__propose_action") {
+    return { behavior: "allow" };
+  }
+
+  // control_spotify is the one approved unsupervised ACTION (low-stakes,
+  // reversible: play/pause/skip on PG's own playback).
+  if (toolName === "mcp__kitsu-tools__control_spotify") {
     return { behavior: "allow" };
   }
 
@@ -430,7 +616,8 @@ export async function* streamKitsu({
         // createSdkMcpServer already returns { type: "sdk", name, instance },
         // so pass it directly as the value in mcpServers.
         mcpServers: {
-          "kitsu-tools": kitsuServer as unknown as import("@anthropic-ai/claude-agent-sdk").McpServerConfig,
+          "kitsu-tools":
+            kitsuServer as unknown as import("@anthropic-ai/claude-agent-sdk").McpServerConfig,
         },
 
         // Pre-approve all read tools and safe write (propose_action)
@@ -441,7 +628,9 @@ export async function* streamKitsu({
           "mcp__kitsu-tools__read_vitals",
           "mcp__kitsu-tools__read_signals",
           "mcp__kitsu-tools__read_recent_archive",
+          "mcp__kitsu-tools__read_spotify",
           "mcp__kitsu-tools__propose_action",
+          "mcp__kitsu-tools__control_spotify",
           "Read",
           "Glob",
           "Grep",
@@ -499,7 +688,9 @@ export async function* streamKitsu({
       if (message.type === "user") {
         // Tool results come back as user messages with tool_use_result
         if (message.isSynthetic && activeToolName) {
-          const hasError = !!(message.tool_use_result as Record<string, unknown> | null)?.isError;
+          const hasError = !!(
+            message.tool_use_result as Record<string, unknown> | null
+          )?.isError;
           yield {
             type: "tool_end",
             name: activeToolName,

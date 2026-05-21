@@ -3,7 +3,7 @@
 /**
  * useMarvis — the client voice loop for the cockpit orchestrator.
  *
- * Loop:  listen (STT) → think (Claude via /api/copilot/chat?mode=marvis)
+ * Loop:  listen (STT) → think (Kitsu via /api/kitsu/query)
  *        → speak (TTS) → idle.  Drives the MarvisPresence state machine.
  *
  * Graceful degradation (auto-upgrades as keys/plan come online, zero code change):
@@ -45,18 +45,73 @@ type SpeechRec = {
   stop: () => void;
 };
 
+// ── Friendly tool name mapping (raw MCP name → display label) ─────────────────
+function friendlyToolName(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes("spotify")) return "music";
+  if (lower.includes("calendar")) return "calendar";
+  if (lower.includes("ship")) return "ships";
+  if (lower.includes("queue")) return "queue";
+  if (lower.includes("vital") || lower.includes("whoop")) return "vitals";
+  if (lower.includes("signal")) return "signals";
+  if (lower.includes("archive")) return "archive";
+  if (lower.includes("websearch") || lower.includes("web_search"))
+    return "the web";
+  if (
+    lower === "read" ||
+    lower === "glob" ||
+    lower === "grep" ||
+    lower === "ls"
+  )
+    return "files";
+  if (
+    lower.includes("read") ||
+    lower.includes("glob") ||
+    lower.includes("grep")
+  )
+    return "files";
+  if (lower.includes("notion")) return "Notion";
+  if (lower.includes("calendar")) return "calendar";
+  // strip mcp__kitsu-tools__ prefix for remaining names
+  const stripped = raw.replace(/^mcp__[^_]+__/, "").replace(/_/g, " ");
+  return stripped;
+}
+
+// ── cleanForSpeech: strip markdown/decoration so Kitsu speaks naturally ────────
+function cleanForSpeech(text: string): string {
+  return (
+    text
+      // remove "★ Insight ..." blocks (entire line)
+      .replace(/★[^\n]*/g, "")
+      // remove horizontal rules (lines of dashes/equals)
+      .replace(/^[─\-=]{3,}\s*$/gm, "")
+      // strip bold/italic markers
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/\*(.*?)\*/g, "$1")
+      // strip inline code
+      .replace(/`([^`]+)`/g, "$1")
+      // strip headers (#, ##, etc.)
+      .replace(/^#{1,6}\s+/gm, "")
+      // collapse multiple blank lines
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
 export function useMarvis() {
   const [state, setState] = useState<MarvisState>("idle");
   const [config, setConfig] = useState<MarvisConfig | null>(null);
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
   const recRef = useRef<SpeechRec | null>(null);
   const wakeRef = useRef<SpeechRec | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
   const [wakeArmed, setWakeArmed] = useState(false);
   const wakeArmedRef = useRef(false);
-  const [party, setParty] = useState(false); // 🎉 "initialize party mode"
+  const [party, setParty] = useState(false); // "initialize party mode"
 
   useEffect(() => {
     fetch("/api/cockpit/voice/config")
@@ -132,14 +187,19 @@ export function useMarvis() {
     [],
   );
 
-  // ── Think: stream Marvis's reply from the shared Copilot agent ──
+  // ── Think: stream Kitsu's reply from the Agent-SDK brain (/api/kitsu/query) ──
+  // Events: session_id (store for resume), text (visible deltas), tool_start /
+  // tool_end (drive the "checking ..." indicator), done (final clean result),
+  // error (graceful fallback). We accumulate text into the visible transcript,
+  // but SPEAK the cleaned final result so Kitsu does not narrate markdown or
+  // intermediate tool-thinking aloud.
   const ask = useCallback(
     async (userText: string) => {
       if (!userText.trim()) return;
-      // 🎉 easter egg: "initialize party mode"
+      // easter egg: "initialize party mode"
       // PartyMode owns the audio choreography: it speaks the intro line, THEN
       // starts the song, then drops hype lines (ducking the music). So here we
-      // only flip the flag + set the transcript bubble — no speak() collision.
+      // only flip the flag + set the transcript bubble (no speak() collision).
       if (/initiali[sz]e party mode|party mode/i.test(userText)) {
         setParty(true);
         setReply("Initializing party mode. Hold onto something.");
@@ -147,17 +207,19 @@ export function useMarvis() {
       }
       setReply("");
       setState("thinking");
+      setActiveTool(null);
       const nextTurns: Turn[] = [...turns, { role: "user", text: userText }];
       setTurns(nextTurns);
 
       let acc = "";
+      let finalResult = "";
       try {
-        const r = await fetch("/api/copilot/chat", {
+        const r = await fetch("/api/kitsu/query", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            mode: "marvis",
             messages: nextTurns.map((t) => ({ role: t.role, content: t.text })),
+            sessionId: sessionIdRef.current ?? undefined,
           }),
         });
         if (!r.body) throw new Error("no stream");
@@ -175,20 +237,50 @@ export function useMarvis() {
             if (!line) continue;
             try {
               const msg = JSON.parse(line.slice(6));
-              if (msg.type === "text" && msg.delta) {
-                acc += msg.delta;
-                setReply(acc);
+              switch (msg.type) {
+                case "session_id":
+                  // Resume context on the next turn (cross-reload continuity).
+                  if (msg.session_id) sessionIdRef.current = msg.session_id;
+                  break;
+                case "text":
+                  if (msg.delta) {
+                    acc += msg.delta;
+                    setReply(acc);
+                  }
+                  break;
+                case "tool_start":
+                  if (msg.name) setActiveTool(friendlyToolName(msg.name));
+                  break;
+                case "tool_end":
+                  setActiveTool(null);
+                  break;
+                case "done":
+                  // result is the final clean answer from the agent loop.
+                  if (msg.result) finalResult = msg.result;
+                  setActiveTool(null);
+                  break;
+                case "error":
+                  if (!acc) acc = "I hit a snag reaching my tools. Try again?";
+                  setActiveTool(null);
+                  break;
+                default:
+                  break;
               }
             } catch {
-              /* skip */
+              /* skip malformed event */
             }
           }
         }
       } catch {
         acc = acc || "I lost the thread there. Say again?";
       }
-      setTurns((t) => [...t, { role: "assistant", text: acc }]);
-      await speak(acc);
+      setActiveTool(null);
+      // Prefer the final result for the spoken + recorded turn; fall back to the
+      // streamed accumulation if no done.result arrived.
+      const answer = finalResult || acc;
+      setReply(answer);
+      setTurns((t) => [...t, { role: "assistant", text: answer }]);
+      await speak(cleanForSpeech(answer));
     },
     [turns, speak],
   );
@@ -329,6 +421,7 @@ export function useMarvis() {
     interrupt,
     toggleWake,
     wakeArmed,
+    activeTool, // friendly label of the tool Kitsu is using right now (or null)
     party,
     setParty,
   };
