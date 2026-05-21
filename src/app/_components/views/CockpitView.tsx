@@ -16,7 +16,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CockpitTerminal } from "./cockpit/CockpitTerminal";
-import { MarvisCorner } from "./cockpit/MarvisCorner";
 
 const C = {
   ink: "#13110D",
@@ -207,8 +206,7 @@ export function CockpitView() {
         the aesthetic is picked.
       </p>
 
-      {/* MARVIS — big corner presence + speech bubble (fixed overlay) */}
-      <MarvisCorner />
+      {/* Kitsu now mounts globally in page.tsx (persistent bottom-right on every tab). */}
 
       {/* LAUNCH */}
       {daemon?.running && (

@@ -8,7 +8,6 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { MarvisCorner } from "../cockpit/MarvisCorner";
 import { PHASES, Phase, phaseForHour } from "../../emaki/theme";
 import {
   EMAKI_CSS,
@@ -1719,8 +1718,7 @@ export default function TopBarHome() {
           ))}
         </div>
 
-        {/* Kitsu */}
-        <MarvisCorner modelUrl="/live2d/fox/standard_fox.model3.json" />
+        {/* Kitsu now mounts globally in page.tsx (persistent on every tab). */}
       </div>
     </>
   );

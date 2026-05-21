@@ -11,6 +11,7 @@ import { HomeModeToggle } from "./_components/HomeModeToggle";
 import { AmbientParticles } from "./_components/AmbientParticles";
 import { TabBar } from "./_components/TabBar";
 import { EmakiBackdrop } from "./_components/emaki/EmakiBackdrop";
+import { MarvisCorner } from "./_components/views/cockpit/MarvisCorner";
 import { CaptureFAB } from "./_components/CaptureFAB";
 import { BrandModePicker } from "./_components/BrandModePicker";
 import { CopilotLauncher } from "./_components/Copilot/CopilotPanel";
@@ -108,7 +109,9 @@ export default function Page() {
           </div>
         </div>
 
-        {/* On the cockpit, Marvis is the voice/assistant — hide the global FABs so they don't cover him */}
+        {/* Kitsu (MarvisCorner) is a GLOBAL persistent presence, bottom-right on every tab. */}
+        <MarvisCorner modelUrl="/live2d/fox/standard_fox.model3.json" />
+        {/* On the cockpit, the global FABs are hidden so they don't crowd Kitsu's terminal. */}
         {active !== "cockpit" && <CaptureFAB />}
         {active !== "cockpit" && <CopilotLauncher />}
         <CommandPalette />
