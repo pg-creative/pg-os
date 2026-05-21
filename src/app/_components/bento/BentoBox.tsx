@@ -59,7 +59,7 @@ export function BentoBox({
           position: "relative",
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: 14,
           padding: "16px 18px",
           width: "100%",
           overflow: "hidden",
@@ -79,11 +79,11 @@ export function BentoBox({
               <span
                 style={{
                   fontFamily: "var(--mono), ui-monospace, monospace",
-                  fontSize: "var(--text-xs)",
+                  fontSize: "var(--text-sm)",
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
-                  color: tk.gold,
-                  fontWeight: 700,
+                  color: tk.eyebrowText,
+                  fontWeight: 800,
                 }}
               >
                 {eyebrow}
@@ -94,8 +94,9 @@ export function BentoBox({
               <span
                 style={{
                   fontFamily: "var(--mono), ui-monospace, monospace",
-                  fontSize: "var(--text-2xs)",
+                  fontSize: "var(--text-xs)",
                   color: tk.textMuted,
+                  fontWeight: 600,
                 }}
               >
                 {count}
@@ -122,8 +123,8 @@ export function BentoBox({
             overflowY: scroll ? "auto" : "visible",
             color: tk.textPrimary,
             fontSize: "var(--text-base)",
-            fontWeight: 450,
-            lineHeight: 1.55,
+            fontWeight: 500,
+            lineHeight: 1.65,
           }}
         >
           {children}

@@ -66,12 +66,12 @@ export const PHASES: Record<Phase, PhaseTokens> = {
     railBorder: "rgba(210,168,80,0.35)",
     /* Washi paper: warm dark amber tint */
     panelBg: "rgba(22,16,8,0.90)",
-    panelBorder: "rgba(210,168,80,0.20)",
+    panelBorder: "rgba(210,168,80,0.42)",
     panelInkBorder: "rgba(210,168,80,0.55)",
     panelTint: "rgba(180,130,40,0.04)",
-    textPrimary: "#EFE4C8",
+    textPrimary: "#F5EDD5",
     textSub: "#B8A882",
-    textMuted: "#B0A075",
+    textMuted: "#8A7858",
     /* Accent: warm amber / foxfire gold, NOT teal */
     accent: "#E8A840",
     accentDim: "#A06C18",
@@ -111,7 +111,7 @@ export const PHASES: Record<Phase, PhaseTokens> = {
     railBorder: "rgba(210,130,170,0.28)",
     /* Washi: subtle plum/rose tint */
     panelBg: "rgba(28,14,38,0.90)",
-    panelBorder: "rgba(210,130,170,0.22)",
+    panelBorder: "rgba(210,130,170,0.40)",
     panelInkBorder: "rgba(210,130,170,0.50)",
     panelTint: "rgba(160,80,130,0.04)",
     textPrimary: "#F4E8F8",
@@ -184,7 +184,7 @@ export const PHASES: Record<Phase, PhaseTokens> = {
       "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 38%, transparent 74%, rgba(96,124,156,0.18) 100%), radial-gradient(ellipse at 50% 108%, rgba(80,112,150,0.14) 0%, transparent 58%)",
     ambientWash: "none",
     eyebrow: "rgba(140,92,12,0.90)",
-    eyebrowText: "#7a4c08",
+    eyebrowText: "#5e3a06",
     pillActive: "rgba(20,88,48,0.18)",
     pillInactive: "rgba(250,244,232,0.70)",
     pillTextActive: "#0e3d24",

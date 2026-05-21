@@ -335,7 +335,7 @@ const LOCAL_CSS = `
     line-height: 1;
   }
   .v2-clock-tz {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -345,7 +345,7 @@ const LOCAL_CSS = `
     flex: 1;
   }
   .v2-greeting-eyebrow {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -354,8 +354,9 @@ const LOCAL_CSS = `
   }
   .v2-greeting-main {
     font-family: 'Noto Serif JP', serif;
-    font-size: clamp(20px, 3vw, 28px);
-    font-weight: 700;
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
     line-height: 1.2;
   }
   .v2-greeting-date {
@@ -380,7 +381,7 @@ const LOCAL_CSS = `
   }
   .v2-hero-kanji-sub {
     font-family: 'Noto Serif JP', serif;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 400;
     letter-spacing: 0.06em;
     margin-top: 4px;
@@ -441,7 +442,7 @@ const LOCAL_CSS = `
     line-height: 1.15;
   }
   .v2-op-meta {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.10em;
     text-transform: uppercase;
@@ -453,7 +454,7 @@ const LOCAL_CSS = `
     gap: 6px;
   }
   .v2-op-tag {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     padding: 2px 8px;
@@ -472,21 +473,21 @@ const LOCAL_CSS = `
   }
   .v2-vital-val {
     font-family: 'DM Sans', monospace;
-    font-size: 22px;
-    font-weight: 700;
+    font-size: clamp(26px, 2.4vw, 32px);
+    font-weight: 800;
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
   .v2-vital-lbl {
     font-family: 'Noto Serif JP', serif;
-    font-size: 10px;
-    font-weight: 700;
+    font-size: var(--text-xs);
+    font-weight: 600;
     letter-spacing: 0.10em;
     text-transform: uppercase;
     margin-top: 4px;
   }
   .v2-vital-unit {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 500;
     margin-left: 2px;
   }
@@ -610,7 +611,7 @@ const LOCAL_CSS = `
     line-height: 1.2;
   }
   .v2-project-sub {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -698,7 +699,7 @@ const LOCAL_CSS = `
     display: inline-block;
     border-radius: 4px;
     padding: 2px 6px;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-family: 'DM Sans', monospace;
     font-weight: 500;
     flex-shrink: 0;
@@ -796,12 +797,14 @@ const LOCAL_CSS = `
 
   /* ── Band label row ── */
   .v2-band-label {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 700;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
     font-family: 'Noto Serif JP', serif;
     margin-bottom: 14px;
+    padding-bottom: 6px;
+    opacity: 0.7;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -818,7 +821,7 @@ const LOCAL_CSS = `
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.10em;
     padding: 2px 8px;
@@ -1000,7 +1003,7 @@ export default function TopBarHome() {
                 <div
                   className="v2-clock-digits"
                   style={{
-                    color: tk.foxfire,
+                    color: phase === "day" ? tk.textPrimary : tk.foxfire,
                     textShadow:
                       tk.heroHalo !== "none" ? tk.heroHalo : undefined,
                   }}
