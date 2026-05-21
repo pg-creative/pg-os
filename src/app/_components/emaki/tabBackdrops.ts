@@ -23,8 +23,9 @@ export interface TabBackdrop {
   prominence: Prominence;
 }
 
-// Keyed by the tab id from useActiveTab(). "home" intentionally omitted.
+// Keyed by the tab id from useActiveTab().
 const REGISTRY: Record<string, TabBackdrop> = {
+  home: { variant: 1, prominence: "prominent" },
   cockpit: { variant: 0, prominence: "prominent" },
   habits: { variant: 1, prominence: "prominent" },
   flow: { variant: 3, prominence: "prominent" },

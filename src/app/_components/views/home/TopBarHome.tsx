@@ -12,8 +12,6 @@ import { PHASES, Phase, phaseForHour } from "../../emaki/theme";
 import {
   EMAKI_CSS,
   useEmakiVars,
-  PaintedBackdrop,
-  FoxfireLayer,
   KintsugiSeam,
   WashiPanel,
   GlyphSun,
@@ -972,18 +970,15 @@ export default function TopBarHome() {
         className="el-root"
         style={{
           flexDirection: "column",
-          background: tk.bg,
+          background: "transparent",
           transition: "background 0.6s ease",
           ["--hero-halo" as string]: tk.heroHalo,
           ["--panel-blur" as string]: phase === "day" ? "none" : "blur(10px)",
           ...kintsugiVars,
         }}
       >
-        {/* World painting layers */}
-        <PaintedBackdrop phase={phase} />
-        <FoxfireLayer phase={phase} />
-
-        {/* Nav now lives in the GLOBAL EmakiShellBar (page.tsx). */}
+        {/* Painted world comes from the GLOBAL EmakiBackdrop (page.tsx), full-bleed
+            and immersive like the other tabs. Nav lives in the global EmakiShellBar. */}
 
         {/* ── PAGE SCROLL CANVAS ── */}
         <main className="v2-page">
