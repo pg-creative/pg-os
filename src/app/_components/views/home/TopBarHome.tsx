@@ -213,14 +213,6 @@ const INBOX = [
   },
 ];
 
-const NAV_ITEMS = [
-  { label: "Home", glyph: "⌂", active: true },
-  { label: "Habits", glyph: "◎", active: false },
-  { label: "Projects", glyph: "⬡", active: false },
-  { label: "Flow", glyph: "∿", active: false },
-  { label: "Claude", glyph: "✦", active: false },
-];
-
 /* ── V2 local CSS — broadsheet band layout ── */
 const LOCAL_CSS = `
   /* ── Topbar nav ── */
@@ -991,66 +983,7 @@ export default function TopBarHome() {
         <PaintedBackdrop phase={phase} />
         <FoxfireLayer phase={phase} />
 
-        {/* ── TOP NAV BAR ── */}
-        <nav
-          className="v2-topbar"
-          aria-label="Primary navigation"
-          style={{
-            background: tk.railBg,
-            borderBottom: `1px solid ${tk.railBorder}`,
-          }}
-        >
-          {/* Wordmark */}
-          <div
-            className="v2-topbar-wordmark"
-            style={{
-              color: tk.goldBright,
-              borderColor: tk.railBorder,
-            }}
-          >
-            PG OS
-          </div>
-
-          {/* Tab strip */}
-          <div className="v2-topbar-tabs" role="tablist">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.label}
-                className="v2-topbar-tab"
-                role="tab"
-                tabIndex={0}
-                aria-pressed={item.active}
-                aria-selected={item.active}
-                type="button"
-                style={{
-                  background: item.active ? tk.pillActive : "transparent",
-                  color: item.active ? tk.foxfire : tk.textMuted,
-                }}
-              >
-                <span className="v2-topbar-tab-glyph">{item.glyph}</span>
-                <span className="v2-topbar-tab-label">{item.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Right actions: online pip */}
-          <div
-            className="v2-topbar-actions"
-            style={{ borderColor: tk.railBorder }}
-          >
-            <span
-              className="v2-online-pip"
-              style={{
-                background: "rgba(52,211,153,0.12)",
-                border: "1px solid rgba(52,211,153,0.28)",
-                color: "#34D399",
-              }}
-            >
-              <span className="v2-online-dot" />
-              ONLINE
-            </span>
-          </div>
-        </nav>
+        {/* Nav now lives in the GLOBAL EmakiShellBar (page.tsx). */}
 
         {/* ── PAGE SCROLL CANVAS ── */}
         <main className="v2-page">
