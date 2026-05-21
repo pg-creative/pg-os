@@ -368,6 +368,13 @@ function EvalTile({
   const s = STATUS_META[itemStatus];
   const vColor = verdictColor(v.tone, tk);
 
+  // Semantic badge colors for status
+  function statusBadgeColor(st: "pending" | "installed" | "passed"): string {
+    if (st === "installed") return "#7C9A6E";
+    if (st === "passed") return "#7C9A6E";
+    return tk.gold;
+  }
+
   return (
     <BentoBox
       cols={4}
@@ -388,6 +395,10 @@ function EvalTile({
           textAlign: "left",
           cursor: "pointer",
           color: "inherit",
+          /* Enforce consistent collapsed height so bento grid stays aligned */
+          minHeight: 96,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* Verdict + score row */}
@@ -402,14 +413,15 @@ function EvalTile({
           <span
             style={{
               fontFamily: "var(--mono), ui-monospace, monospace",
-              fontSize: "var(--text-xs)",
+              fontSize: "var(--text-2xs)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
+              fontWeight: 700,
               color: vColor,
-              border: `1px solid ${vColor}`,
+              background: `${vColor}18`,
+              border: `1px solid ${vColor}80`,
               borderRadius: 4,
-              padding: "1px 7px",
-              opacity: 0.9,
+              padding: "2px 7px",
             }}
           >
             {v.glyph} {v.label}
@@ -454,11 +466,19 @@ function EvalTile({
           <PillTag tk={tk} dim>
             {record.lens}
           </PillTag>
+          {/* Status badge — semantic color, visible border */}
           <span
             style={{
               fontFamily: "var(--mono), ui-monospace, monospace",
               fontSize: "var(--text-2xs)",
-              color: tk.textMuted,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              color: statusBadgeColor(itemStatus),
+              background: `${statusBadgeColor(itemStatus)}18`,
+              border: `1px solid ${statusBadgeColor(itemStatus)}80`,
+              borderRadius: 4,
+              padding: "2px 7px",
               marginLeft: "auto",
             }}
           >
@@ -466,7 +486,7 @@ function EvalTile({
           </span>
         </div>
 
-        {/* Verdict text preview */}
+        {/* Verdict text preview — clamped to 2 lines with fade */}
         <p
           style={{
             margin: 0,
@@ -474,9 +494,14 @@ function EvalTile({
             color: tk.textSub,
             lineHeight: 1.55,
             opacity: 0.85,
+            /* Hard clamp to 2 lines so all cards align */
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
           }}
         >
-          {record.verdictText.slice(0, 220)}
+          {record.verdictText}
         </p>
       </button>
 

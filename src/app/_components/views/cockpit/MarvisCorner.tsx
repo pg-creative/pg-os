@@ -27,14 +27,16 @@ export function MarvisCorner({
   modelUrl?: string;
 }) {
   const m = useMarvis();
+  // Default COLLAPSED to the fox orb (still present bottom-right, but does not
+  // occlude tab content). Click the orb to expand the panel. Auto-opens only
+  // when Kitsu has something to say (speaking) or is actively listening.
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setOpen(true), 300);
-    return () => clearTimeout(t);
-  }, []);
+    if (m.state === "speaking" || m.state === "listening") setOpen(true);
+  }, [m.state]);
 
   // Auto-scroll the transcript on new content.
   useEffect(() => {

@@ -45,12 +45,25 @@ export function BentoBox({
   return (
     <div
       onClick={onClick}
+      {...(onClick
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            },
+          }
+        : {})}
       style={{
         gridColumn: `span ${cols}`,
         gridRow: rows > 1 ? `span ${rows}` : undefined,
         display: "flex",
         cursor: onClick ? "pointer" : undefined,
-        minHeight: 96,
+        minHeight: 120,
+        borderRadius: 14,
       }}
     >
       <WashiPanel
@@ -59,8 +72,8 @@ export function BentoBox({
           position: "relative",
           display: "flex",
           flexDirection: "column",
-          gap: 14,
-          padding: "16px 18px",
+          gap: 18,
+          padding: "16px 18px 20px",
           width: "100%",
           overflow: "hidden",
           ...style,
@@ -94,9 +107,9 @@ export function BentoBox({
               <span
                 style={{
                   fontFamily: "var(--mono), ui-monospace, monospace",
-                  fontSize: "var(--text-xs)",
-                  color: tk.textMuted,
-                  fontWeight: 600,
+                  fontSize: "var(--text-sm)",
+                  color: tk.textPrimary,
+                  fontWeight: 700,
                 }}
               >
                 {count}

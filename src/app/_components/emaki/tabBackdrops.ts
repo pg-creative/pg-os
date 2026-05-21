@@ -1,16 +1,12 @@
 /**
- * Per-tab painted backdrop registry (cohesion pass, 2026-05-21).
+ * Per-tab painted backdrop registry (bespoke art, 2026-05-21).
  *
- * Each tab gets a DISTINCT Emaki sky composition + a prominence judgment, so the
- * whole OS sits in the painted world while staying legible. All entries use the
- * locked 3-phase sky art (emaki-sky-{day,twilight,night}_{0..3}.png), choosing a
- * different variant per tab for visual variety. "prominent" lets more sky show
- * (calm tabs); "subtle" dims it heavily behind a scrim (data-dense tabs).
+ * Each tab now has its OWN painted scene generated per phase via Legnext/MJ
+ * (scripts/gen-tab-art.py), saved at /art/tabs/<tab>-<phase>.png. The 3-phase
+ * day/twilight/night system is preserved (one image per phase per tab).
  *
- * NOTE: bespoke per-tab scenes (a unique painting per surface) are the upgrade
- * once the image pipeline (Legnext/MJ key) is available; the variant index is the
- * stand-in differentiator until then. "home" returns null because TopBarHome
- * paints its own backdrop.
+ * prominence: "prominent" lets more sky show (calm tabs); "subtle" dims it
+ * harder behind a scrim so data-dense tabs stay legible.
  */
 
 import type { Phase } from "./theme";
@@ -18,29 +14,27 @@ import type { Phase } from "./theme";
 export type Prominence = "subtle" | "prominent";
 
 export interface TabBackdrop {
-  /** Which emaki-sky variant (0..3) this tab uses. */
-  variant: 0 | 1 | 2 | 3;
   prominence: Prominence;
 }
 
-// Keyed by the tab id from useActiveTab().
+// Keyed by the tab id from useActiveTab(). Every tab has bespoke 3-phase art.
 const REGISTRY: Record<string, TabBackdrop> = {
-  home: { variant: 1, prominence: "prominent" },
-  cockpit: { variant: 0, prominence: "prominent" },
-  habits: { variant: 1, prominence: "prominent" },
-  flow: { variant: 3, prominence: "prominent" },
-  timeline: { variant: 3, prominence: "subtle" },
-  projects: { variant: 2, prominence: "subtle" },
-  claude: { variant: 1, prominence: "subtle" },
-  stack: { variant: 2, prominence: "subtle" },
-  brain: { variant: 0, prominence: "subtle" },
+  home: { prominence: "prominent" },
+  cockpit: { prominence: "prominent" },
+  habits: { prominence: "prominent" },
+  flow: { prominence: "subtle" },
+  projects: { prominence: "subtle" },
+  claude: { prominence: "subtle" },
+  stack: { prominence: "subtle" },
+  timeline: { prominence: "subtle" },
+  brain: { prominence: "subtle" },
 };
 
 export function backdropForTab(tab: string): TabBackdrop | null {
   return REGISTRY[tab] ?? null;
 }
 
-/** Resolve the sky image path for a tab's variant in the current phase. */
-export function backdropImage(phase: Phase, variant: number): string {
-  return `/art/aesthetic-2026-05-20/emaki-sky-${phase}_${variant}.png`;
+/** Resolve the bespoke painted scene for a tab in the current phase. */
+export function backdropImage(phase: Phase, tab: string): string {
+  return `/art/tabs/${tab}-${phase}.png`;
 }

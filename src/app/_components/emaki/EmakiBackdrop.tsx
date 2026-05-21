@@ -25,10 +25,10 @@ export function EmakiBackdrop() {
   const { active } = useActiveTab();
 
   const cfg = backdropForTab(active);
-  if (!cfg) return null; // home paints its own backdrop
+  if (!cfg) return null;
 
   const phase = phaseForMode(mode);
-  const img = backdropImage(phase, cfg.variant);
+  const img = backdropImage(phase, active);
   // Scrim opacity: subtle = mostly hidden behind the page tint; prominent = sky reads through.
   const scrimOpacity = cfg.prominence === "prominent" ? 0.6 : 0.85;
 
