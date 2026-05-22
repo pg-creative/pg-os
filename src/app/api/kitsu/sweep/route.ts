@@ -19,7 +19,7 @@ import {
   type Urgency,
 } from "@/lib/kitsu/kitsuOrchestration";
 import { listQueue, addQueueItem } from "@/lib/queueStore";
-import { appendKitsuDecision } from "@/lib/kitsu/kitsuMemory";
+import { appendKitsuDecision, distillToMemory } from "@/lib/kitsu/kitsuMemory";
 import { sendToAll, isPushConfigured } from "@/lib/push";
 
 export const runtime = "nodejs";
@@ -80,9 +80,13 @@ async function runSweep() {
     notified = res.delivered > 0;
   }
 
+  // Anti-drift: fold accumulated corrections into the sharp MEMORY.md so the
+  // soul does not bloat into a wall of text over time.
+  const distilled = await distillToMemory().catch(() => ({ distilled: 0 }));
+
   // Log the sweep so the decision-log shows Kitsu's proactive activity.
   await appendKitsuDecision({
-    summary: `Swept the fleet: ${fleet.sessions.length} live, ${urgencies.length} urgent, ${nudged.length} nudged, notified=${notified}`,
+    summary: `Swept the fleet: ${fleet.sessions.length} live, ${urgencies.length} urgent, ${nudged.length} nudged, notified=${notified}, distilled=${distilled.distilled}`,
     kind: "sweep",
   });
 
@@ -92,6 +96,7 @@ async function runSweep() {
     urgencies,
     nudged,
     notified,
+    distilled: distilled.distilled,
   };
 }
 

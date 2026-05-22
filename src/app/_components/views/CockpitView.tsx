@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CockpitTerminal } from "./cockpit/CockpitTerminal";
+import { SoulPanel } from "./cockpit/SoulPanel";
 import { TabShell } from "../bento/TabShell";
 import { BentoBox } from "../bento/BentoBox";
 import { useEmaki } from "../bento/emakiContext";
@@ -193,6 +194,7 @@ export function CockpitView() {
         setSelected={setSelected}
       />
       {sel && <TerminalTile sel={sel} daemon={daemon} />}
+      <SoulPanel />
     </TabShell>
   );
 }

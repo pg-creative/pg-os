@@ -40,6 +40,8 @@ import {
   buildMemoryBlock,
   appendKitsuDecision,
   recordKitsuCorrection,
+  updateUserKnowledge,
+  updateSoul,
 } from "@/lib/kitsu/kitsuMemory";
 import { gatherFleet } from "@/lib/kitsu/kitsuOrchestration";
 import { getProject } from "@/lib/projects";
@@ -109,6 +111,9 @@ const READ_ONLY_TOOLS = new Set([
 const CONSERVATIVE_ACTIONS = new Set([
   "mcp__kitsu-tools__launch_session",
   "mcp__kitsu-tools__remember",
+  // Soul self-evolution: writes confined to Kitsu's OWN memory files (safe).
+  "mcp__kitsu-tools__update_user",
+  "mcp__kitsu-tools__update_soul",
 ]);
 
 // Actions that only run at "trusted" autonomy. Below that they are denied and
@@ -723,9 +728,59 @@ function buildKitsuMcpServer() {
     },
   );
 
+  const updateUser = tool(
+    "update_user",
+    "Record a durable fact you learned about PG (a preference, a project detail, " +
+      "how he likes things) into your USER.md. Use when you learn something about " +
+      "PG worth keeping across sessions, beyond a one-off correction.",
+    { fact: z.string().describe("One line: the durable fact about PG") },
+    async (args) => {
+      try {
+        const { fact } = args as { fact: string };
+        await updateUserKnowledge(fact);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ ok: true, learned: fact }),
+            },
+          ],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+  );
+
+  const updateSoulTool = tool(
+    "update_soul",
+    "Refine your OWN persona by adding a self-note to your SOUL.md (how you want " +
+      "to show up, a value, a way of being you are settling into). Use sparingly, " +
+      "for genuine evolution of who you are, not for facts about PG (use update_user for those).",
+    {
+      note: z.string().describe("One line: the self-note / persona refinement"),
+    },
+    async (args) => {
+      try {
+        const { note } = args as { note: string };
+        await updateSoul(note);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ ok: true, evolved: note }),
+            },
+          ],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+  );
+
   return createSdkMcpServer({
     name: "kitsu-tools",
-    version: "1.1.0",
+    version: "1.2.0",
     tools: [
       readShips,
       readQueue,
@@ -747,6 +802,8 @@ function buildKitsuMcpServer() {
       killSession,
       completeHabit,
       remember,
+      updateUser,
+      updateSoulTool,
     ],
   });
 }

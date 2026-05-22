@@ -34,6 +34,34 @@ export function MarvisCorner({
   const [typed, setTyped] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // "Teach Kitsu" correction affordance
+  const [teachOpen, setTeachOpen] = useState(false);
+  const [teachText, setTeachText] = useState("");
+  const [teachStatus, setTeachStatus] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+
+  async function submitCorrection() {
+    const v = teachText.trim();
+    if (!v) return;
+    setTeachStatus("saving");
+    try {
+      await fetch("/api/kitsu/correct", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ correction: v }),
+      });
+      setTeachStatus("saved");
+      setTeachText("");
+      setTimeout(() => {
+        setTeachStatus("idle");
+        setTeachOpen(false);
+      }, 1800);
+    } catch {
+      setTeachStatus("idle");
+    }
+  }
+
   useEffect(() => {
     if (m.state === "speaking" || m.state === "listening") setOpen(true);
   }, [m.state]);
@@ -241,6 +269,88 @@ export function MarvisCorner({
           )}
         </div>
 
+        {/* teach Kitsu inline drawer */}
+        {teachOpen && (
+          <div
+            style={{
+              padding: "8px 12px",
+              borderTop: "1px solid rgba(214,163,103,.12)",
+              background: "rgba(214,163,103,.05)",
+            }}
+          >
+            {teachStatus === "saved" ? (
+              <div
+                style={{
+                  color: C.emerald,
+                  fontSize: "var(--text-xs)",
+                  fontFamily: "ui-monospace,monospace",
+                  textAlign: "center",
+                  padding: "6px 0",
+                }}
+              >
+                Kitsu will remember that.
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void submitCorrection();
+                }}
+                style={{ display: "flex", gap: 6 }}
+              >
+                <input
+                  autoFocus
+                  value={teachText}
+                  onChange={(e) => setTeachText(e.target.value)}
+                  placeholder="what should Kitsu remember?"
+                  aria-label="Teach Kitsu a correction"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    background: C.ink,
+                    border: "1px solid rgba(214,163,103,.35)",
+                    borderRadius: 7,
+                    padding: "7px 10px",
+                    color: C.cream,
+                    fontSize: "var(--text-xs)",
+                    fontFamily: "ui-monospace,monospace",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={teachStatus === "saving" || !teachText.trim()}
+                  aria-label="Save correction"
+                  style={{
+                    ...btn(C.emerald, false),
+                    fontSize: "var(--text-xs)",
+                    padding: "7px 10px",
+                    opacity:
+                      teachStatus === "saving" || !teachText.trim() ? 0.5 : 1,
+                  }}
+                >
+                  {teachStatus === "saving" ? "…" : "save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTeachOpen(false);
+                    setTeachText("");
+                    setTeachStatus("idle");
+                  }}
+                  aria-label="Cancel correction"
+                  style={{
+                    ...btn(C.dim, false),
+                    fontSize: "var(--text-xs)",
+                    padding: "7px 10px",
+                  }}
+                >
+                  ✕
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
         {/* input */}
         <form
           onSubmit={(e) => {
@@ -276,6 +386,16 @@ export function MarvisCorner({
           />
           <button type="submit" title="send" style={btn(C.amber, false)}>
             ➤
+          </button>
+          <button
+            type="button"
+            onClick={() => setTeachOpen((x) => !x)}
+            title="Teach Kitsu something to remember"
+            aria-label="Teach Kitsu"
+            aria-pressed={teachOpen}
+            style={btn(teachOpen ? C.emerald : C.dim, teachOpen)}
+          >
+            🦊
           </button>
           <button
             type="button"
