@@ -29,8 +29,10 @@ export function EmakiBackdrop() {
 
   const phase = phaseForMode(mode);
   const img = backdropImage(phase, active);
-  // Scrim opacity: subtle = mostly hidden behind the page tint; prominent = sky reads through.
-  const scrimOpacity = cfg.prominence === "prominent" ? 0.6 : 0.85;
+  // Scrim opacity: lightened 2026-05-21 so the bespoke painting actually reads
+  // (PG: "on many tabs you can barely see the image"). Panels stay solid for
+  // legibility, so the art shows through gaps/margins rather than behind text.
+  const scrimOpacity = cfg.prominence === "prominent" ? 0.38 : 0.55;
 
   return (
     <div

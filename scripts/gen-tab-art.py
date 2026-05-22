@@ -7,7 +7,7 @@ the first upscaled quadrant to public/art/tabs/<tab>-<phase>.png. Wire via tabBa
 
 Run:  LEGNEXT_API_KEY must be set (it is, via ~/.zshenv).  python3 scripts/gen-tab-art.py
 """
-import os, json, time, urllib.request, urllib.error, pathlib
+import os, json, time, urllib.request, urllib.error, pathlib, shutil, subprocess
 
 KEY = os.environ["LEGNEXT_API_KEY"]
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -53,6 +53,23 @@ def download(url, dest):
     with urllib.request.urlopen(req, timeout=60) as r:
         dest.write_bytes(r.read())
 
+def optimize(png_path):
+    """Re-encode the downloaded PNG (~2MB) to WebP q80 (~180KB) — what the app
+    actually serves (tabBackdrops.ts -> .webp) — then drop the heavy PNG.
+    Requires cwebp (brew install webp). 27 imgs: ~46MB PNG -> ~4.8MB WebP."""
+    webp = png_path.with_suffix(".webp")
+    if not shutil.which("cwebp"):
+        print(f"  cwebp not found; keeping PNG {png_path.name} (run: brew install webp)", flush=True)
+        return png_path
+    try:
+        subprocess.run(["cwebp", "-q", "80", "-quiet", str(png_path), "-o", str(webp)], check=True)
+        png_path.unlink(missing_ok=True)
+        print(f"  webp {webp.name} ({webp.stat().st_size // 1024}KB)", flush=True)
+        return webp
+    except Exception as e:
+        print(f"  webp FAIL {png_path.name}: {e}", flush=True)
+        return png_path
+
 # Submit all
 jobs = {}  # (tab,phase) -> job_id
 for tab, scene in SCENES.items():
@@ -83,8 +100,9 @@ while pending and time.time() < deadline:
                 dest = OUT / f"{key[0]}-{key[1]}.png"
                 try:
                     download(urls[0], dest)
-                    done[key] = str(dest)
-                    print(f"DONE {key[0]}-{key[1]} -> {dest}", flush=True)
+                    final = optimize(dest)
+                    done[key] = str(final)
+                    print(f"DONE {key[0]}-{key[1]} -> {final}", flush=True)
                 except Exception as e:
                     print(f"dl err {key}: {e}", flush=True)
             pending.pop(key, None)

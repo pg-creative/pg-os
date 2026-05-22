@@ -34,7 +34,8 @@ export function backdropForTab(tab: string): TabBackdrop | null {
   return REGISTRY[tab] ?? null;
 }
 
-/** Resolve the bespoke painted scene for a tab in the current phase. */
+/** Resolve the bespoke painted scene for a tab in the current phase.
+ *  WebP (q80, 2026-05-21): ~177KB vs ~2MB PNG — 27 images now ~4.8MB total. */
 export function backdropImage(phase: Phase, tab: string): string {
-  return `/art/tabs/${tab}-${phase}.png`;
+  return `/art/tabs/${tab}-${phase}.webp`;
 }

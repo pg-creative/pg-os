@@ -5,6 +5,7 @@ import { phaseForMode } from "./bento/emakiContext";
 import { PHASES } from "./emaki/theme";
 import { CityTemp } from "./LocationLive";
 import { LiveStamp } from "./LiveClock";
+import { SoundToggle } from "./SoundProvider";
 
 const PHASE_MODES = [
   { mode: "laputa-day", glyph: "☀", title: "Day · 陽光の庭" },
@@ -234,6 +235,7 @@ export function EmakiShellBar() {
               AUTO
             </button>
           </span>
+          <SoundToggle />
           <span className="emaki-shellbar-online">
             <span className="emaki-shellbar-online-pip" />
             ONLINE
