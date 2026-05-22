@@ -259,7 +259,7 @@ export function PartyMode({
     // equalizer draw loop
     const eq = eqRef.current;
     const ex = eq?.getContext("2d") ?? null;
-    let bins: Uint8Array | null = null;
+    let bins: Uint8Array<ArrayBuffer> | null = null;
     const drawEq = () => {
       const analyser = analyserRef.current;
       if (eq && ex && analyser) {

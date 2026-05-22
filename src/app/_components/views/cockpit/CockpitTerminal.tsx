@@ -52,7 +52,8 @@ export function CockpitTerminal({
       term = new Terminal({
         fontFamily:
           '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace',
-        fontSize: "var(--text-sm)",
+        // xterm needs a numeric px size (it cannot resolve CSS custom properties).
+        fontSize: 13,
         lineHeight: 1.2,
         cursorBlink: true,
         scrollback: 50000,
