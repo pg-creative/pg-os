@@ -82,6 +82,22 @@ type ProjResp = {
 type AgentResp = {
   agents?: { name: string; lastRun: string | null; lastStatus: string }[];
 };
+type NowPlayingResp =
+  | { authed: false }
+  | {
+      authed: true;
+      playing: boolean;
+      track?: {
+        id: string;
+        name: string;
+        artists: string;
+        album: string;
+        albumArt: string | null;
+        progressMs: number;
+        durationMs: number;
+        externalUrl: string;
+      };
+    };
 
 function relTime(ms: number | null | undefined): string {
   if (!ms) return "--";
@@ -176,6 +192,16 @@ const MOCK_AGENTS = [
   { name: "morning-briefing", lastRun: "6h", status: "ok" as const },
   { name: "weekly-meta-audit", lastRun: "2d", status: "error" as const },
 ];
+
+// Fallback shown while Spotify loads or when not authed.
+const MOCK_NOW_PLAYING = {
+  playing: false,
+  track: null as null | {
+    name: string;
+    artists: string;
+    albumArt: string | null;
+  },
+};
 
 // TODO: wire Gmail route. No /api Gmail endpoint exists yet, so the inbox band
 // stays on this stub rather than faking live mail.
@@ -861,6 +887,7 @@ export default function TopBarHome() {
     }[]
   >(MOCK_SESSIONS);
   const [AGENTS, setAgents] = useState(MOCK_AGENTS);
+  const [NOW_PLAYING, setNowPlaying] = useState(MOCK_NOW_PLAYING);
 
   useEmakiVars(phase);
 
@@ -933,6 +960,25 @@ export default function TopBarHome() {
             status: (a.lastStatus === "ok" ? "ok" : "error") as "ok" | "error",
           })),
         );
+      })
+      .catch(() => {});
+
+    // Spotify now playing
+    fetch("/api/spotify/now-playing")
+      .then((r) => r.json())
+      .then((d: NowPlayingResp) => {
+        if (cancelled || !d?.authed) return;
+        const resp = d as Extract<NowPlayingResp, { authed: true }>;
+        setNowPlaying({
+          playing: resp.playing,
+          track: resp.track
+            ? {
+                name: resp.track.name,
+                artists: resp.track.artists,
+                albumArt: resp.track.albumArt,
+              }
+            : null,
+        });
       })
       .catch(() => {});
 
@@ -1257,42 +1303,63 @@ export default function TopBarHome() {
                     06 // NOW PLAYING
                   </div>
                   <div className="v2-np-row">
-                    <div
-                      className="v2-np-art"
-                      style={{
-                        background: `linear-gradient(135deg, ${tk.accent}30, ${tk.foxfire}20)`,
-                        border: `1.5px solid ${tk.panelBorder}`,
-                      }}
-                    >
-                      ♪
-                    </div>
+                    {NOW_PLAYING.track?.albumArt ? (
+                      /* Real album art from Spotify */
+                      <img
+                        src={NOW_PLAYING.track.albumArt}
+                        alt="Album art"
+                        className="v2-np-art"
+                        style={{
+                          objectFit: "cover",
+                          border: `1.5px solid ${tk.panelBorder}`,
+                        }}
+                      />
+                    ) : (
+                      /* Fallback glyph when not authed or nothing playing */
+                      <div
+                        className="v2-np-art"
+                        style={{
+                          background: `linear-gradient(135deg, ${tk.accent}30, ${tk.foxfire}20)`,
+                          border: `1.5px solid ${tk.panelBorder}`,
+                          color: tk.textMuted,
+                        }}
+                      >
+                        ♪
+                      </div>
+                    )}
                     <div className="v2-np-info">
                       <div
                         className="v2-np-track"
                         style={{ color: tk.textPrimary }}
                       >
-                        One Summer&apos;s Day
+                        {NOW_PLAYING.track?.name ??
+                          (NOW_PLAYING.playing
+                            ? "Loading..."
+                            : "Nothing playing")}
                       </div>
                       <div
                         className="v2-np-artist"
                         style={{ color: tk.textMuted }}
                       >
-                        Joe Hisaishi
+                        {NOW_PLAYING.track?.artists ?? "Spotify"}
                       </div>
                     </div>
-                    <div className="v2-np-eq" aria-label="Now playing">
-                      {[0.6, 1, 0.75, 0.9, 0.5].map((h, i) => (
-                        <div
-                          key={i}
-                          className="v2-np-bar"
-                          style={{
-                            height: 16 * h,
-                            background: `linear-gradient(180deg, ${tk.foxfireGlow}, ${tk.accent})`,
-                            ["--bar-dur" as string]: `${0.6 + i * 0.12}s`,
-                          }}
-                        />
-                      ))}
-                    </div>
+                    {/* EQ bars animate only when a track is actually playing */}
+                    {NOW_PLAYING.playing && (
+                      <div className="v2-np-eq" aria-label="Now playing">
+                        {[0.6, 1, 0.75, 0.9, 0.5].map((h, i) => (
+                          <div
+                            key={i}
+                            className="v2-np-bar"
+                            style={{
+                              height: 16 * h,
+                              background: `linear-gradient(180deg, ${tk.foxfireGlow}, ${tk.accent})`,
+                              ["--bar-dur" as string]: `${0.6 + i * 0.12}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
