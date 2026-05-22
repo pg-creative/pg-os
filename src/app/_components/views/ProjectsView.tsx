@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { CardGlyph } from "../CardGlyph";
 import { Skeleton } from "../Skeleton";
@@ -12,12 +12,24 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { RealtimeConfig } from "../../api/realtime/config/route";
 import { TasksRegion } from "../Tasks/TasksRegion";
 import { ProjectActiveCard } from "./ProjectActiveCard";
-import { getActiveChestId, setActiveChestId, getDefaultActiveChestId } from "../../../lib/projects";
+import {
+  getActiveChestId,
+  setActiveChestId,
+  getDefaultActiveChestId,
+} from "../../../lib/projects";
 import { TabShell } from "../bento/TabShell";
 import { BentoBox } from "../bento/BentoBox";
 import { useEmaki } from "../bento/emakiContext";
+import { useActiveTab } from "../useActiveTab";
 
-type Glyph = "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
+type Glyph =
+  | "sun"
+  | "star"
+  | "heart"
+  | "sparkles"
+  | "feather"
+  | "music"
+  | "compass";
 
 interface Project {
   id: string;
@@ -44,6 +56,22 @@ interface LaunchResult {
   error?: string;
 }
 
+interface CockpitLaunchResult {
+  ok: boolean;
+  target?: string;
+  sessionId?: string;
+  error?: string;
+  hint?: string;
+}
+
+interface CockpitSession {
+  id: string;
+  cwd: string;
+  label: string;
+  projectId: string | null;
+  createdAt: string;
+}
+
 type ToastState = {
   message: string;
   variant: "success" | "copy" | "error";
@@ -63,7 +91,13 @@ function relTime(ms: number): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function DeadlineTag({ days, isoDate }: { days: number | null; isoDate?: string }) {
+function DeadlineTag({
+  days,
+  isoDate,
+}: {
+  days: number | null;
+  isoDate?: string;
+}) {
   const { tk } = useEmaki();
   if (days === null) return null;
 
@@ -84,7 +118,9 @@ function DeadlineTag({ days, isoDate }: { days: number | null; isoDate?: string 
   } else {
     if (!isoDate) return null;
     const d = new Date(isoDate);
-    label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+    label = d
+      .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      .toUpperCase();
     color = tk.gold;
   }
 
@@ -113,59 +149,99 @@ function ProjectCard({
   num,
   compressed,
   onSetActive,
+  cockpitSessionId,
+  onLaunchCockpit,
 }: {
   project: Project;
   num: number;
   compressed?: boolean;
   onSetActive?: () => void;
+  cockpitSessionId?: string | null;
+  onLaunchCockpit?: (projectId: string) => Promise<void>;
 }) {
   const { tk } = useEmaki();
   const [launching, setLaunching] = useState(false);
+  const [cockpitLaunching, setCockpitLaunching] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [contextText, setContextText] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const showToast = (message: string, variant: NonNullable<ToastState>["variant"]) => {
+  const showToast = (
+    message: string,
+    variant: NonNullable<ToastState>["variant"],
+  ) => {
     setToast({ message, variant });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleLaunch = useCallback(async (e?: React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    setLaunching(true);
-    try {
-      const res = await fetch("/api/launch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: project.id }),
-      });
-      const data: LaunchResult = await res.json();
-      if (!res.ok || !data.ok) {
-        showToast(`⚠ Launch failed: ${data.error ?? "unknown error"}`, "error");
-        return;
+  const handleLaunch = useCallback(
+    async (e?: React.MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      setLaunching(true);
+      try {
+        const res = await fetch("/api/launch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: project.id }),
+        });
+        const data: LaunchResult = await res.json();
+        if (!res.ok || !data.ok) {
+          showToast(
+            `⚠ Launch failed: ${data.error ?? "unknown error"}`,
+            "error",
+          );
+          return;
+        }
+        if (data.autoLaunched) {
+          showToast("✓ Launched in Ghostty", "success");
+        } else {
+          await navigator.clipboard.writeText(data.command);
+          setContextText(data.contextPrompt);
+          showToast("📋 Copied — paste in your terminal", "copy");
+        }
+      } catch (err) {
+        showToast(
+          `⚠ Launch failed: ${err instanceof Error ? err.message : "network error"}`,
+          "error",
+        );
+      } finally {
+        setLaunching(false);
       }
-      if (data.autoLaunched) {
-        showToast("✓ Launched in Ghostty", "success");
-      } else {
-        await navigator.clipboard.writeText(data.command);
-        setContextText(data.contextPrompt);
-        showToast("📋 Copied — paste in your terminal", "copy");
+    },
+    [project.id],
+  );
+
+  const handleCockpitLaunch = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!onLaunchCockpit) return;
+      setCockpitLaunching(true);
+      try {
+        await onLaunchCockpit(project.id);
+      } catch (err) {
+        showToast(
+          `✺ ${err instanceof Error ? err.message : "Cockpit daemon down"}`,
+          "error",
+        );
+      } finally {
+        setCockpitLaunching(false);
       }
-    } catch (err) {
-      showToast(`⚠ Launch failed: ${err instanceof Error ? err.message : "network error"}`, "error");
-    } finally {
-      setLaunching(false);
-    }
-  }, [project.id]);
+    },
+    [onLaunchCockpit, project.id],
+  );
 
   // Close context menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     function handleOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
-      if (!target.closest(".pr-context-menu") && !target.closest(".pr-context-menu-trigger")) {
+      if (
+        !target.closest(".pr-context-menu") &&
+        !target.closest(".pr-context-menu-trigger")
+      ) {
         setMenuOpen(false);
       }
     }
@@ -181,10 +257,21 @@ function ProjectCard({
       cols={compressed ? 4 : 6}
       eyebrow={`${pad} // ${project.name.toUpperCase()}`}
       kanji="事"
-      count={<DeadlineTag days={project.daysUntilDeadline} isoDate={project.deadline} />}
+      count={
+        <DeadlineTag
+          days={project.daysUntilDeadline}
+          isoDate={project.deadline}
+        />
+      }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
-
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          position: "relative",
+        }}
+      >
         {/* Project name + glyph */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <CardGlyph name={project.glyph ?? "compass"} />
@@ -220,7 +307,14 @@ function ProjectCard({
         </div>
 
         {/* State row */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           <span
             style={{
               fontFamily: "var(--mono), ui-monospace, monospace",
@@ -229,10 +323,13 @@ function ProjectCard({
               color: tk.textMuted,
             }}
           >
-            LAST SHIP · {project.lastCommitAt ? relTime(project.lastCommitAt) : "never"}
+            LAST SHIP ·{" "}
+            {project.lastCommitAt ? relTime(project.lastCommitAt) : "never"}
           </span>
           {project.uncommittedCount > 0 && (
-            <StatPill color={tk.accent}>{project.uncommittedCount} UNCOMMITTED</StatPill>
+            <StatPill color={tk.accent}>
+              {project.uncommittedCount} UNCOMMITTED
+            </StatPill>
           )}
           {project.queueCount > 0 && (
             <StatPill color={tk.foxfire}>{project.queueCount} QUEUED</StatPill>
@@ -282,7 +379,13 @@ function ProjectCard({
             >
               BLOCKED ·
             </span>
-            <span style={{ fontSize: "var(--text-xs)", color: tk.textSub, lineHeight: 1.4 }}>
+            <span
+              style={{
+                fontSize: "var(--text-xs)",
+                color: tk.textSub,
+                lineHeight: 1.4,
+              }}
+            >
               {project.topBlocker}
             </span>
           </div>
@@ -290,7 +393,16 @@ function ProjectCard({
 
         {/* Top action items */}
         {project.topActions.length > 0 && (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3 }}>
+          <ul
+            style={{
+              margin: 0,
+              padding: 0,
+              listStyle: "none",
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+            }}
+          >
             {project.topActions.map((a) => (
               <li
                 key={a.id}
@@ -311,20 +423,65 @@ function ProjectCard({
         )}
 
         {/* Memory snippet (fallback) */}
-        {project.memorySnippet && project.topActions.length === 0 && !project.topBlocker && (
-          <div
+        {project.memorySnippet &&
+          project.topActions.length === 0 &&
+          !project.topBlocker && (
+            <div
+              style={{
+                fontSize: "var(--text-xs)",
+                color: tk.textMuted,
+                fontStyle: "italic",
+                lineHeight: 1.5,
+              }}
+            >
+              {project.memorySnippet}
+            </div>
+          )}
+
+        {/* Live in Cockpit badge */}
+        {cockpitSessionId && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              sessionStorage.setItem("pg-os-cockpit-select", cockpitSessionId);
+              onLaunchCockpit?.(project.id);
+            }}
+            aria-label={`${project.name} is live in Cockpit — switch to Cockpit tab`}
             style={{
-              fontSize: "var(--text-xs)",
-              color: tk.textMuted,
-              fontStyle: "italic",
-              lineHeight: 1.5,
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              background: "rgba(91,173,126,0.08)",
+              border: "1px solid rgba(91,173,126,0.35)",
+              borderRadius: 5,
+              padding: "3px 9px",
+              cursor: "pointer",
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.08em",
+              color: "#5BAD7E",
+              whiteSpace: "nowrap",
+              width: "100%",
             }}
           >
-            {project.memorySnippet}
-          </div>
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#5BAD7E",
+                flexShrink: 0,
+                animation: "pg-cockpit-pulse 2s ease-in-out infinite",
+              }}
+              aria-hidden="true"
+            />
+            LIVE IN COCKPIT →
+          </button>
         )}
 
-        {/* Footer: open link + launch button */}
+        {/* Footer: open link + launch buttons */}
         <div
           style={{
             display: "flex",
@@ -333,6 +490,8 @@ function ProjectCard({
             paddingTop: 8,
             borderTop: `1px solid ${tk.divider}`,
             marginTop: 4,
+            gap: 6,
+            flexWrap: "wrap",
           }}
         >
           <Link
@@ -348,34 +507,66 @@ function ProjectCard({
           >
             OPEN →
           </Link>
-          <button
-            onClick={handleLaunch}
-            disabled={launching}
-            type="button"
-            style={{
-              background: "transparent",
-              border: `1px solid ${running ? tk.foxfire : tk.accent}`,
-              borderRadius: 5,
-              color: running ? tk.foxfire : tk.accent,
-              fontFamily: "var(--mono), ui-monospace, monospace",
-              fontSize: "var(--text-2xs)",
-              letterSpacing: "0.08em",
-              padding: "4px 10px",
-              cursor: launching ? "default" : "pointer",
-              opacity: launching ? 0.6 : 1,
-              transition: "opacity 160ms ease",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {launching ? "LAUNCHING…" : "LAUNCH SESSION →"}
-          </button>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {onLaunchCockpit && (
+              <button
+                onClick={handleCockpitLaunch}
+                disabled={cockpitLaunching}
+                type="button"
+                aria-label={`Launch ${project.name} in Cockpit terminal`}
+                aria-busy={cockpitLaunching}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${tk.gold}`,
+                  borderRadius: 5,
+                  color: tk.gold,
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-2xs)",
+                  letterSpacing: "0.08em",
+                  padding: "4px 10px",
+                  cursor: cockpitLaunching ? "default" : "pointer",
+                  opacity: cockpitLaunching ? 0.6 : 1,
+                  transition: "opacity 160ms ease",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {cockpitLaunching ? "OPENING…" : "✺ COCKPIT"}
+              </button>
+            )}
+            <button
+              onClick={handleLaunch}
+              disabled={launching}
+              type="button"
+              aria-label={`Launch ${project.name} session in Ghostty`}
+              style={{
+                background: "transparent",
+                border: `1px solid ${running ? tk.foxfire : tk.accent}`,
+                borderRadius: 5,
+                color: running ? tk.foxfire : tk.accent,
+                fontFamily: "var(--mono), ui-monospace, monospace",
+                fontSize: "var(--text-2xs)",
+                letterSpacing: "0.08em",
+                padding: "4px 10px",
+                cursor: launching ? "default" : "pointer",
+                opacity: launching ? 0.6 : 1,
+                transition: "opacity 160ms ease",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {launching ? "LAUNCHING…" : "LAUNCH SESSION →"}
+            </button>
+          </div>
         </div>
 
         {/* Context preview (shown after clipboard copy) */}
         {contextText && (
           <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 4 }}>
             <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setContextOpen((v) => !v); }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setContextOpen((v) => !v);
+              }}
               type="button"
               style={{
                 background: "transparent",
@@ -426,20 +617,20 @@ function ProjectCard({
                 toast.variant === "success"
                   ? "rgba(124,154,110,0.2)"
                   : toast.variant === "error"
-                  ? "rgba(184,83,111,0.2)"
-                  : "rgba(0,0,0,0.22)",
+                    ? "rgba(184,83,111,0.2)"
+                    : "rgba(0,0,0,0.22)",
               color:
                 toast.variant === "success"
                   ? "#7C9A6E"
                   : toast.variant === "error"
-                  ? "#B8536F"
-                  : tk.textSub,
+                    ? "#B8536F"
+                    : tk.textSub,
               border: `1px solid ${
                 toast.variant === "success"
                   ? "rgba(124,154,110,0.4)"
                   : toast.variant === "error"
-                  ? "rgba(184,83,111,0.4)"
-                  : tk.divider
+                    ? "rgba(184,83,111,0.4)"
+                    : tk.divider
               }`,
               zIndex: 10,
               whiteSpace: "nowrap",
@@ -455,7 +646,11 @@ function ProjectCard({
             <button
               className="pr-context-menu-trigger"
               type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen((v) => !v); }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMenuOpen((v) => !v);
+              }}
               aria-label="Project options"
               style={{
                 background: "transparent",
@@ -519,7 +714,13 @@ function ProjectCard({
   );
 }
 
-function StatPill({ color, children }: { color: string; children: React.ReactNode }) {
+function StatPill({
+  color,
+  children,
+}: {
+  color: string;
+  children: React.ReactNode;
+}) {
   return (
     <span
       style={{
@@ -544,6 +745,70 @@ export function ProjectsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { brand } = useMode();
+  const { setActive } = useActiveTab();
+
+  // Map projectId -> cockpit sessionId for live sessions
+  const [cockpitMap, setCockpitMap] = useState<Record<string, string>>({});
+  const cockpitPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchCockpitSessions = useCallback(() => {
+    fetch("/api/cockpit/sessions", { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error("cockpit-sessions unavailable");
+        return r.json();
+      })
+      .then((data: { running: boolean; sessions: CockpitSession[] }) => {
+        const map: Record<string, string> = {};
+        for (const s of data.sessions) {
+          if (s.projectId) map[s.projectId] = s.id;
+        }
+        setCockpitMap(map);
+      })
+      .catch(() => {
+        /* daemon may be down; silently ignore */
+      });
+  }, []);
+
+  useEffect(() => {
+    fetchCockpitSessions();
+    cockpitPollRef.current = setInterval(fetchCockpitSessions, 5000);
+    return () => {
+      if (cockpitPollRef.current) clearInterval(cockpitPollRef.current);
+    };
+  }, [fetchCockpitSessions]);
+
+  const handleLaunchCockpit = useCallback(
+    async (projectId: string) => {
+      // If there is already a live session for this project, just switch tabs
+      const existingSessionId = cockpitMap[projectId];
+      if (existingSessionId) {
+        sessionStorage.setItem("pg-os-cockpit-select", existingSessionId);
+        setActive("cockpit");
+        return;
+      }
+      const res = await fetch("/api/launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, target: "cockpit" }),
+      });
+      const data = (await res.json()) as CockpitLaunchResult;
+      if (res.status === 503 || !data.ok) {
+        // Non-blocking hint via a short-lived DOM toast handled by caller
+        const hint = data.hint ?? data.error ?? "Cockpit daemon not running";
+        // Surface via console + a brief custom event; ProjectCard shows its own toast
+        console.warn("[cockpit]", hint);
+        // Re-throw so the caller (ProjectCard) can catch and show inline toast
+        throw new Error(hint);
+      }
+      if (data.sessionId) {
+        sessionStorage.setItem("pg-os-cockpit-select", data.sessionId);
+      }
+      setActive("cockpit");
+      // Refresh cockpit map after a short delay to pick up the new session
+      setTimeout(fetchCockpitSessions, 800);
+    },
+    [cockpitMap, setActive, fetchCockpitSessions],
+  );
 
   const fetchProjects = useCallback(() => {
     fetch("/api/projects", { cache: "no-store" })
@@ -555,7 +820,9 @@ export function ProjectsView() {
         setProjects(data.projects);
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Failed to load projects");
+        setError(
+          err instanceof Error ? err.message : "Failed to load projects",
+        );
       })
       .finally(() => setLoading(false));
   }, []);
@@ -567,7 +834,8 @@ export function ProjectsView() {
   // Realtime: subscribe to PG OS `tasks` table
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
-    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null =
+      null;
     let destroyed = false;
 
     async function setupRealtime() {
@@ -577,7 +845,10 @@ export function ProjectsView() {
         const cfg: RealtimeConfig = await res.json();
         if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return;
 
-        const client = await createBrowserSupabaseClient(cfg.pgosUrl, cfg.pgosPublishableKey);
+        const client = await createBrowserSupabaseClient(
+          cfg.pgosUrl,
+          cfg.pgosPublishableKey,
+        );
         if (!client || destroyed) return;
 
         supabaseClient = client;
@@ -585,7 +856,9 @@ export function ProjectsView() {
           client,
           channelName: "tasks-realtime",
           table: "tasks",
-          onchange: () => { fetchProjects(); },
+          onchange: () => {
+            fetchProjects();
+          },
         });
       } catch {
         // Realtime is best-effort
@@ -613,7 +886,9 @@ export function ProjectsView() {
       try {
         es = new EventSource("/api/projects/events");
         es.addEventListener("refresh", () => fetchProjects());
-        es.onopen = () => { backoffMs = 2000; };
+        es.onopen = () => {
+          backoffMs = 2000;
+        };
         es.onerror = () => {
           es?.close();
           es = null;
@@ -634,7 +909,9 @@ export function ProjectsView() {
   }, [fetchProjects]);
 
   // Active Chest state
-  const [activeId, setActiveId] = useState<string | null>(() => getActiveChestId());
+  const [activeId, setActiveId] = useState<string | null>(() =>
+    getActiveChestId(),
+  );
 
   useEffect(() => {
     const stored = getActiveChestId();
@@ -647,12 +924,18 @@ export function ProjectsView() {
   // Keyboard navigation [ and ]
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       if (e.key !== "[" && e.key !== "]") return;
       e.preventDefault();
       const list = filtered;
       if (list.length === 0) return;
-      const currentIdx = activeId ? list.findIndex((p) => p.id === activeId) : -1;
+      const currentIdx = activeId
+        ? list.findIndex((p) => p.id === activeId)
+        : -1;
       let nextIdx: number;
       if (e.key === "]") nextIdx = (currentIdx + 1) % list.length;
       else nextIdx = currentIdx <= 0 ? list.length - 1 : currentIdx - 1;
@@ -663,7 +946,7 @@ export function ProjectsView() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, filtered]);
 
   // 14-day idle auto-clear
@@ -682,7 +965,9 @@ export function ProjectsView() {
   }, [activeId, projects]);
 
   // Split filtered into active + rest
-  const activeProject = activeId ? filtered.find((p) => p.id === activeId) ?? null : null;
+  const activeProject = activeId
+    ? (filtered.find((p) => p.id === activeId) ?? null)
+    : null;
   const restProjects = filtered.filter((p) => p.id !== activeProject?.id);
 
   const count = filtered.length;
@@ -690,6 +975,9 @@ export function ProjectsView() {
 
   return (
     <TabShell title="Projects" eyebrow={eyebrow}>
+      {/* Cockpit live-dot pulse keyframe */}
+      <style>{`@keyframes pg-cockpit-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.45;transform:scale(0.7)}}`}</style>
+
       {/* Brand mode filter hint */}
       {brandCfg && (
         <BentoBox cols={12}>
@@ -733,23 +1021,31 @@ export function ProjectsView() {
       {/* Active project hero */}
       {!loading && !error && activeProject && (
         <BentoBox cols={12} style={{ padding: 0, overflow: "hidden" }}>
-          <ProjectActiveCard project={activeProject} />
+          <ProjectActiveCard
+            project={activeProject}
+            cockpitSessionId={cockpitMap[activeProject.id] ?? null}
+            onLaunchCockpit={handleLaunchCockpit}
+          />
         </BentoBox>
       )}
 
       {/* Project grid cards */}
-      {!loading && !error && (activeProject ? restProjects : filtered).map((project, i) => (
-        <ProjectCard
-          key={project.id}
-          project={project}
-          num={i + 1}
-          compressed={!!activeProject}
-          onSetActive={() => {
-            setActiveChestId(project.id);
-            setActiveId(project.id);
-          }}
-        />
-      ))}
+      {!loading &&
+        !error &&
+        (activeProject ? restProjects : filtered).map((project, i) => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            num={i + 1}
+            compressed={!!activeProject}
+            onSetActive={() => {
+              setActiveChestId(project.id);
+              setActiveId(project.id);
+            }}
+            cockpitSessionId={cockpitMap[project.id] ?? null}
+            onLaunchCockpit={handleLaunchCockpit}
+          />
+        ))}
 
       {/* Tasks layer */}
       {!loading && !error && (
@@ -763,7 +1059,11 @@ export function ProjectsView() {
 
 // Inner components that use useEmaki() (must be inside EmakiProvider = inside TabShell)
 
-function ProjectsFilterHint({ brandCfg }: { brandCfg: { glyph: string; label: string } }) {
+function ProjectsFilterHint({
+  brandCfg,
+}: {
+  brandCfg: { glyph: string; label: string };
+}) {
   const { tk } = useEmaki();
   return (
     <div

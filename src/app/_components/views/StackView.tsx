@@ -367,6 +367,19 @@ function EvalTile({
   const v = VERDICT_META[record.verdict];
   const s = STATUS_META[itemStatus];
   const vColor = verdictColor(v.tone, tk);
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    try {
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(record.install).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      });
+    } catch {
+      // clipboard unavailable or denied -- silent no-op
+    }
+  }
 
   // Semantic badge colors for status
   function statusBadgeColor(st: "pending" | "installed" | "passed"): string {
@@ -515,21 +528,45 @@ function EvalTile({
           }}
         >
           {record.install && (
-            <pre
-              style={{
-                background: "rgba(0,0,0,0.20)",
-                border: `1px solid ${tk.divider}`,
-                borderRadius: 6,
-                padding: "8px 12px",
-                fontFamily: "var(--mono), ui-monospace, monospace",
-                fontSize: "var(--text-xs)",
-                color: tk.textSub,
-                overflowX: "auto",
-                marginBottom: 10,
-              }}
-            >
-              <code>{record.install}</code>
-            </pre>
+            <div style={{ position: "relative", marginBottom: 10 }}>
+              <pre
+                style={{
+                  background: "rgba(0,0,0,0.20)",
+                  border: `1px solid ${tk.divider}`,
+                  borderRadius: 6,
+                  padding: "8px 40px 8px 12px",
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-xs)",
+                  color: tk.textSub,
+                  overflowX: "auto",
+                  margin: 0,
+                }}
+              >
+                <code>{record.install}</code>
+              </pre>
+              <button
+                onClick={handleCopy}
+                aria-label={copied ? "Copied" : "Copy install command"}
+                style={{
+                  position: "absolute",
+                  top: 5,
+                  right: 6,
+                  background: copied ? `${tk.gold}22` : "rgba(0,0,0,0.28)",
+                  border: `1px solid ${copied ? tk.gold : tk.divider}`,
+                  borderRadius: 4,
+                  padding: "2px 7px",
+                  cursor: "pointer",
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-2xs)",
+                  color: copied ? tk.gold : tk.textMuted,
+                  letterSpacing: "0.06em",
+                  transition: "all 150ms ease",
+                  lineHeight: 1.6,
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
           )}
           <pre
             style={{

@@ -80,6 +80,10 @@ export function CockpitView() {
   const [loaded, setLoaded] = useState(false);
   const [newCwd, setNewCwd] = useState("");
   const [launching, setLaunching] = useState(false);
+  // Deep-link target: when the Projects tab launches/links a session it stashes
+  // the id here, then switches to this tab. We select it once it shows up in the
+  // fleet (telemetry can lag a fresh launch by a refresh tick).
+  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [tele, acts, dinfo] = await Promise.all([
@@ -123,6 +127,26 @@ export function CockpitView() {
     const iv = setInterval(refresh, 3000);
     return () => clearInterval(iv);
   }, [refresh]);
+
+  // Pick up a deep-link selection from the Projects tab (sessionStorage), then clear it.
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem("pg-os-cockpit-select");
+      if (id) {
+        setPendingSelect(id);
+        sessionStorage.removeItem("pg-os-cockpit-select");
+      }
+    } catch {
+      /* sessionStorage unavailable (SSR / private mode) */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (pendingSelect && cards.some((c) => c.sessionId === pendingSelect)) {
+      setSelected(pendingSelect);
+      setPendingSelect(null);
+    }
+  }, [pendingSelect, cards]);
 
   const launch = useCallback(async () => {
     if (!daemon?.running || !daemon.token) return;

@@ -397,6 +397,50 @@ function LoadingTiles() {
   );
 }
 
+function EditHabitButton({
+  habit,
+  onEditHabit,
+}: {
+  habit: Habit;
+  onEditHabit: (habit: Habit) => void;
+}) {
+  const { tk } = useEmaki();
+  return (
+    <button
+      onClick={() => onEditHabit(habit)}
+      aria-label={`Edit habit: ${habit.name}`}
+      title="Edit habit"
+      style={{
+        flexShrink: 0,
+        background: "transparent",
+        border: `1px solid ${tk.divider}`,
+        borderRadius: 6,
+        color: tk.textMuted,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 28,
+        height: 28,
+        padding: 0,
+        transition: "border-color 140ms ease, color 140ms ease",
+        fontSize: 13,
+        lineHeight: 1,
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = tk.accent;
+        (e.currentTarget as HTMLButtonElement).style.color = tk.accent;
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = tk.divider;
+        (e.currentTarget as HTMLButtonElement).style.color = tk.textMuted;
+      }}
+    >
+      ✎
+    </button>
+  );
+}
+
 function ConnectedTiles({
   snapshot,
   week,
@@ -410,7 +454,6 @@ function ConnectedTiles({
   onRefetch: () => void;
   onEditHabit: (habit: Habit) => void;
 }) {
-  void onEditHabit;
   const mirrorPrompt =
     MIRROR_PROMPTS[new Date().getDay() % MIRROR_PROMPTS.length];
 
@@ -478,13 +521,49 @@ function ConnectedTiles({
           eyebrow="02 // ANCHORS"
           scroll={anchors.length > 6}
         >
-          <AnchorRow habits={anchors} onComplete={onComplete} />
+          {anchors.map((habit, i) => (
+            <div
+              key={habit.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                borderBottom:
+                  i < anchors.length - 1
+                    ? `1px solid rgba(255,255,255,0.06)`
+                    : undefined,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <AnchorRow habits={[habit]} onComplete={onComplete} />
+              </div>
+              <EditHabitButton habit={habit} onEditHabit={onEditHabit} />
+            </div>
+          ))}
         </BentoBox>
       )}
 
       {weekly.length > 0 && (
         <BentoBox cols={12} eyebrow="03 // WEEKLY" scroll={weekly.length > 5}>
-          <WeeklyGrid habits={weekly} onComplete={onComplete} />
+          {weekly.map((habit, i) => (
+            <div
+              key={habit.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                borderBottom:
+                  i < weekly.length - 1
+                    ? `1px solid rgba(255,255,255,0.06)`
+                    : undefined,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <WeeklyGrid habits={[habit]} onComplete={onComplete} />
+              </div>
+              <EditHabitButton habit={habit} onEditHabit={onEditHabit} />
+            </div>
+          ))}
         </BentoBox>
       )}
 

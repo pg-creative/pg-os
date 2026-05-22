@@ -27,7 +27,23 @@ function BrainContent() {
 
   const [selected, setSelected] = useState<BrainEntry | null>(null);
   const [drawerBusy, setDrawerBusy] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const { tk } = useEmaki();
+
+  const handleNotionSync = useCallback(async () => {
+    setSyncStatus("loading");
+    try {
+      const r = await fetch("/api/brain/notion-sync", { method: "POST" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      refresh();
+      setSyncStatus("done");
+      setTimeout(() => setSyncStatus("idle"), 2200);
+    } catch (err) {
+      console.error("[brain] notion-sync failed", err);
+      setSyncStatus("error");
+      setTimeout(() => setSyncStatus("idle"), 3000);
+    }
+  }, [refresh]);
 
   const handleMutate = useCallback(
     async (slug: string, patch: { status?: string; route?: string }) => {
@@ -68,6 +84,47 @@ function BrainContent() {
           >
             Error: {error}
           </span>
+        </BentoBox>
+      )}
+
+      {/* Notion sync button -- sits above the filter column */}
+      {notionConfigured && (
+        <BentoBox cols={3}>
+          <button
+            type="button"
+            onClick={handleNotionSync}
+            disabled={syncStatus === "loading"}
+            aria-label="Sync entries from Notion"
+            style={{
+              width: "100%",
+              background: "transparent",
+              border: `1px solid ${syncStatus === "error" ? "#B8536F" : syncStatus === "done" ? tk.gold : tk.divider}`,
+              borderRadius: 6,
+              color:
+                syncStatus === "error"
+                  ? "#B8536F"
+                  : syncStatus === "done"
+                    ? tk.gold
+                    : syncStatus === "loading"
+                      ? tk.textMuted
+                      : tk.accent,
+              cursor: syncStatus === "loading" ? "default" : "pointer",
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "0.08em",
+              opacity: syncStatus === "loading" ? 0.6 : 1,
+              padding: "6px 12px",
+              transition: "opacity 160ms ease, border-color 200ms ease, color 200ms ease",
+            }}
+          >
+            {syncStatus === "loading"
+              ? "Syncing..."
+              : syncStatus === "done"
+                ? "Synced"
+                : syncStatus === "error"
+                  ? "Sync failed"
+                  : "Sync Notion"}
+          </button>
         </BentoBox>
       )}
 
