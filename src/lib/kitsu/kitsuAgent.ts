@@ -34,6 +34,28 @@ import {
   spotifyCommand,
   refreshSpotifyToken,
 } from "@/lib/spotify";
+import {
+  ensureKitsuMemory,
+  loadKitsuMemory,
+  buildMemoryBlock,
+  appendKitsuDecision,
+  recordKitsuCorrection,
+} from "@/lib/kitsu/kitsuMemory";
+import { gatherFleet } from "@/lib/kitsu/kitsuOrchestration";
+import { getProject } from "@/lib/projects";
+import { launchCockpitSession, killCockpitSession } from "@/lib/cockpitDaemon";
+import { getAgentHealth } from "@/lib/agentHealth";
+import { listProjectStates } from "@/lib/projectState";
+import { getDaySnapshot, toggleCompletion } from "@/lib/habits";
+
+// ── Autonomy level (PG decision 2026-05-22: conservative, built to evolve) ────
+// Dial this UP as trust grows — it is the single switch for how much Kitsu does
+// unsupervised. "readonly": observe only. "conservative": launch sessions when
+// asked (reversible), but kill/destructive actions need approval. "trusted":
+// launch + kill + act directly.
+export type KitsuAutonomy = "readonly" | "conservative" | "trusted";
+export const KITSU_AUTONOMY: KitsuAutonomy =
+  (process.env.KITSU_AUTONOMY as KitsuAutonomy) || "conservative";
 
 // Resolve a fresh Spotify access token (refreshing if expired). Mirrors the
 // logic in /api/spotify/command so Kitsu can read + control playback directly.
@@ -67,6 +89,11 @@ const READ_ONLY_TOOLS = new Set([
   "mcp__kitsu-tools__read_signals",
   "mcp__kitsu-tools__read_recent_archive",
   "mcp__kitsu-tools__read_spotify",
+  // Phase 4 orchestration reads (always safe to observe)
+  "mcp__kitsu-tools__monitor_fleet",
+  "mcp__kitsu-tools__read_agent_health",
+  "mcp__kitsu-tools__read_projects",
+  "mcp__kitsu-tools__read_habits",
   // Claude Code built-in read tools
   "Read",
   "Glob",
@@ -74,6 +101,21 @@ const READ_ONLY_TOOLS = new Set([
   "WebSearch",
   "WebFetch",
   "LS",
+]);
+
+// Actions Kitsu may take at "conservative" autonomy: PG-initiated and reversible.
+// launch_session opens a session you can kill; remember writes only Kitsu's own
+// memory files. Both are low-stakes.
+const CONSERVATIVE_ACTIONS = new Set([
+  "mcp__kitsu-tools__launch_session",
+  "mcp__kitsu-tools__remember",
+]);
+
+// Actions that only run at "trusted" autonomy. Below that they are denied and
+// Kitsu is told to surface them via propose_action for PG to approve.
+const TRUSTED_ACTIONS = new Set([
+  "mcp__kitsu-tools__kill_session",
+  "mcp__kitsu-tools__complete_habit",
 ]);
 
 // These are explicitly disallowed (Claude shouldn't see them at all).
@@ -475,9 +517,215 @@ function buildKitsuMcpServer() {
     },
   );
 
+  // ── Phase 4 orchestration tools ──────────────────────────────────────────
+
+  const monitorFleet = tool(
+    "monitor_fleet",
+    "Observe the live fleet of Claude Code sessions: model, context %, cost, " +
+      "status (running/idle/waiting/permission), current tool, and which are " +
+      "controllable (daemon-backed two-way terminals). Use to answer 'what is " +
+      "happening' / 'what needs me' and to lead with anything awaiting a decision.",
+    {},
+    async () => {
+      try {
+        const fleet = await gatherFleet();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(fleet) }],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+    { annotations: { readOnlyHint: true } },
+  );
+
+  const readAgentHealth = tool(
+    "read_agent_health",
+    "Read the health of PG's scheduled agents (session-review, morning-briefing, " +
+      "memory-hygiene, etc.): last run, status, schedule, budget. Use to spot a " +
+      "stalled or failing agent.",
+    {},
+    async () => {
+      try {
+        const health = await getAgentHealth();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(health) }],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+    { annotations: { readOnlyHint: true } },
+  );
+
+  const readProjects = tool(
+    "read_projects",
+    "Read the state of PG's active projects: current blockers and action items " +
+      "(parsed from each project's MEMORY.md), recent git activity, and which is " +
+      "active. Use to route work and surface what is stuck.",
+    {},
+    async () => {
+      try {
+        const projects = await listProjectStates();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(projects) }],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+    { annotations: { readOnlyHint: true } },
+  );
+
+  const readHabits = tool(
+    "read_habits",
+    "Read today's habit snapshot from Hero's Chronicle: which habits are done, " +
+      "which are pending, streaks, and journal status. Use to calibrate nudges.",
+    {},
+    async () => {
+      try {
+        const snap = await getDaySnapshot();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(snap) }],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+    { annotations: { readOnlyHint: true } },
+  );
+
+  const launchSession = tool(
+    "launch_session",
+    "Launch a Claude Code session in one of PG's projects (daemon-backed, opens a " +
+      "live two-way terminal in the Cockpit tab). Use when PG asks you to start " +
+      "working on a project. Reversible: the session can be killed.",
+    {
+      projectId: z
+        .string()
+        .describe(
+          "Project id, e.g. 'metrasens', 'heros-chronicle', 'personal-os'",
+        ),
+    },
+    async (args) => {
+      try {
+        const { projectId } = args as { projectId: string };
+        const p = getProject(projectId);
+        if (!p) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: `unknown_project: ${projectId}`,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        const result = await launchCockpitSession(p.path, p.name);
+        if (result.ok) {
+          await appendKitsuDecision({
+            summary: `Launched a session in ${p.name}`,
+            kind: "action",
+            detail: `sessionId ${result.id}`,
+          });
+        }
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          isError: !result.ok,
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+  );
+
+  const killSession = tool(
+    "kill_session",
+    "Kill a running daemon-backed Claude Code session by its id. Destructive: " +
+      "in-progress work in that session is lost. Needs PG approval unless Kitsu " +
+      "is at trusted autonomy.",
+    { sessionId: z.string().describe("The session id to kill") },
+    async (args) => {
+      try {
+        const { sessionId } = args as { sessionId: string };
+        const result = await killCockpitSession(sessionId);
+        if (result.ok) {
+          await appendKitsuDecision({
+            summary: `Killed session ${sessionId}`,
+            kind: "action",
+          });
+        }
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          isError: !result.ok,
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+  );
+
+  const completeHabit = tool(
+    "complete_habit",
+    "Mark a habit complete for today in Hero's Chronicle. Needs PG approval " +
+      "unless Kitsu is at trusted autonomy.",
+    { habitId: z.string().describe("The habit id to toggle complete") },
+    async (args) => {
+      try {
+        const { habitId } = args as { habitId: string };
+        const result = await toggleCompletion(habitId);
+        await appendKitsuDecision({
+          summary: `Toggled habit ${habitId} -> ${result.completed ? "done" : "undone"}`,
+          kind: "action",
+        });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+  );
+
+  const remember = tool(
+    "remember",
+    "Persist something you learned about PG (a correction, a preference, the way " +
+      "he likes things done) to your own evolving memory. Call this whenever PG " +
+      "corrects you or states a preference, so it survives across sessions.",
+    {
+      correction: z
+        .string()
+        .describe("The lesson / preference / correction, in one line"),
+      context: z.string().optional().describe("Optional: what prompted it"),
+    },
+    async (args) => {
+      try {
+        const { correction, context } = args as {
+          correction: string;
+          context?: string;
+        };
+        await recordKitsuCorrection({ correction, context });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ ok: true, remembered: correction }),
+            },
+          ],
+        };
+      } catch (err) {
+        return errContent(err);
+      }
+    },
+  );
+
   return createSdkMcpServer({
     name: "kitsu-tools",
-    version: "1.0.0",
+    version: "1.1.0",
     tools: [
       readShips,
       readQueue,
@@ -490,8 +738,30 @@ function buildKitsuMcpServer() {
       addQueueItem,
       readSpotify,
       controlSpotify,
+      // Phase 4 orchestration + Phase 3 memory
+      monitorFleet,
+      readAgentHealth,
+      readProjects,
+      readHabits,
+      launchSession,
+      killSession,
+      completeHabit,
+      remember,
     ],
   });
+}
+
+// Shared error-content helper for tool bodies.
+function errContent(err: unknown) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    ],
+    isError: true,
+  };
 }
 
 // Singleton MCP server -- created once per process
@@ -524,6 +794,30 @@ const canUseTool: Parameters<typeof query>[0]["options"] extends infer O
   // reversible: play/pause/skip on PG's own playback).
   if (toolName === "mcp__kitsu-tools__control_spotify") {
     return { behavior: "allow" };
+  }
+
+  // ── Autonomy gate (KITSU_AUTONOMY) ──────────────────────────────────────
+  // Conservative actions (launch a session, write to own memory): allowed at
+  // "conservative" and "trusted"; at "readonly" they are surfaced for approval.
+  if (CONSERVATIVE_ACTIONS.has(toolName)) {
+    if (KITSU_AUTONOMY === "readonly") {
+      return {
+        behavior: "deny",
+        message: `Kitsu is in read-only mode. Surface '${toolName}' via propose_action for PG to run.`,
+      };
+    }
+    return { behavior: "allow" };
+  }
+  // Trusted actions (kill a session, complete a habit): only at "trusted".
+  // Below that, deny and tell Kitsu to surface it for PG's approval.
+  if (TRUSTED_ACTIONS.has(toolName)) {
+    if (KITSU_AUTONOMY === "trusted") {
+      return { behavior: "allow" };
+    }
+    return {
+      behavior: "deny",
+      message: `'${toolName}' is destructive and needs PG's approval at the current autonomy level. Use propose_action to surface it in the Flow queue instead.`,
+    };
   }
 
   // Write tools that add persistent records require PG approval
@@ -593,6 +887,16 @@ export async function* streamKitsu({
     systemPrompt = `${MARVIS_PERSONA}\n\nCURRENT FLEET: fleet telemetry unavailable right now.`;
   }
 
+  // Phase 3: prepend Kitsu's evolving memory (persona + recent decisions +
+  // PG's corrections) so continuity compounds across sessions, beyond SDK resume.
+  try {
+    await ensureKitsuMemory();
+    const mem = await loadKitsuMemory();
+    systemPrompt = `${buildMemoryBlock(mem)}\n\n---\n\n${systemPrompt}`;
+  } catch {
+    /* memory is best-effort; never block a turn on it */
+  }
+
   // Build the user prompt from the last user message in the array.
   // The Agent SDK takes a single prompt string; prior turns are context
   // that would be loaded via session resume. For multi-turn we rely on
@@ -631,6 +935,14 @@ export async function* streamKitsu({
           "mcp__kitsu-tools__read_spotify",
           "mcp__kitsu-tools__propose_action",
           "mcp__kitsu-tools__control_spotify",
+          // Phase 4 orchestration reads (always safe). The ACTION tools
+          // (launch_session, remember, kill_session, complete_habit) are
+          // intentionally NOT pre-approved here so the autonomy gate in
+          // canUseTool governs them.
+          "mcp__kitsu-tools__monitor_fleet",
+          "mcp__kitsu-tools__read_agent_health",
+          "mcp__kitsu-tools__read_projects",
+          "mcp__kitsu-tools__read_habits",
           "Read",
           "Glob",
           "Grep",

@@ -40,7 +40,10 @@ async function readToken(): Promise<string | null> {
   }
 }
 
-async function daemonFetch(pathname: string, init?: RequestInit): Promise<Response | null> {
+async function daemonFetch(
+  pathname: string,
+  init?: RequestInit,
+): Promise<Response | null> {
   const token = await readToken();
   if (!token) return null;
   const ctrl = new AbortController();
@@ -48,7 +51,11 @@ async function daemonFetch(pathname: string, init?: RequestInit): Promise<Respon
   try {
     return await fetch(`${BASE}${pathname}`, {
       ...init,
-      headers: { "x-cockpit-token": token, "content-type": "application/json", ...(init?.headers || {}) },
+      headers: {
+        "x-cockpit-token": token,
+        "content-type": "application/json",
+        ...(init?.headers || {}),
+      },
       signal: ctrl.signal,
     });
   } catch {
@@ -89,7 +96,10 @@ export type LaunchCockpitResult =
   | { ok: false; error: string };
 
 /** Launch a Claude Code session in the daemon (tmux + node-pty) at `cwd`. */
-export async function launchCockpitSession(cwd: string, label?: string): Promise<LaunchCockpitResult> {
+export async function launchCockpitSession(
+  cwd: string,
+  label?: string,
+): Promise<LaunchCockpitResult> {
   const r = await daemonFetch("/sessions", {
     method: "POST",
     body: JSON.stringify({ cwd, label }),
@@ -101,6 +111,19 @@ export async function launchCockpitSession(cwd: string, label?: string): Promise
   } catch {
     /* fall through to status check */
   }
-  if (r.status === 201 && data.id) return { ok: true, id: data.id, attachCommand: data.attachCommand };
+  if (r.status === 201 && data.id)
+    return { ok: true, id: data.id, attachCommand: data.attachCommand };
   return { ok: false, error: data.error || `daemon_status_${r.status}` };
+}
+
+/** Kill a daemon-backed session (DELETE /sessions/:id). */
+export async function killCockpitSession(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const r = await daemonFetch(`/sessions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!r) return { ok: false, error: "daemon_unreachable" };
+  if (r.ok) return { ok: true };
+  return { ok: false, error: `daemon_status_${r.status}` };
 }

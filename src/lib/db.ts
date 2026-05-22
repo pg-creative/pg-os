@@ -14,8 +14,8 @@ export function db(): SupabaseClient {
   if (!url || !key) {
     throw new Error(
       "Missing PGOS_SUPABASE_URL or PGOS_SUPABASE_SERVICE_ROLE_KEY env vars. " +
-      "Set them in .env.local for dev or in Vercel project settings for production. " +
-      "See supabase/README.md for setup steps.",
+        "Set them in .env.local for dev or in Vercel project settings for production. " +
+        "See supabase/README.md for setup steps.",
     );
   }
 
@@ -27,7 +27,9 @@ export function db(): SupabaseClient {
 }
 
 export function isDbConfigured(): boolean {
-  return !!(process.env.PGOS_SUPABASE_URL && process.env.PGOS_SUPABASE_SERVICE_ROLE_KEY);
+  return !!(
+    process.env.PGOS_SUPABASE_URL && process.env.PGOS_SUPABASE_SERVICE_ROLE_KEY
+  );
 }
 
 // Type-friendly table names. Matches supabase/migrations/001_init.sql.
@@ -42,4 +44,5 @@ export const T = {
   push_subscriptions: "push_subscriptions",
   mode_state: "mode_state",
   telegram_events: "telegram_events",
+  agent_state: "agent_state",
 } as const;
