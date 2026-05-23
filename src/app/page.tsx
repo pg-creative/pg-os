@@ -3,7 +3,7 @@ import { BridgeModeProvider } from "./_components/BridgeModeProvider";
 import { ToastDeck } from "./_components/Toast";
 import { AmbientParticles } from "./_components/AmbientParticles";
 import { EmakiShellBar } from "./_components/EmakiShellBar";
-import { TabBar } from "./_components/TabBar";
+import { MobileNavV1Foxfire } from "./_components/mobile/MobileNavV1Foxfire";
 import { EmakiBackdrop } from "./_components/emaki/EmakiBackdrop";
 import { MarvisCorner } from "./_components/views/cockpit/MarvisCorner";
 import { CaptureFAB } from "./_components/CaptureFAB";
@@ -34,8 +34,8 @@ export default function Page() {
         <EmakiBackdrop />
         <AmbientParticles />
         {/* Global shell nav — the home-lab top bar. Tabs are hidden on mobile
-            via EmakiShellBar's @media (max-width: 767px) rule; the bottom
-            TabBar takes over for thumb-friendly mobile navigation. */}
+            via EmakiShellBar's @media (max-width: 767px) rule; the Foxfire
+            drawer (mounted below) takes over for mobile navigation. */}
         <EmakiShellBar />
         <div className={`shell${active === "home" ? " shell-bleed" : ""}`}>
           {/* ACTIVE VIEW */}
@@ -65,9 +65,12 @@ export default function Page() {
         {/* On the cockpit, the global FABs are hidden so they don't crowd Kitsu's terminal. */}
         {active !== "cockpit" && <CaptureFAB />}
         {active !== "cockpit" && <CopilotLauncher />}
-        {/* Mobile bottom thumb bar -- position:fixed via globals.css @media (max-width:768px).
-            Hidden on desktop by the same media query (display:none above 768px). */}
-        <TabBar />
+        {/* MOBILE NAV — Foxfire Drawer (PG pick, 2026-05-23, from /dev/mobile-nav-v2 bake-off).
+            A foxfire-glow FAB sits bottom-left at <768px; tap to slide in a full-screen
+            painted-kitsune-den drawer with all 9 tabs (anchor pattern, iOS hydration safe).
+            Replaces the crammed 9-slot TabBar that this round's audit found unusable on phone.
+            Hidden above 767px by the component's own inline @media rule. */}
+        <MobileNavV1Foxfire />
         <CommandPalette />
         <AmbientIdle />
         <ToastDeck />
