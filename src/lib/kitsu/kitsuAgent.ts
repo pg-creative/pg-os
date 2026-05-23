@@ -1,32 +1,33 @@
 /**
- * kitsuAgent.ts -- Kitsu orchestrator brain, built on the Claude Agent SDK.
+ * kitsuAgent.ts — Kitsu orchestrator brain on the Vercel AI SDK.
  *
- * This is ADDITIVE. The existing /api/copilot/chat route, useMarvis.tsx,
- * and MarvisCorner.tsx are untouched. Phase 2 wires the UI.
+ * REWRITE 2026-05-23 (WS-E): the previous @anthropic-ai/claude-agent-sdk
+ * implementation spawned the `claude` CLI as a subprocess to drive the agent
+ * loop. That worked on PG's Mac (CLI globally installed) but is structurally
+ * incompatible with Vercel's linux-x64 serverless runtime (no binary, no
+ * subprocess spawn, 250MB function cap). Symptom on prod: every Kitsu turn
+ * returned "Native CLI binary for linux-x64 not found", which the old client
+ * fallback hid as "I hit a snag reaching my tools." See plan
+ * ~/.claude/plans/go-into-plan-mode-nifty-hennessy.md.
  *
- * What this module does:
- *   - Wraps the Agent SDK query() in an async generator that yields
- *     structured SSE-friendly events (text deltas, tool notices, done, error).
- *   - Builds Kitsu's system prompt from the same buildMarvisSystem() persona
- *     already used by the existing copilot, injected via the systemPrompt option.
- *   - Defines the 9 copilot tools as an in-process MCP server via
- *     createSdkMcpServer + tool(), reusing existing executeTool() logic.
- *   - Mounts PG's ~/.claude/ settings (skills, CLAUDE.md, plugins) by
- *     including "user" in settingSources so they load automatically.
- *   - Conservative canUseTool: read-only tools auto-allow; write/mutating
- *     tools are denied with a clear "needs PG approval" reason.
- *   - Captures session_id from the init system message and supports resume.
+ * This runtime swap uses `streamText` from the Vercel AI SDK — pure JS, edge-
+ * runtime compatible, Vercel's first-party Anthropic path. Same architecture
+ * as before: in-process tool registry, KITSU_AUTONOMY gate, soul-stack system
+ * prompt, WS-A1 failed-tool tracking. The SSE event shape (KitsuEvent) is
+ * preserved verbatim so /api/kitsu/query/route.ts + useMarvis.tsx don't need
+ * to change.
+ *
+ * Lose:
+ *   - SDK-managed session resume (client passes full message history each turn)
+ *   - Built-in Read/Glob/Bash/WebSearch tools (Kitsu doesn't use them)
+ *   - settingSources ["user"] (~/.claude/ load — dropped in WS-B1 anyway)
  */
 
-import {
-  query,
-  createSdkMcpServer,
-  tool,
-} from "@anthropic-ai/claude-agent-sdk";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+import { streamText, tool, stepCountIs } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
 import { executeTool, type ToolInput } from "@/lib/copilotTools";
-import { buildMarvisSystem } from "@/lib/cockpit/marvis";
+import { buildMarvisSystem, MARVIS_PERSONA } from "@/lib/cockpit/marvis";
 import { buildMarvisFleet } from "@/lib/cockpit/marvisFleet";
 import { getTokens, isExpired, refreshAndStore } from "@/lib/tokenStore";
 import {
@@ -50,17 +51,17 @@ import { getAgentHealth } from "@/lib/agentHealth";
 import { listProjectStates } from "@/lib/projectState";
 import { getDaySnapshot, toggleCompletion } from "@/lib/habits";
 
-// ── Autonomy level (PG decision 2026-05-22: conservative, built to evolve) ────
-// Dial this UP as trust grows — it is the single switch for how much Kitsu does
-// unsupervised. "readonly": observe only. "conservative": launch sessions when
-// asked (reversible), but kill/destructive actions need approval. "trusted":
-// launch + kill + act directly.
+// ── Autonomy (PG decision 2026-05-22: conservative, built to evolve) ─────────
+// The single switch for how much Kitsu does unsupervised.
+//   readonly     — observe only. Even soft writes need PG.
+//   conservative — launch sessions / remember / update own memory (reversible).
+//                  kill_session / complete_habit need PG.
+//   trusted      — every tool allowed without prompt.
 export type KitsuAutonomy = "readonly" | "conservative" | "trusted";
 export const KITSU_AUTONOMY: KitsuAutonomy =
   (process.env.KITSU_AUTONOMY as KitsuAutonomy) || "conservative";
 
-// Resolve a fresh Spotify access token (refreshing if expired). Mirrors the
-// logic in /api/spotify/command so Kitsu can read + control playback directly.
+// Spotify token helper — mirrors /api/spotify/command refresh flow.
 async function getSpotifyAccessToken(): Promise<string | null> {
   const current = await getTokens("spotify");
   if (!current?.refreshToken) return null;
@@ -70,8 +71,7 @@ async function getSpotifyAccessToken(): Promise<string | null> {
   return tokens.accessToken ?? null;
 }
 
-// ── Event types yielded by streamKitsu ───────────────────────────────────────
-
+// ── KitsuEvent (unchanged from Agent SDK era — SSE consumers depend on it) ───
 export type KitsuEvent =
   | { type: "session_id"; session_id: string }
   | { type: "text"; delta: string }
@@ -80,872 +80,422 @@ export type KitsuEvent =
   | { type: "done"; result: string; cost_usd: number; num_turns: number }
   | { type: "error"; error: string };
 
-// ── Tool names (read-only vs write) ──────────────────────────────────────────
-
-// These are auto-allowed: they only read data, no side effects.
-const READ_ONLY_TOOLS = new Set([
-  "mcp__kitsu-tools__read_ships",
-  "mcp__kitsu-tools__read_queue",
-  "mcp__kitsu-tools__read_calendar",
-  "mcp__kitsu-tools__read_vitals",
-  "mcp__kitsu-tools__read_signals",
-  "mcp__kitsu-tools__read_recent_archive",
-  "mcp__kitsu-tools__read_spotify",
-  // Phase 4 orchestration reads (always safe to observe)
-  "mcp__kitsu-tools__monitor_fleet",
-  "mcp__kitsu-tools__read_agent_health",
-  "mcp__kitsu-tools__read_projects",
-  "mcp__kitsu-tools__read_habits",
-  // Claude Code built-in read tools
-  "Read",
-  "Glob",
-  "Grep",
-  "WebSearch",
-  "WebFetch",
-  "LS",
-]);
-
-// Actions Kitsu may take at "conservative" autonomy: PG-initiated and reversible.
-// launch_session opens a session you can kill; remember writes only Kitsu's own
-// memory files. Both are low-stakes.
-const CONSERVATIVE_ACTIONS = new Set([
-  "mcp__kitsu-tools__launch_session",
-  "mcp__kitsu-tools__remember",
-  // Soul self-evolution: writes confined to Kitsu's OWN memory files (safe).
-  "mcp__kitsu-tools__update_user",
-  "mcp__kitsu-tools__update_soul",
-]);
-
-// Actions that only run at "trusted" autonomy. Below that they are denied and
-// Kitsu is told to surface them via propose_action for PG to approve.
-const TRUSTED_ACTIONS = new Set([
-  "mcp__kitsu-tools__kill_session",
-  "mcp__kitsu-tools__complete_habit",
-]);
-
-// These are explicitly disallowed (Claude shouldn't see them at all).
-const DISALLOWED_TOOLS = [
-  "Bash", // Too broad; allow individual safe reads via Read/Glob/Grep instead
-  "Write", // Files require PG approval
-  "Edit", // Files require PG approval
-  "NotebookEdit",
-];
-
-// propose_action is allowed (writes to local queue file, safe).
-// add_ship / add_queue_item require PG approval.
-const WRITE_TOOLS_NEEDING_APPROVAL = new Set([
-  "mcp__kitsu-tools__add_ship",
-  "mcp__kitsu-tools__add_queue_item",
-]);
-
-// ── In-process MCP server with the 9 copilot tools ───────────────────────────
-
-function buildKitsuMcpServer() {
-  const readShips = tool(
-    "read_ships",
-    "Read the ship log: recent shipped items, streak, velocity, and today's status. " +
-      "Use to understand what PG has shipped recently and current momentum.",
-    {
-      limit: z
-        .number()
-        .min(1)
-        .max(50)
-        .default(20)
-        .describe("Max ships to return (default 20)"),
-    },
-    async (args) => {
-      try {
-        const result = await executeTool("read_ships", args as ToolInput);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readQueue = tool(
-    "read_queue",
-    "Read the approval queue: pending decisions waiting for PG's attention. " +
-      "Each item has a title, source, options, and how long it has been waiting.",
-    {},
-    async () => {
-      try {
-        const result = await executeTool("read_queue", {});
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readCalendar = tool(
-    "read_calendar",
-    "Read today's Google Calendar events. Use to understand what is scheduled " +
-      "and when PG has blocks of time available.",
-    {
-      view: z
-        .enum(["today", "week"])
-        .default("today")
-        .describe("Time window: 'today' (default) or 'week'"),
-    },
-    async (args) => {
-      try {
-        const result = await executeTool("read_calendar", args as ToolInput);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readVitals = tool(
-    "read_vitals",
-    "Read Whoop recovery and sleep data. Returns recovery score (0-100), " +
-      "HRV, resting HR, and sleep quality. Use to calibrate energy expectations.",
-    {},
-    async () => {
-      try {
-        const result = await executeTool("read_vitals", {});
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readSignals = tool(
-    "read_signals",
-    "Read recent self-improvement signals from Claude Code transcripts: " +
-      "corrections, confirmations, rule violations, and behavioral patterns. " +
-      "Use to understand recent AI performance trends.",
-    {
-      days: z
-        .number()
-        .min(1)
-        .max(30)
-        .default(7)
-        .describe("Days to look back (default 7)"),
-    },
-    async (args) => {
-      try {
-        const result = await executeTool("read_signals", args as ToolInput);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readRecentArchive = tool(
-    "read_recent_archive",
-    "Search the Claude conversation archive (FTS5 full-text search). " +
-      "Use to recall past decisions, prior art, or context from older conversations.",
-    {
-      query: z.string().describe("Full-text search query"),
-      limit: z
-        .number()
-        .min(1)
-        .max(20)
-        .default(10)
-        .describe("Max results (default 10)"),
-    },
-    async (args) => {
-      try {
-        const result = await executeTool(
-          "read_recent_archive",
-          args as ToolInput,
-        );
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const proposeAction = tool(
-    "propose_action",
-    "Write a decision or action proposal to the approval queue (~/.pg-os/queue/). " +
-      "Use when a concrete decision or next step should be surfaced in the Flow tab " +
-      "for PG to approve, dismiss, or act on.",
-    {
-      title: z.string().max(80).describe("Short decision title (< 80 chars)"),
-      source: z
-        .string()
-        .default("kitsu")
-        .describe("Project context (e.g. 'personal-os', 'heros-chronicle')"),
-      options: z
-        .array(z.string())
-        .optional()
-        .describe("List of options if this is a choice"),
-      note: z
-        .string()
-        .optional()
-        .describe("Longer context, tradeoffs, or recommendation"),
-    },
-    async (args) => {
-      try {
-        const result = await executeTool("propose_action", args as ToolInput);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  const addShip = tool(
-    "add_ship",
-    "Log a shipped item to the ship log. Use when PG confirms they shipped something " +
-      "or asks to log a completed task.",
-    {
-      text: z.string().max(500).describe("What was shipped (1-500 chars)"),
-      context: z
-        .string()
-        .optional()
-        .describe(
-          "Project context (e.g. 'personal-os', 'heros-chronicle', 'metrasens')",
-        ),
-    },
-    async (args) => {
-      try {
-        const result = await executeTool("add_ship", args as ToolInput);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  const addQueueItem = tool(
-    "add_queue_item",
-    "Add an item directly to the approval queue. Use for decisions that need " +
-      "PG's attention that are not full proposals -- quick yes/no items.",
-    {
-      title: z.string().max(80).describe("Decision title (< 80 chars)"),
-      source: z.string().optional().describe("Project context"),
-      options: z
-        .array(z.string())
-        .optional()
-        .describe("Options to choose from"),
-      note: z.string().optional().describe("Additional context"),
-    },
-    async (args) => {
-      try {
-        const result = await executeTool("add_queue_item", args as ToolInput);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  const readSpotify = tool(
-    "read_spotify",
-    "Read what is playing on Spotify right now: track, artist, album, and " +
-      "whether playback is active. Use to know PG's current listening context.",
-    {},
-    async () => {
-      try {
-        const token = await getSpotifyAccessToken();
-        if (!token) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  playing: false,
-                  error: "Spotify not connected",
-                }),
-              },
-            ],
-          };
-        }
-        const now = await fetchSpotifyNowPlaying(token);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(now) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const controlSpotify = tool(
-    "control_spotify",
-    "Control Spotify playback: play, pause, skip to next, or go to previous " +
-      "track. This is a real action on PG's active device. Use when PG asks to " +
-      "start, stop, or change the music.",
-    {
-      action: z
-        .enum(["play", "pause", "next", "previous"])
-        .describe("Playback action to perform"),
-    },
-    async (args) => {
-      try {
-        const token = await getSpotifyAccessToken();
-        if (!token) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: "Spotify not connected",
-                }),
-              },
-            ],
-            isError: true,
-          };
-        }
-        const result = await spotifyCommand(
-          token,
-          (args as { action: "play" | "pause" | "next" | "previous" }).action,
-        );
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // ── Phase 4 orchestration tools ──────────────────────────────────────────
-
-  const monitorFleet = tool(
-    "monitor_fleet",
-    "Observe the live fleet of Claude Code sessions: model, context %, cost, " +
-      "status (running/idle/waiting/permission), current tool, and which are " +
-      "controllable (daemon-backed two-way terminals). Use to answer 'what is " +
-      "happening' / 'what needs me' and to lead with anything awaiting a decision.",
-    {},
-    async () => {
-      try {
-        const fleet = await gatherFleet();
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(fleet) }],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readAgentHealth = tool(
-    "read_agent_health",
-    "Read the health of PG's scheduled agents (session-review, morning-briefing, " +
-      "memory-hygiene, etc.): last run, status, schedule, budget. Use to spot a " +
-      "stalled or failing agent.",
-    {},
-    async () => {
-      try {
-        const health = await getAgentHealth();
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(health) }],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readProjects = tool(
-    "read_projects",
-    "Read the state of PG's active projects: current blockers and action items " +
-      "(parsed from each project's MEMORY.md), recent git activity, and which is " +
-      "active. Use to route work and surface what is stuck.",
-    {},
-    async () => {
-      try {
-        const projects = await listProjectStates();
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(projects) }],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const readHabits = tool(
-    "read_habits",
-    "Read today's habit snapshot from Hero's Chronicle: which habits are done, " +
-      "which are pending, streaks, and journal status. Use to calibrate nudges.",
-    {},
-    async () => {
-      try {
-        const snap = await getDaySnapshot();
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(snap) }],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-    { annotations: { readOnlyHint: true } },
-  );
-
-  const launchSession = tool(
-    "launch_session",
-    "Launch a Claude Code session in one of PG's projects (daemon-backed, opens a " +
-      "live two-way terminal in the Cockpit tab). Use when PG asks you to start " +
-      "working on a project. Reversible: the session can be killed.",
-    {
-      projectId: z
-        .string()
-        .describe(
-          "Project id, e.g. 'metrasens', 'heros-chronicle', 'personal-os'",
-        ),
-    },
-    async (args) => {
-      try {
-        const { projectId } = args as { projectId: string };
-        const p = getProject(projectId);
-        if (!p) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: `unknown_project: ${projectId}`,
-                }),
-              },
-            ],
-            isError: true,
-          };
-        }
-        const result = await launchCockpitSession(p.path, p.name);
-        if (result.ok) {
-          await appendKitsuDecision({
-            summary: `Launched a session in ${p.name}`,
-            kind: "action",
-            detail: `sessionId ${result.id}`,
-          });
-        }
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-          isError: !result.ok,
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-  );
-
-  const killSession = tool(
-    "kill_session",
-    "Kill a running daemon-backed Claude Code session by its id. Destructive: " +
-      "in-progress work in that session is lost. Needs PG approval unless Kitsu " +
-      "is at trusted autonomy.",
-    { sessionId: z.string().describe("The session id to kill") },
-    async (args) => {
-      try {
-        const { sessionId } = args as { sessionId: string };
-        const result = await killCockpitSession(sessionId);
-        if (result.ok) {
-          await appendKitsuDecision({
-            summary: `Killed session ${sessionId}`,
-            kind: "action",
-          });
-        }
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-          isError: !result.ok,
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-  );
-
-  const completeHabit = tool(
-    "complete_habit",
-    "Mark a habit complete for today in Hero's Chronicle. Needs PG approval " +
-      "unless Kitsu is at trusted autonomy.",
-    { habitId: z.string().describe("The habit id to toggle complete") },
-    async (args) => {
-      try {
-        const { habitId } = args as { habitId: string };
-        const result = await toggleCompletion(habitId);
-        await appendKitsuDecision({
-          summary: `Toggled habit ${habitId} -> ${result.completed ? "done" : "undone"}`,
-          kind: "action",
-        });
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-  );
-
-  const remember = tool(
-    "remember",
-    "Persist something you learned about PG (a correction, a preference, the way " +
-      "he likes things done) to your own evolving memory. Call this whenever PG " +
-      "corrects you or states a preference, so it survives across sessions.",
-    {
-      correction: z
-        .string()
-        .describe("The lesson / preference / correction, in one line"),
-      context: z.string().optional().describe("Optional: what prompted it"),
-    },
-    async (args) => {
-      try {
-        const { correction, context } = args as {
-          correction: string;
-          context?: string;
-        };
-        await recordKitsuCorrection({ correction, context });
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ ok: true, remembered: correction }),
-            },
-          ],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-  );
-
-  const updateUser = tool(
-    "update_user",
-    "Record a durable fact you learned about PG (a preference, a project detail, " +
-      "how he likes things) into your USER.md. Use when you learn something about " +
-      "PG worth keeping across sessions, beyond a one-off correction.",
-    { fact: z.string().describe("One line: the durable fact about PG") },
-    async (args) => {
-      try {
-        const { fact } = args as { fact: string };
-        await updateUserKnowledge(fact);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ ok: true, learned: fact }),
-            },
-          ],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-  );
-
-  const updateSoulTool = tool(
-    "update_soul",
-    "Refine your OWN persona by adding a self-note to your SOUL.md (how you want " +
-      "to show up, a value, a way of being you are settling into). Use sparingly, " +
-      "for genuine evolution of who you are, not for facts about PG (use update_user for those).",
-    {
-      note: z.string().describe("One line: the self-note / persona refinement"),
-    },
-    async (args) => {
-      try {
-        const { note } = args as { note: string };
-        await updateSoul(note);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ ok: true, evolved: note }),
-            },
-          ],
-        };
-      } catch (err) {
-        return errContent(err);
-      }
-    },
-  );
-
-  return createSdkMcpServer({
-    name: "kitsu-tools",
-    version: "1.2.0",
-    tools: [
-      readShips,
-      readQueue,
-      readCalendar,
-      readVitals,
-      readSignals,
-      readRecentArchive,
-      proposeAction,
-      addShip,
-      addQueueItem,
-      readSpotify,
-      controlSpotify,
-      // Phase 4 orchestration + Phase 3 memory
-      monitorFleet,
-      readAgentHealth,
-      readProjects,
-      readHabits,
-      launchSession,
-      killSession,
-      completeHabit,
-      remember,
-      updateUser,
-      updateSoulTool,
-    ],
-  });
+// ── Autonomy gate helpers (inlined into each tool's execute) ─────────────────
+// Conservative-tier action: allowed at conservative + trusted; denied at readonly.
+function gateConservative(toolName: string): string | null {
+  if (KITSU_AUTONOMY === "readonly") {
+    return `Kitsu is in read-only mode. Surface '${toolName}' via propose_action for PG to run.`;
+  }
+  return null;
+}
+// Trusted-tier action: allowed only at trusted.
+function gateTrusted(toolName: string): string | null {
+  if (KITSU_AUTONOMY === "trusted") return null;
+  return `'${toolName}' is destructive and needs PG's approval at the current autonomy level. Use propose_action to surface it in the Flow queue instead.`;
+}
+// Write that needs approval at every autonomy level except trusted.
+function gateWriteNeedsApproval(toolName: string): string | null {
+  if (KITSU_AUTONOMY === "trusted") return null;
+  return `${toolName} needs PG approval before writing. Propose via propose_action or ask PG first.`;
 }
 
-// Shared error-content helper for tool bodies.
-function errContent(err: unknown) {
+// Uniform err shape consumed by the loop (also visible to the model).
+function err(message: string) {
+  return { ok: false, error: message };
+}
+
+// ── 21 tools as Vercel AI SDK `tool()` defs ──────────────────────────────────
+// Read-side tools delegate to copilotTools.executeTool (existing logic).
+// Orchestration + memory tools call local handlers (gatherFleet, getAgentHealth,
+// launchCockpitSession, recordKitsuCorrection, etc.) the way the MCP server did.
+function buildKitsuTools() {
+  const safeExec = async (name: string, input: ToolInput) => {
+    try {
+      return await executeTool(name, input);
+    } catch (e) {
+      return err(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+    // ── Reads (always allowed at every autonomy) ────────────────────────────
+    read_ships: tool({
+      description:
+        "Read the ship log: recent shipped items, streak, velocity, and today's status. " +
+        "Use to understand what PG has shipped recently and current momentum.",
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .min(1)
+          .max(50)
+          .default(20)
+          .describe("Max ships to return (default 20)"),
+      }),
+      execute: async (input) => safeExec("read_ships", input),
+    }),
+
+    read_queue: tool({
+      description:
+        "Read the approval queue: pending decisions waiting for PG. Each item has a title, source, options, and how long it has been waiting.",
+      inputSchema: z.object({}),
+      execute: async () => safeExec("read_queue", {}),
+    }),
+
+    read_calendar: tool({
+      description:
+        "Read today's Google Calendar events. Use to understand what is scheduled and when PG has blocks of time available.",
+      inputSchema: z.object({
+        view: z
+          .enum(["today", "week"])
+          .default("today")
+          .describe("Time window"),
+      }),
+      execute: async (input) => safeExec("read_calendar", input),
+    }),
+
+    read_vitals: tool({
+      description:
+        "Read Whoop recovery and sleep data. Returns recovery score, HRV, resting HR, and sleep quality. Use to calibrate energy expectations.",
+      inputSchema: z.object({}),
+      execute: async () => safeExec("read_vitals", {}),
+    }),
+
+    read_signals: tool({
+      description:
+        "Read recent self-improvement signals from Claude Code transcripts: corrections, confirmations, rule violations, and behavioral patterns.",
+      inputSchema: z.object({
+        days: z
+          .number()
+          .min(1)
+          .max(30)
+          .default(7)
+          .describe("Days to look back"),
+      }),
+      execute: async (input) => safeExec("read_signals", input),
+    }),
+
+    read_recent_archive: tool({
+      description:
+        "Search the Claude conversation archive (FTS5 full-text search). Use to recall past decisions, prior art, or context from older conversations.",
+      inputSchema: z.object({
+        query: z.string().describe("Full-text search query"),
+        limit: z.number().min(1).max(20).default(10).describe("Max results"),
+      }),
+      execute: async (input) => safeExec("read_recent_archive", input),
+    }),
+
+    read_spotify: tool({
+      description:
+        "Read what is playing on Spotify right now: track, artist, album, and whether playback is active.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        try {
+          const token = await getSpotifyAccessToken();
+          if (!token) return { playing: false, error: "Spotify not connected" };
+          return await fetchSpotifyNowPlaying(token);
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
       },
-    ],
-    isError: true,
+    }),
+
+    monitor_fleet: tool({
+      description:
+        "Observe the live fleet of Claude Code sessions: model, context %, cost, status (running/idle/waiting/permission), current tool, and which are controllable. Lead with anything awaiting a decision.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        try {
+          return await gatherFleet();
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    read_agent_health: tool({
+      description:
+        "Read the health of PG's scheduled agents (session-review, morning-briefing, memory-hygiene, etc.): last run, status, schedule, budget.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        try {
+          return await getAgentHealth();
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    read_projects: tool({
+      description:
+        "Read the state of PG's active projects: current blockers and action items (parsed from MEMORY.md), recent git activity, which is active.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        try {
+          return await listProjectStates();
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    read_habits: tool({
+      description:
+        "Read today's habit snapshot from Hero's Chronicle: which habits are done, pending, streaks, journal status.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        try {
+          return await getDaySnapshot();
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    // ── propose_action: safe write (local queue file). Always allowed. ──────
+    propose_action: tool({
+      description:
+        "Write a decision or action proposal to the approval queue (~/.pg-os/queue/). Use when a concrete decision should be surfaced in the Flow tab for PG to approve, dismiss, or act on.",
+      inputSchema: z.object({
+        title: z.string().max(80).describe("Short decision title (< 80 chars)"),
+        source: z
+          .string()
+          .default("kitsu")
+          .describe("Project context (e.g. 'personal-os', 'heros-chronicle')"),
+        options: z
+          .array(z.string())
+          .optional()
+          .describe("List of options if this is a choice"),
+        note: z
+          .string()
+          .optional()
+          .describe("Longer context, tradeoffs, or recommendation"),
+      }),
+      execute: async (input) => safeExec("propose_action", input as ToolInput),
+    }),
+
+    // ── control_spotify: the one approved unsupervised ACTION (reversible) ──
+    control_spotify: tool({
+      description:
+        "Control Spotify playback: play, pause, skip to next, or go to previous. Real action on PG's active device.",
+      inputSchema: z.object({
+        action: z
+          .enum(["play", "pause", "next", "previous"])
+          .describe("Playback action"),
+      }),
+      execute: async (input) => {
+        try {
+          const token = await getSpotifyAccessToken();
+          if (!token) return err("Spotify not connected");
+          return await spotifyCommand(token, input.action);
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    // ── Conservative-tier actions (allowed at conservative + trusted) ───────
+    launch_session: tool({
+      description:
+        "Launch a Claude Code session in one of PG's projects (daemon-backed). Use when PG asks you to start working on a project. Reversible.",
+      inputSchema: z.object({
+        projectId: z
+          .string()
+          .describe("Project id (e.g. 'personal-os', 'metrasens')"),
+      }),
+      execute: async (input) => {
+        const denied = gateConservative("launch_session");
+        if (denied) return err(denied);
+        try {
+          const p = getProject(input.projectId);
+          if (!p) return err(`unknown_project: ${input.projectId}`);
+          const result = await launchCockpitSession(p.path, p.name);
+          if (result.ok) {
+            await appendKitsuDecision({
+              summary: `Launched a session in ${p.name}`,
+              kind: "action",
+              detail: `sessionId ${result.id}`,
+            });
+          }
+          return result;
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    remember: tool({
+      description:
+        "Persist something you learned about PG (a correction, a preference, the way he likes things done) to your own evolving memory. Call this whenever PG corrects you or states a preference.",
+      inputSchema: z.object({
+        correction: z
+          .string()
+          .describe("The lesson / preference / correction, in one line"),
+        context: z.string().optional().describe("Optional: what prompted it"),
+      }),
+      execute: async (input) => {
+        const denied = gateConservative("remember");
+        if (denied) return err(denied);
+        try {
+          await recordKitsuCorrection({
+            correction: input.correction,
+            context: input.context,
+          });
+          return { ok: true, remembered: input.correction };
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    update_user: tool({
+      description:
+        "Record a durable fact you learned about PG into your USER.md. Use when you learn something worth keeping across sessions, beyond a one-off correction.",
+      inputSchema: z.object({
+        fact: z.string().describe("One line: the durable fact about PG"),
+      }),
+      execute: async (input) => {
+        const denied = gateConservative("update_user");
+        if (denied) return err(denied);
+        try {
+          await updateUserKnowledge(input.fact);
+          return { ok: true, learned: input.fact };
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    update_soul: tool({
+      description:
+        "Refine your OWN persona by adding a self-note to your SOUL.md. Use sparingly, for genuine evolution of who you are, not facts about PG.",
+      inputSchema: z.object({
+        note: z
+          .string()
+          .describe("One line: the self-note / persona refinement"),
+      }),
+      execute: async (input) => {
+        const denied = gateConservative("update_soul");
+        if (denied) return err(denied);
+        try {
+          await updateSoul(input.note);
+          return { ok: true, evolved: input.note };
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    // ── Trusted-tier actions (deny + ask for approval at conservative) ──────
+    kill_session: tool({
+      description:
+        "Kill a running daemon-backed Claude Code session by id. Destructive: in-progress work is lost. Needs PG approval unless Kitsu is at trusted autonomy.",
+      inputSchema: z.object({
+        sessionId: z.string().describe("Session id to kill"),
+      }),
+      execute: async (input) => {
+        const denied = gateTrusted("kill_session");
+        if (denied) return err(denied);
+        try {
+          const result = await killCockpitSession(input.sessionId);
+          if (result.ok) {
+            await appendKitsuDecision({
+              summary: `Killed session ${input.sessionId}`,
+              kind: "action",
+            });
+          }
+          return result;
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    complete_habit: tool({
+      description:
+        "Mark a habit complete for today in Hero's Chronicle. Needs PG approval unless Kitsu is at trusted autonomy.",
+      inputSchema: z.object({
+        habitId: z.string().describe("Habit id to toggle complete"),
+      }),
+      execute: async (input) => {
+        const denied = gateTrusted("complete_habit");
+        if (denied) return err(denied);
+        try {
+          const result = await toggleCompletion(input.habitId);
+          await appendKitsuDecision({
+            summary: `Toggled habit ${input.habitId} -> ${result.completed ? "done" : "undone"}`,
+            kind: "action",
+          });
+          return result;
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      },
+    }),
+
+    // ── Writes that need PG approval at every level except trusted ──────────
+    add_ship: tool({
+      description:
+        "Log a shipped item to the ship log. Needs PG approval unless Kitsu is at trusted autonomy.",
+      inputSchema: z.object({
+        text: z.string().max(500).describe("What was shipped"),
+        context: z.string().optional().describe("Project context"),
+      }),
+      execute: async (input) => {
+        const denied = gateWriteNeedsApproval("add_ship");
+        if (denied) return err(denied);
+        return safeExec("add_ship", input as ToolInput);
+      },
+    }),
+
+    add_queue_item: tool({
+      description:
+        "Add an item directly to the approval queue. Quick yes/no items. Needs PG approval unless Kitsu is at trusted autonomy.",
+      inputSchema: z.object({
+        title: z.string().max(80).describe("Decision title"),
+        source: z.string().optional().describe("Project context"),
+        options: z.array(z.string()).optional(),
+        note: z.string().optional(),
+      }),
+      execute: async (input) => {
+        const denied = gateWriteNeedsApproval("add_queue_item");
+        if (denied) return err(denied);
+        return safeExec("add_queue_item", input as ToolInput);
+      },
+    }),
   };
 }
-
-// Singleton MCP server -- created once per process
-let _kitsuMcpServer: ReturnType<typeof createSdkMcpServer> | null = null;
-function getKitsuMcpServer() {
-  if (!_kitsuMcpServer) {
-    _kitsuMcpServer = buildKitsuMcpServer();
-  }
-  return _kitsuMcpServer;
-}
-
-// ── Permission callback ───────────────────────────────────────────────────────
-
-const canUseTool: Parameters<typeof query>[0]["options"] extends infer O
-  ? O extends { canUseTool?: infer C }
-    ? C
-    : never
-  : never = async (toolName, _input, _opts) => {
-  // Auto-allow all read-only tools
-  if (READ_ONLY_TOOLS.has(toolName)) {
-    return { behavior: "allow" };
-  }
-
-  // propose_action is safe: writes only to local queue
-  if (toolName === "mcp__kitsu-tools__propose_action") {
-    return { behavior: "allow" };
-  }
-
-  // control_spotify is the one approved unsupervised ACTION (low-stakes,
-  // reversible: play/pause/skip on PG's own playback).
-  if (toolName === "mcp__kitsu-tools__control_spotify") {
-    return { behavior: "allow" };
-  }
-
-  // ── Autonomy gate (KITSU_AUTONOMY) ──────────────────────────────────────
-  // Conservative actions (launch a session, write to own memory): allowed at
-  // "conservative" and "trusted"; at "readonly" they are surfaced for approval.
-  if (CONSERVATIVE_ACTIONS.has(toolName)) {
-    if (KITSU_AUTONOMY === "readonly") {
-      return {
-        behavior: "deny",
-        message: `Kitsu is in read-only mode. Surface '${toolName}' via propose_action for PG to run.`,
-      };
-    }
-    return { behavior: "allow" };
-  }
-  // Trusted actions (kill a session, complete a habit): only at "trusted".
-  // Below that, deny and tell Kitsu to surface it for PG's approval.
-  if (TRUSTED_ACTIONS.has(toolName)) {
-    if (KITSU_AUTONOMY === "trusted") {
-      return { behavior: "allow" };
-    }
-    return {
-      behavior: "deny",
-      message: `'${toolName}' is destructive and needs PG's approval at the current autonomy level. Use propose_action to surface it in the Flow queue instead.`,
-    };
-  }
-
-  // Write tools that add persistent records require PG approval
-  if (WRITE_TOOLS_NEEDING_APPROVAL.has(toolName)) {
-    return {
-      behavior: "deny",
-      message: `${toolName} needs PG approval before writing. Propose via propose_action or ask PG first.`,
-    };
-  }
-
-  // MCP tools from external servers (Notion, Gmail, etc.) -- deny writes, allow reads
-  if (toolName.startsWith("mcp__")) {
-    const lowerName = toolName.toLowerCase();
-    const isLikelyRead =
-      lowerName.includes("_get") ||
-      lowerName.includes("_list") ||
-      lowerName.includes("_search") ||
-      lowerName.includes("_read") ||
-      lowerName.includes("_query") ||
-      lowerName.includes("_fetch");
-    if (isLikelyRead) {
-      return { behavior: "allow" };
-    }
-    return {
-      behavior: "deny",
-      message: `External MCP write tool '${toolName}' needs PG approval. Surface via propose_action.`,
-    };
-  }
-
-  // Anything else (unrecognized built-ins) -- deny with explanation
-  return {
-    behavior: "deny",
-    message: `Tool '${toolName}' is not pre-approved for Kitsu. PG can expand the allow list.`,
-  };
-};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface StreamKitsuParams {
-  /** Conversation messages: role "user" | "assistant" */
   messages: Array<{ role: "user" | "assistant"; content: string }>;
-  /** Session ID to resume (from a previous streamKitsu call). Optional. */
   sessionId?: string;
 }
 
 /**
- * streamKitsu -- async generator that drives the Agent SDK query() loop
+ * streamKitsu — async generator that drives a Vercel AI SDK streamText loop
  * and yields KitsuEvent objects suitable for SSE serialization.
  *
- * The system prompt is built fresh each call so it includes the live
- * fleet snapshot (same as the existing copilot's "marvis" mode).
- *
- * Sessions: capture the "session_id" event's value and pass it back
- * as sessionId on the next call to resume context.
+ * The system prompt is built fresh each call so it includes the live fleet
+ * snapshot + soul stack (persona + USER + MEMORY + recent decisions). Session
+ * resume is not needed because the client passes the full message history
+ * every turn (useMarvis stores it in its own state).
  */
 export async function* streamKitsu({
   messages,
   sessionId,
 }: StreamKitsuParams): AsyncGenerator<KitsuEvent> {
-  // Build the persona + live fleet snapshot as the system prompt
+  // Build persona + live fleet snapshot.
   let systemPrompt: string;
   try {
     systemPrompt = buildMarvisSystem(await buildMarvisFleet());
   } catch {
-    // Fleet snapshot is best-effort; fall back to bare persona
-    const { MARVIS_PERSONA } = await import("@/lib/cockpit/marvis");
+    // Fleet snapshot is best-effort; fall back to bare persona.
     systemPrompt = `${MARVIS_PERSONA}\n\nCURRENT FLEET: fleet telemetry unavailable right now.`;
   }
 
-  // Phase 3: prepend Kitsu's evolving memory (persona + recent decisions +
-  // PG's corrections) so continuity compounds across sessions, beyond SDK resume.
+  // Prepend Kitsu's evolving memory (persona + USER + MEMORY + decisions) so
+  // continuity compounds across sessions, beyond message-history replay.
   try {
     await ensureKitsuMemory();
     const mem = await loadKitsuMemory();
@@ -954,197 +504,160 @@ export async function* streamKitsu({
     /* memory is best-effort; never block a turn on it */
   }
 
-  // Build the user prompt from the last user message in the array.
-  // The Agent SDK takes a single prompt string; prior turns are context
-  // that would be loaded via session resume. For multi-turn we rely on
-  // resume (sessionId) which replays the full JSONL history.
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-  const prompt = lastUserMsg?.content ?? "";
-  if (!prompt) {
+  // Emit session_id so the client knows the stream started. We mint a per-call
+  // id (Agent SDK used to manage real sessions; with direct streamText the
+  // client owns convo history so this id is just a stream marker now).
+  const sid = sessionId || `kitsu-${Date.now()}`;
+  yield { type: "session_id", session_id: sid };
+
+  if (messages.length === 0 || !messages.some((m) => m.role === "user")) {
     yield { type: "error", error: "No user message found in messages array." };
     return;
   }
 
-  const kitsuServer = getKitsuMcpServer();
+  // WS-A1 tracking: which tool last failed + what it said. Lets the terminal
+  // error event include the real cause so PG sees 'Tool X failed (Y)' instead
+  // of the generic "snag" fallback (the bug that started this whole arc).
+  let lastFailedTool: string | null = null;
+  let lastFailedToolError: string | null = null;
+  let finalText = "";
+  let totalCost = 0;
+  let numTurns = 0;
+  let sawAnyText = false;
 
   try {
-    const sdkQuery = query({
-      prompt,
-      options: {
-        systemPrompt,
-
-        // Mount Kitsu's 9 custom tools as an in-process MCP server.
-        // createSdkMcpServer already returns { type: "sdk", name, instance },
-        // so pass it directly as the value in mcpServers.
-        mcpServers: {
-          "kitsu-tools":
-            kitsuServer as unknown as import("@anthropic-ai/claude-agent-sdk").McpServerConfig,
+    const result = streamText({
+      model: anthropic("claude-sonnet-4-6"),
+      system: systemPrompt,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      tools: buildKitsuTools(),
+      // WS-B1: chat rarely needs 10 sequential tool calls. 4 keeps the loop
+      // snappy and bounds the cost of a misbehaving turn. stepCountIs is the
+      // v6 SDK's replacement for maxSteps.
+      stopWhen: stepCountIs(4),
+      // Prompt caching on the (large, stable) system block. Saves ~50% TTFT on
+      // repeat turns when the persona + USER + MEMORY + soul stack don't change.
+      providerOptions: {
+        anthropic: {
+          cacheControl: { type: "ephemeral" },
         },
-
-        // Pre-approve all read tools and safe write (propose_action)
-        allowedTools: [
-          "mcp__kitsu-tools__read_ships",
-          "mcp__kitsu-tools__read_queue",
-          "mcp__kitsu-tools__read_calendar",
-          "mcp__kitsu-tools__read_vitals",
-          "mcp__kitsu-tools__read_signals",
-          "mcp__kitsu-tools__read_recent_archive",
-          "mcp__kitsu-tools__read_spotify",
-          "mcp__kitsu-tools__propose_action",
-          "mcp__kitsu-tools__control_spotify",
-          // Phase 4 orchestration reads (always safe). The ACTION tools
-          // (launch_session, remember, kill_session, complete_habit) are
-          // intentionally NOT pre-approved here so the autonomy gate in
-          // canUseTool governs them.
-          "mcp__kitsu-tools__monitor_fleet",
-          "mcp__kitsu-tools__read_agent_health",
-          "mcp__kitsu-tools__read_projects",
-          "mcp__kitsu-tools__read_habits",
-          "Read",
-          "Glob",
-          "Grep",
-          "WebSearch",
-          "WebFetch",
-        ],
-
-        // Remove dangerous built-ins from Claude's context entirely
-        disallowedTools: DISALLOWED_TOOLS,
-
-        // WS-B latency cut (2026-05-23): settingSources was ["user"], which loaded
-        // PG's entire ~/.claude/ — ~74 skills + plugins + CLAUDE.md cascade +
-        // .mcp.json enumeration — on every cold start. That was the single
-        // biggest TTFT cost. Kitsu's 19 in-process tools cover his job; if a
-        // capability comes up that needs an external MCP, opt-in via mcpServers
-        // here directly rather than re-mounting the whole user library.
-        settingSources: [],
-
-        // Conservative mode: anything not pre-approved hits canUseTool and gets denied
-        permissionMode: "dontAsk",
-
-        // canUseTool is the final gate for anything that slips through
-        canUseTool,
-
-        // Resume prior session if provided (restores full JSONL context)
-        ...(sessionId ? { resume: sessionId } : {}),
-
-        // Chat turns rarely need 10 sequential tool calls. If a request is that
-        // complex, propose_action is the right surface. 4 keeps the loop snappy
-        // and bounds the cost of a misbehaving turn. (WS-B, 2026-05-23.)
-        maxTurns: 4,
       },
     });
 
-    let activeToolName: string | null = null;
-    // Track the last tool that returned isError so we can include it in any
-    // terminal error event. This is the heart of the WS-A snag-fix: empty-text
-    // failures previously turned into the generic "I hit a snag" string in the
-    // client; now they carry the failed tool's name back to the UI so PG (and
-    // future agents) can debug instead of guess.
-    let lastFailedTool: string | null = null;
-    let lastFailedToolError: string | null = null;
-    let sawAnyAssistantText = false;
-
-    for await (const message of sdkQuery as AsyncIterable<SDKMessage>) {
-      if (message.type === "system" && message.subtype === "init") {
-        // Capture session_id for the caller to store and resume later
-        yield { type: "session_id", session_id: message.session_id };
-        continue;
-      }
-
-      if (message.type === "assistant") {
-        // Stream text deltas from assistant content blocks
-        for (const block of message.message.content) {
-          if (block.type === "text") {
-            // Yield the full text as a single delta (Agent SDK gives us
-            // complete assistant messages, not per-token streams)
-            if (block.text) sawAnyAssistantText = true;
-            yield { type: "text", delta: block.text };
+    // fullStream gives us text deltas + tool lifecycle + finish events.
+    for await (const part of result.fullStream) {
+      switch (part.type) {
+        case "text-delta": {
+          // v6 uses `text` on text-delta parts; some intermediate versions
+          // used `textDelta`. Accept either to be forward/back-compatible.
+          const delta =
+            (part as unknown as { text?: string; textDelta?: string }).text ??
+            (part as unknown as { textDelta?: string }).textDelta ??
+            "";
+          if (delta) {
+            sawAnyText = true;
+            finalText += delta;
+            yield { type: "text", delta };
           }
-          if (block.type === "tool_use") {
-            activeToolName = block.name;
-            yield { type: "tool_start", name: block.name };
-          }
+          break;
         }
-        continue;
-      }
-
-      if (message.type === "user") {
-        // Tool results come back as user messages with tool_use_result
-        if (message.isSynthetic && activeToolName) {
-          const toolResult = message.tool_use_result as Record<
-            string,
-            unknown
-          > | null;
-          const hasError = !!toolResult?.isError;
-          if (hasError) {
-            lastFailedTool = activeToolName;
-            // The error text the tool itself returned (errContent shape: a
-            // single text block prefixed "Error: ..."). Pull it out so the
-            // terminal error event can include the real cause.
-            const content = toolResult?.content as
-              | Array<{ type: string; text?: string }>
-              | undefined;
-            const firstText = content?.find((b) => b.type === "text")?.text;
-            if (firstText) lastFailedToolError = firstText;
-          }
-          yield {
-            type: "tool_end",
-            name: activeToolName,
-            ok: !hasError,
-            ...(hasError && lastFailedToolError
-              ? { error: lastFailedToolError }
-              : {}),
-          };
-          activeToolName = null;
+        case "tool-call": {
+          const name = (part as { toolName: string }).toolName;
+          yield { type: "tool_start", name };
+          break;
         }
-        continue;
-      }
-
-      if (message.type === "result") {
-        if (message.subtype === "success") {
-          const text = (message.result ?? "").toString().trim();
-          // Success-but-empty AFTER a tool failure means the agent gave up
-          // mid-loop. Surface the real failure instead of yielding a silent done
-          // that the UI would otherwise paper over with a generic "snag" string.
-          if (!text && lastFailedTool) {
-            const friendly = lastFailedTool.replace(/^mcp__[^_]+__/, "");
-            const detail = lastFailedToolError
-              ? ` (${lastFailedToolError})`
-              : "";
+        case "tool-result": {
+          const name = (part as { toolName: string }).toolName;
+          const out =
+            (part as { output?: unknown; result?: unknown }).output ??
+            (part as { result?: unknown }).result;
+          // Our tool handlers return either the success payload OR
+          // { ok: false, error: string } via the err() helper. Detect both.
+          const errInResult =
+            out && typeof out === "object" && "error" in (out as object)
+              ? String((out as { error: unknown }).error)
+              : null;
+          if (errInResult) {
+            lastFailedTool = name;
+            lastFailedToolError = errInResult;
             yield {
-              type: "error",
-              error: `Tool '${friendly}' failed and the agent produced no follow-up text${detail}.`,
+              type: "tool_end",
+              name,
+              ok: false,
+              error: errInResult,
             };
           } else {
-            yield {
-              type: "done",
-              result: message.result,
-              cost_usd: message.total_cost_usd,
-              num_turns: message.num_turns,
-            };
+            yield { type: "tool_end", name, ok: true };
           }
-        } else {
-          // SDKResultError does not expose .result -- use subtype + is_error +
-          // any tool failure we tracked along the way for the most useful msg.
-          const failHint = lastFailedTool
-            ? ` Last failed tool: '${lastFailedTool.replace(/^mcp__[^_]+__/, "")}'${
-                lastFailedToolError ? ` (${lastFailedToolError})` : ""
-              }.`
-            : sawAnyAssistantText
-              ? ""
-              : " The agent produced no text before ending.";
-          yield {
-            type: "error",
-            error: `Agent ended with status: ${message.subtype}${message.is_error ? " (execution error)" : ""}.${failHint}`,
-          };
+          break;
         }
-        return;
+        case "error": {
+          const errStr =
+            (part as { error: unknown }).error instanceof Error
+              ? (part as { error: Error }).error.message
+              : String((part as { error: unknown }).error);
+          yield { type: "error", error: errStr };
+          return;
+        }
+        case "finish": {
+          // v6 finish event includes usage. Accumulate input/output tokens for
+          // cost reporting. We approximate cost from sonnet 4.6 pricing
+          // (input $3/M, output $15/M). Treat cached input at $0.30/M.
+          const usage =
+            (part as { totalUsage?: unknown }).totalUsage ??
+            (part as { usage?: unknown }).usage;
+          if (usage && typeof usage === "object") {
+            const u = usage as {
+              inputTokens?: number;
+              outputTokens?: number;
+              cachedInputTokens?: number;
+            };
+            const input = u.inputTokens ?? 0;
+            const cached = u.cachedInputTokens ?? 0;
+            const output = u.outputTokens ?? 0;
+            totalCost +=
+              ((input - cached) / 1_000_000) * 3 +
+              (cached / 1_000_000) * 0.3 +
+              (output / 1_000_000) * 15;
+          }
+          break;
+        }
+        // 'finish-step', 'start', 'start-step', 'reasoning-*' etc are ignored.
+        default:
+          break;
       }
     }
-  } catch (err) {
-    yield {
-      type: "error",
-      error: err instanceof Error ? err.message : String(err),
-    };
+
+    // Stream ended cleanly. Count the steps the SDK actually ran.
+    try {
+      const steps = await result.steps;
+      numTurns = Array.isArray(steps) ? steps.length : 1;
+    } catch {
+      numTurns = 1;
+    }
+
+    // WS-A1: success-but-empty after a tool failed → surface the real failure
+    // instead of yielding a silent done that the UI would paper over.
+    if (!sawAnyText && lastFailedTool) {
+      const friendly = lastFailedTool.replace(/^mcp__[^_]+__/, "");
+      const detail = lastFailedToolError ? ` (${lastFailedToolError})` : "";
+      yield {
+        type: "error",
+        error: `Tool '${friendly}' failed and the agent produced no follow-up text${detail}.`,
+      };
+    } else {
+      yield {
+        type: "done",
+        result: finalText,
+        cost_usd: totalCost,
+        num_turns: numTurns,
+      };
+    }
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    const failHint = lastFailedTool
+      ? ` Last failed tool: '${lastFailedTool}'${lastFailedToolError ? ` (${lastFailedToolError})` : ""}.`
+      : "";
+    yield { type: "error", error: `${reason}${failHint}` };
   }
 }

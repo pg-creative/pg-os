@@ -119,7 +119,8 @@ export const COPILOT_TOOLS: Tool[] = [
         },
         source: {
           type: "string",
-          description: "Project context (e.g. 'personal-os', 'heros-chronicle')",
+          description:
+            "Project context (e.g. 'personal-os', 'heros-chronicle')",
         },
         options: {
           type: "array",
@@ -188,9 +189,30 @@ export const COPILOT_TOOLS: Tool[] = [
 
 // ── Server-side tool executors ────────────────────────────────────────────────
 
-/** Base URL for internal API calls from server-side route handlers */
+/**
+ * Base URL for internal API calls from server-side route handlers.
+ *
+ * 2026-05-23 (WS-E follow-up): the previous hard-coded `127.0.0.1:3030` only
+ * worked on PG's local Mac on the original :3030 dev port. On Vercel it
+ * resolves to nothing (no such loopback in a serverless function); on the
+ * :3031 worktree dev it also misses. Result: every tool that delegates to an
+ * internal API route returned "fetch failed" on prod and the worktree. This
+ * env-aware version uses Vercel's deployment URL on prod and respects PORT in
+ * dev so the same code path works in both.
+ */
 function baseUrl(): string {
-  return "http://127.0.0.1:3030";
+  // On Vercel: prefer the production alias (stable URL across deploys), fall
+  // back to the unique deployment URL.
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  // Local dev: Next sets PORT; default to 3031 (the worktree dev port) since
+  // the parent repo dev runs on 3030 already and PG launches the worktree fresh.
+  const port = process.env.PORT || "3031";
+  return `http://127.0.0.1:${port}`;
 }
 
 async function apiFetch(path: string): Promise<unknown> {
@@ -209,8 +231,10 @@ async function apiPost(path: string, body: unknown): Promise<unknown> {
     cache: "no-store",
   });
   if (!res.ok) {
-    const j = await res.json().catch(() => ({})) as Record<string, unknown>;
-    throw new Error(j.error as string ?? `API POST ${path} returned ${res.status}`);
+    const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new Error(
+      (j.error as string) ?? `API POST ${path} returned ${res.status}`,
+    );
   }
   return res.json();
 }
@@ -242,7 +266,9 @@ export async function executeTool(
 
     case "read_signals": {
       const days = typeof input.days === "number" ? input.days : 7;
-      return apiFetch(`/api/claude/signals?days=${Math.min(30, Math.max(1, days))}`);
+      return apiFetch(
+        `/api/claude/signals?days=${Math.min(30, Math.max(1, days))}`,
+      );
     }
 
     case "read_recent_archive": {
@@ -301,7 +327,9 @@ interface QueueFileParams {
   note?: string;
 }
 
-async function writeQueueFile(params: QueueFileParams): Promise<{ ok: boolean; id: string }> {
+async function writeQueueFile(
+  params: QueueFileParams,
+): Promise<{ ok: boolean; id: string }> {
   const queueDir = path.join(os.homedir(), ".pg-os", "queue");
   fs.mkdirSync(queueDir, { recursive: true });
 
@@ -319,7 +347,8 @@ async function writeQueueFile(params: QueueFileParams): Promise<{ ok: boolean; i
       ? `options: [${params.options.map((o) => `"${o.replace(/"/g, '\\"')}"`).join(", ")}]\n`
       : "";
 
-  const content = `---
+  const content =
+    `---
 title: "${params.title.replace(/"/g, '\\"')}"
 source: ${params.source ?? "copilot"}
 ${optionsYaml}created_at: ${createdAt}
