@@ -35,16 +35,20 @@ export function TabShell({
 
   return (
     <EmakiProvider phase={phase}>
-      {/* overflow-x: hidden on mobile contains any rogue tile internals (legacy
-          .el-panel, AgentLab canvases, etc.) that would otherwise push the page
-          wider than the viewport. Desktop keeps natural overflow. */}
+      {/* Mobile safety: keep tile internals from pushing the page wider than the
+          viewport, but DO NOT use overflow-x: hidden here (the root html/body now
+          uses overflow-x: clip globally; adding hidden on this descendant would
+          re-create an unintended scroll container and could re-introduce the
+          scroll-trap bug). max-width on children is the safe containment. */}
       <style>{`
         @media (max-width: 767px) {
-          .tab-shell-root { overflow-x: hidden; }
           .tab-shell-root > * { max-width: 100%; }
         }
       `}</style>
-      <div className="tab-shell-root" style={{ padding: "8px 0 64px", position: "relative", zIndex: 2 }}>
+      <div
+        className="tab-shell-root"
+        style={{ padding: "8px 0 64px", position: "relative", zIndex: 2 }}
+      >
         <div
           style={{
             maxWidth,
@@ -86,7 +90,14 @@ export function TabShell({
             </h1>
           </div>
           {actions && (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               {actions}
             </div>
           )}

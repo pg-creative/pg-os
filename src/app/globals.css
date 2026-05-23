@@ -156,7 +156,12 @@
 
 /* ── Base ───────────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box}
-html,body{background:var(--bg-0);color:var(--fg);font-family:var(--body),sans-serif;font-size:var(--text-base);line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;overflow-x:hidden;margin:0}
+/* overflow-x: clip contains horizontal overflow WITHOUT forcing overflow-y: hidden
+   on the document, which `overflow-x: hidden` does per the CSS overflow spec
+   (any overflow value besides `visible` on html/body propagates to the other axis).
+   The old `hidden` value was sealing the entire page on every tab and viewport.
+   clip is the modern fix (Chrome 90+, Safari 16+, Firefox 81+ — covers PG's iPhone). */
+html,body{background:var(--bg-0);color:var(--fg);font-family:var(--body),sans-serif;font-size:var(--text-base);line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;overflow-x:clip;margin:0}
 body{
   background:
     radial-gradient(ellipse at top left, rgba(255,255,255,0.5), transparent 50%),
