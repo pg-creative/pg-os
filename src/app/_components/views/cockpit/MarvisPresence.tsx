@@ -35,6 +35,9 @@ export function MarvisPresence() {
         marginBottom: 18,
       }}
     >
+      <style>{`
+        @media (max-width: 767px) { .marvis-presence-inline-input { display: none !important; } }
+      `}</style>
       {/* Orb */}
       <div
         style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}
@@ -145,6 +148,7 @@ export function MarvisPresence() {
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           placeholder="ask Marvis…"
+          className="marvis-presence-inline-input"
           style={{
             background: "#13110D",
             border: "1px solid rgba(214,163,103,0.2)",

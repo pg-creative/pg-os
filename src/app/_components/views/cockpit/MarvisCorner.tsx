@@ -11,6 +11,8 @@ import { useMarvis } from "./useMarvis";
 import { CockpitLive2D } from "./skins/CockpitLive2D";
 import { PartyMode } from "./PartyMode";
 
+const BOOTSTRAP_DISMISSED_KEY = "pg-os-kitsu-bootstrap-dismissed";
+
 const C = {
   ink: "#13110D",
   panel: "rgba(20,17,13,0.97)",
@@ -33,6 +35,12 @@ export function MarvisCorner({
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Mobile-responsive avatar size: 200 on narrow viewports, 280 on wider ones.
+  const [avatarSize, setAvatarSize] = useState(280);
+
+  // Bootstrap onboarding banner state.
+  const [showBootstrapBanner, setShowBootstrapBanner] = useState(false);
 
   // "Teach Kitsu" correction affordance
   const [teachOpen, setTeachOpen] = useState(false);
@@ -63,6 +71,28 @@ export function MarvisCorner({
   }
 
   useEffect(() => {
+    // Responsive avatar: 200px on viewports narrower than 480px.
+    const mq = window.matchMedia("(max-width: 479px)");
+    setAvatarSize(mq.matches ? 200 : 280);
+    const handler = (e: MediaQueryListEvent) =>
+      setAvatarSize(e.matches ? 200 : 280);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  useEffect(() => {
+    // Bootstrap check: POST is idempotent; if soul was fresh, show onboarding banner.
+    const dismissed = localStorage.getItem(BOOTSTRAP_DISMISSED_KEY);
+    if (dismissed) return;
+    void fetch("/api/kitsu/bootstrap", { method: "POST" })
+      .then((r) => r.json())
+      .then((data: { wasUnbootstrapped?: boolean }) => {
+        if (data.wasUnbootstrapped) setShowBootstrapBanner(true);
+      })
+      .catch(() => { /* silent fail */ });
+  }, []);
+
+  useEffect(() => {
     if (m.state === "speaking" || m.state === "listening") setOpen(true);
   }, [m.state]);
 
@@ -82,7 +112,7 @@ export function MarvisCorner({
             position: "fixed",
             right: 18,
             bottom: 18,
-            zIndex: 9000,
+            zIndex: 9999,
             width: 60,
             height: 60,
             borderRadius: "50%",
@@ -93,6 +123,7 @@ export function MarvisCorner({
             background:
               "radial-gradient(circle at 45% 40%, #FBE8C8, #D6A367 60%, #8a5a2a)",
             boxShadow: "0 0 26px rgba(214,163,103,.6)",
+            touchAction: "manipulation",
           }}
         >
           🦊
@@ -108,13 +139,18 @@ export function MarvisCorner({
 
   return (
     <>
+      <style>{`
+        .marvis-expanded { backdrop-filter: blur(6px); }
+        @media (max-width: 767px) { .marvis-expanded { backdrop-filter: none !important; } }
+      `}</style>
       <div
+        className="marvis-expanded"
         style={{
           position: "fixed",
           right: 16,
           bottom: 16,
-          zIndex: 9000,
-          width: 360,
+          zIndex: 9999,
+          width: "min(360px, calc(100vw - 24px))",
           maxHeight: "calc(100vh - 130px)",
           display: "flex",
           flexDirection: "column",
@@ -125,7 +161,7 @@ export function MarvisCorner({
           overflow: "hidden",
           transform: open ? "translateY(0)" : "translateY(110%)",
           transition: "transform .45s cubic-bezier(.22,1,.36,1)",
-          backdropFilter: "blur(6px)",
+          touchAction: "manipulation",
         }}
       >
         {/* header */}
@@ -181,7 +217,8 @@ export function MarvisCorner({
         {/* big fox avatar */}
         <div
           style={{
-            height: 210,
+            height: "auto",
+            maxHeight: "min(210px, 30vh)",
             overflow: "hidden",
             position: "relative",
             background:
@@ -199,7 +236,7 @@ export function MarvisCorner({
           >
             <CockpitLive2D
               state={m.state}
-              size={280}
+              size={avatarSize}
               zoom={1.42}
               align="top"
               modelUrl={modelUrl}
@@ -221,7 +258,73 @@ export function MarvisCorner({
             gap: 8,
           }}
         >
-          {m.turns.length === 0 && m.state === "idle" && (
+          {/* Bootstrap onboarding banner — shown once on fresh soul seed */}
+          {showBootstrapBanner && (
+            <div
+              style={{
+                background: "rgba(214,163,103,.1)",
+                border: "1px solid rgba(214,163,103,.3)",
+                borderRadius: 10,
+                padding: "10px 12px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8,
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ fontSize: "var(--text-sm)" }}>👋</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    color: C.cream,
+                    fontSize: "var(--text-sm)",
+                    lineHeight: 1.4,
+                    marginBottom: 6,
+                  }}
+                >
+                  Fresh boot — want to confirm a few things?
+                </div>
+                <button
+                  onClick={() => {
+                    setShowBootstrapBanner(false);
+                    localStorage.setItem(BOOTSTRAP_DISMISSED_KEY, "1");
+                    m.ask(
+                      "Bootstrap me — short interview to confirm SOUL and USER.",
+                    );
+                  }}
+                  style={{
+                    ...btn(C.amber, false),
+                    fontSize: "var(--text-xs)",
+                    padding: "5px 10px",
+                    minWidth: "auto",
+                    minHeight: "auto",
+                  }}
+                >
+                  Start interview
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setShowBootstrapBanner(false);
+                  localStorage.setItem(BOOTSTRAP_DISMISSED_KEY, "1");
+                }}
+                aria-label="Dismiss bootstrap banner"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: C.dim,
+                  cursor: "pointer",
+                  fontSize: "var(--text-sm)",
+                  lineHeight: 1,
+                  padding: 2,
+                  flexShrink: 0,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {m.turns.length === 0 && m.state === "idle" && !showBootstrapBanner && (
             <div
               style={{
                 color: C.dim,
@@ -468,7 +571,12 @@ function btn(color: string, on: boolean): React.CSSProperties {
     color,
     borderRadius: 8,
     padding: "9px 11px",
+    minWidth: 44,
+    minHeight: 44,
     cursor: "pointer",
     fontSize: "var(--text-base)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   };
 }

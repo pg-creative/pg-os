@@ -109,6 +109,8 @@ export function SoulPanel() {
           gap: 4,
           marginBottom: 14,
           flexWrap: "wrap",
+          width: "100%",
+          minWidth: 0,
         }}
       >
         {TABS.map((t) => {
@@ -126,6 +128,7 @@ export function SoulPanel() {
               }}
               style={{
                 ...monoStyle,
+                flex: "0 1 auto",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 background: active
@@ -137,6 +140,7 @@ export function SoulPanel() {
                 padding: "4px 11px",
                 cursor: "pointer",
                 transition: "all 140ms ease",
+                whiteSpace: "nowrap",
               }}
             >
               {t.label}
