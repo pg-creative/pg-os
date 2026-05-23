@@ -20,6 +20,7 @@ import { KitsuV3Notebook } from "../../_components/views/kitsu/KitsuV3Notebook";
 import { KitsuV4CardDeck } from "../../_components/views/kitsu/KitsuV4CardDeck";
 import { KitsuV5NotebookRail } from "../../_components/views/kitsu/KitsuV5NotebookRail";
 import { KitsuV6MissionNotebook } from "../../_components/views/kitsu/KitsuV6MissionNotebook";
+import { KitsuV7Marginalia } from "../../_components/views/kitsu/KitsuV7Marginalia";
 
 const VARIANTS = [
   { id: "1", label: "V1 · Kitsune Shrine", Component: KitsuV1Shrine },
@@ -32,6 +33,7 @@ const VARIANTS = [
     label: "V6 · Mission + Notebook",
     Component: KitsuV6MissionNotebook,
   },
+  { id: "7", label: "V7 · Marginalia", Component: KitsuV7Marginalia },
 ] as const;
 
 function LabBody() {
