@@ -140,6 +140,26 @@ export function EmakiShellBar() {
             display: none;
           }
         }
+        @media (max-width: 767px) {
+          .emaki-shellbar-tabs {
+            display: none;
+          }
+          .emaki-shellbar-temp {
+            display: none;
+          }
+          .emaki-shellbar-stamp {
+            display: none;
+          }
+          .sound-toggle {
+            display: none;
+          }
+          .emaki-shellbar-online {
+            display: none;
+          }
+          .emaki-shellbar-auto {
+            display: none;
+          }
+        }
       `}</style>
 
       <nav
@@ -220,6 +240,7 @@ export function EmakiShellBar() {
               type="button"
               title="Auto (follow the clock)"
               onClick={() => setAutoMode(true)}
+              className="emaki-shellbar-auto"
               style={{
                 border: "none",
                 background: autoMode ? tk.pillActive : "transparent",
@@ -240,10 +261,10 @@ export function EmakiShellBar() {
             <span className="emaki-shellbar-online-pip" />
             ONLINE
           </span>
-          <span>
+          <span className="emaki-shellbar-temp">
             <CityTemp />
           </span>
-          <span>
+          <span className="emaki-shellbar-stamp">
             <LiveStamp />
           </span>
         </div>

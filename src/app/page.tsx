@@ -3,6 +3,7 @@ import { BridgeModeProvider } from "./_components/BridgeModeProvider";
 import { ToastDeck } from "./_components/Toast";
 import { AmbientParticles } from "./_components/AmbientParticles";
 import { EmakiShellBar } from "./_components/EmakiShellBar";
+import { TabBar } from "./_components/TabBar";
 import { EmakiBackdrop } from "./_components/emaki/EmakiBackdrop";
 import { MarvisCorner } from "./_components/views/cockpit/MarvisCorner";
 import { CaptureFAB } from "./_components/CaptureFAB";
@@ -32,8 +33,9 @@ export default function Page() {
       <NowProvider>
         <EmakiBackdrop />
         <AmbientParticles />
-        {/* Global shell nav — the home-lab top bar, wired to all tabs. Replaces
-            the legacy .topbar + TabBar (archived in _components/_legacy/). */}
+        {/* Global shell nav — the home-lab top bar. Tabs are hidden on mobile
+            via EmakiShellBar's @media (max-width: 767px) rule; the bottom
+            TabBar takes over for thumb-friendly mobile navigation. */}
         <EmakiShellBar />
         <div className={`shell${active === "home" ? " shell-bleed" : ""}`}>
           {/* ACTIVE VIEW */}
@@ -63,6 +65,9 @@ export default function Page() {
         {/* On the cockpit, the global FABs are hidden so they don't crowd Kitsu's terminal. */}
         {active !== "cockpit" && <CaptureFAB />}
         {active !== "cockpit" && <CopilotLauncher />}
+        {/* Mobile bottom thumb bar -- position:fixed via globals.css @media (max-width:768px).
+            Hidden on desktop by the same media query (display:none above 768px). */}
+        <TabBar />
         <CommandPalette />
         <AmbientIdle />
         <ToastDeck />
