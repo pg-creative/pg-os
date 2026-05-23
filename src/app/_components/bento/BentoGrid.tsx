@@ -31,13 +31,25 @@ export function BentoGrid({
       }}
     >
       {children}
-      {/* Responsive collapse: keep the grid cohesive on smaller viewports. */}
+      {/* Responsive collapse: keep the grid cohesive on smaller viewports.
+          Below 680px every tile spans the full row (grid-column 1 / -1) so any
+          cols={3,4,6,8,12} prop stacks cleanly — no more "span 4 on a 2-col grid"
+          oddness. Phones (<=480) get tighter gap. */}
       <style>{`
         @media (max-width: 1100px) {
           .bento-grid { grid-template-columns: repeat(6, 1fr) !important; }
         }
         @media (max-width: 680px) {
-          .bento-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+          .bento-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          .bento-grid > * {
+            grid-column: 1 / -1 !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .bento-grid { gap: 10px !important; }
         }
       `}</style>
     </div>

@@ -235,7 +235,9 @@ function LaunchControls({
           color: tk.textPrimary,
           fontFamily: "var(--mono), ui-monospace, monospace",
           fontSize: "var(--text-xs)",
-          width: 280,
+          // Clamp on mobile so the actions row (flexWraps already) does not overflow at 390px.
+          width: "clamp(160px, 100%, 280px)",
+          minWidth: 0,
           outline: "none",
         }}
       />

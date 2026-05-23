@@ -35,7 +35,16 @@ export function TabShell({
 
   return (
     <EmakiProvider phase={phase}>
-      <div style={{ padding: "8px 0 64px", position: "relative", zIndex: 2 }}>
+      {/* overflow-x: hidden on mobile contains any rogue tile internals (legacy
+          .el-panel, AgentLab canvases, etc.) that would otherwise push the page
+          wider than the viewport. Desktop keeps natural overflow. */}
+      <style>{`
+        @media (max-width: 767px) {
+          .tab-shell-root { overflow-x: hidden; }
+          .tab-shell-root > * { max-width: 100%; }
+        }
+      `}</style>
+      <div className="tab-shell-root" style={{ padding: "8px 0 64px", position: "relative", zIndex: 2 }}>
         <div
           style={{
             maxWidth,
