@@ -1010,10 +1010,13 @@ export async function* streamKitsu({
         // Remove dangerous built-ins from Claude's context entirely
         disallowedTools: DISALLOWED_TOOLS,
 
-        // Load user-level ~/.claude/ settings: skills, CLAUDE.md, plugins, .mcp.json.
-        // "project" would load the worktree's .claude/ (skip -- less relevant here).
-        // "user" loads ~/.claude/settings.json and ~/.mcp.json.
-        settingSources: ["user"],
+        // WS-B latency cut (2026-05-23): settingSources was ["user"], which loaded
+        // PG's entire ~/.claude/ — ~74 skills + plugins + CLAUDE.md cascade +
+        // .mcp.json enumeration — on every cold start. That was the single
+        // biggest TTFT cost. Kitsu's 19 in-process tools cover his job; if a
+        // capability comes up that needs an external MCP, opt-in via mcpServers
+        // here directly rather than re-mounting the whole user library.
+        settingSources: [],
 
         // Conservative mode: anything not pre-approved hits canUseTool and gets denied
         permissionMode: "dontAsk",
@@ -1024,12 +1027,22 @@ export async function* streamKitsu({
         // Resume prior session if provided (restores full JSONL context)
         ...(sessionId ? { resume: sessionId } : {}),
 
-        // Reasonable defaults
-        maxTurns: 10,
+        // Chat turns rarely need 10 sequential tool calls. If a request is that
+        // complex, propose_action is the right surface. 4 keeps the loop snappy
+        // and bounds the cost of a misbehaving turn. (WS-B, 2026-05-23.)
+        maxTurns: 4,
       },
     });
 
     let activeToolName: string | null = null;
+    // Track the last tool that returned isError so we can include it in any
+    // terminal error event. This is the heart of the WS-A snag-fix: empty-text
+    // failures previously turned into the generic "I hit a snag" string in the
+    // client; now they carry the failed tool's name back to the UI so PG (and
+    // future agents) can debug instead of guess.
+    let lastFailedTool: string | null = null;
+    let lastFailedToolError: string | null = null;
+    let sawAnyAssistantText = false;
 
     for await (const message of sdkQuery as AsyncIterable<SDKMessage>) {
       if (message.type === "system" && message.subtype === "init") {
@@ -1044,6 +1057,7 @@ export async function* streamKitsu({
           if (block.type === "text") {
             // Yield the full text as a single delta (Agent SDK gives us
             // complete assistant messages, not per-token streams)
+            if (block.text) sawAnyAssistantText = true;
             yield { type: "text", delta: block.text };
           }
           if (block.type === "tool_use") {
@@ -1057,13 +1071,29 @@ export async function* streamKitsu({
       if (message.type === "user") {
         // Tool results come back as user messages with tool_use_result
         if (message.isSynthetic && activeToolName) {
-          const hasError = !!(
-            message.tool_use_result as Record<string, unknown> | null
-          )?.isError;
+          const toolResult = message.tool_use_result as Record<
+            string,
+            unknown
+          > | null;
+          const hasError = !!toolResult?.isError;
+          if (hasError) {
+            lastFailedTool = activeToolName;
+            // The error text the tool itself returned (errContent shape: a
+            // single text block prefixed "Error: ..."). Pull it out so the
+            // terminal error event can include the real cause.
+            const content = toolResult?.content as
+              | Array<{ type: string; text?: string }>
+              | undefined;
+            const firstText = content?.find((b) => b.type === "text")?.text;
+            if (firstText) lastFailedToolError = firstText;
+          }
           yield {
             type: "tool_end",
             name: activeToolName,
             ok: !hasError,
+            ...(hasError && lastFailedToolError
+              ? { error: lastFailedToolError }
+              : {}),
           };
           activeToolName = null;
         }
@@ -1072,17 +1102,40 @@ export async function* streamKitsu({
 
       if (message.type === "result") {
         if (message.subtype === "success") {
-          yield {
-            type: "done",
-            result: message.result,
-            cost_usd: message.total_cost_usd,
-            num_turns: message.num_turns,
-          };
+          const text = (message.result ?? "").toString().trim();
+          // Success-but-empty AFTER a tool failure means the agent gave up
+          // mid-loop. Surface the real failure instead of yielding a silent done
+          // that the UI would otherwise paper over with a generic "snag" string.
+          if (!text && lastFailedTool) {
+            const friendly = lastFailedTool.replace(/^mcp__[^_]+__/, "");
+            const detail = lastFailedToolError
+              ? ` (${lastFailedToolError})`
+              : "";
+            yield {
+              type: "error",
+              error: `Tool '${friendly}' failed and the agent produced no follow-up text${detail}.`,
+            };
+          } else {
+            yield {
+              type: "done",
+              result: message.result,
+              cost_usd: message.total_cost_usd,
+              num_turns: message.num_turns,
+            };
+          }
         } else {
-          // SDKResultError does not expose .result -- use subtype + is_error
+          // SDKResultError does not expose .result -- use subtype + is_error +
+          // any tool failure we tracked along the way for the most useful msg.
+          const failHint = lastFailedTool
+            ? ` Last failed tool: '${lastFailedTool.replace(/^mcp__[^_]+__/, "")}'${
+                lastFailedToolError ? ` (${lastFailedToolError})` : ""
+              }.`
+            : sawAnyAssistantText
+              ? ""
+              : " The agent produced no text before ending.";
           yield {
             type: "error",
-            error: `Agent ended with status: ${message.subtype}${message.is_error ? " (execution error)" : ""}.`,
+            error: `Agent ended with status: ${message.subtype}${message.is_error ? " (execution error)" : ""}.${failHint}`,
           };
         }
         return;

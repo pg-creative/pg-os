@@ -109,6 +109,19 @@ export function useMarvis() {
   const wakeRef = useRef<SpeechRec | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  // WS-A2 double-send guard: short-circuits a second submit event while a
+  // turn is in flight. The form fires `ask` once per submit, but iOS double-
+  // tap, Enter+click, and React 19 strict-mode re-renders have all been
+  // observed to cause duplicate user bubbles. This ref makes ask idempotent
+  // within a single submission window — defensive at the call site, not the
+  // binding site.
+  const submittingRef = useRef(false);
+  // turnsRef mirrors `turns` for synchronous reads inside `ask`. Pairing it
+  // with functional setTurns lets `ask` stay out of `turns` in its useCallback
+  // deps, so its identity is stable across renders — the form handler never
+  // rebinds to a new function reference between renders, which was a
+  // contributing cause of the double-send symptom.
+  const turnsRef = useRef<Turn[]>([]);
   const [wakeArmed, setWakeArmed] = useState(false);
   const wakeArmedRef = useRef(false);
   const [party, setParty] = useState(false); // "initialize party mode"
@@ -119,6 +132,12 @@ export function useMarvis() {
       .then(setConfig)
       .catch(() => setConfig(null));
   }, []);
+
+  // Keep turnsRef in lockstep with the turns state so `ask` can snapshot
+  // the latest history synchronously without depending on `turns` in its deps.
+  useEffect(() => {
+    turnsRef.current = turns;
+  }, [turns]);
 
   // ── Speak: stream audio from the TTS route, fall back to Web Speech ──
   // Resolves when the spoken line FINISHES (not when it starts) so callers can
@@ -205,84 +224,115 @@ export function useMarvis() {
         setReply("Initializing party mode. Hold onto something.");
         return;
       }
-      setReply("");
-      setState("thinking");
-      setActiveTool(null);
-      const nextTurns: Turn[] = [...turns, { role: "user", text: userText }];
-      setTurns(nextTurns);
-
-      let acc = "";
-      let finalResult = "";
+      // WS-A2 guard: a second submit event in the same window becomes a no-op.
+      // The party-mode short-circuit above is intentionally outside the guard
+      // because it has no async side effects to race against.
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       try {
-        const r = await fetch("/api/kitsu/query", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            messages: nextTurns.map((t) => ({ role: t.role, content: t.text })),
-            sessionId: sessionIdRef.current ?? undefined,
-          }),
-        });
-        if (!r.body) throw new Error("no stream");
-        const reader = r.body.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const events = buf.split("\n\n");
-          buf = events.pop() ?? "";
-          for (const ev of events) {
-            const line = ev.split("\n").find((l) => l.startsWith("data: "));
-            if (!line) continue;
-            try {
-              const msg = JSON.parse(line.slice(6));
-              switch (msg.type) {
-                case "session_id":
-                  // Resume context on the next turn (cross-reload continuity).
-                  if (msg.session_id) sessionIdRef.current = msg.session_id;
-                  break;
-                case "text":
-                  if (msg.delta) {
-                    acc += msg.delta;
-                    setReply(acc);
-                  }
-                  break;
-                case "tool_start":
-                  if (msg.name) setActiveTool(friendlyToolName(msg.name));
-                  break;
-                case "tool_end":
-                  setActiveTool(null);
-                  break;
-                case "done":
-                  // result is the final clean answer from the agent loop.
-                  if (msg.result) finalResult = msg.result;
-                  setActiveTool(null);
-                  break;
-                case "error":
-                  if (!acc) acc = "I hit a snag reaching my tools. Try again?";
-                  setActiveTool(null);
-                  break;
-                default:
-                  break;
+        setReply("");
+        setState("thinking");
+        setActiveTool(null);
+        // Functional setTurns so the user turn is appended exactly once even
+        // if a stale closure fires from a prior render. The API request still
+        // needs the full conversation including this new turn, so we read the
+        // latest turns via the ref (synchronous) and append the new one for
+        // the request body.
+        const userTurn: Turn = { role: "user", text: userText };
+        setTurns((t) => [...t, userTurn]);
+        const messagesForApi = [...turnsRef.current, userTurn].map((t) => ({
+          role: t.role,
+          content: t.text,
+        }));
+
+        let acc = "";
+        let finalResult = "";
+        try {
+          const r = await fetch("/api/kitsu/query", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              messages: messagesForApi,
+              sessionId: sessionIdRef.current ?? undefined,
+            }),
+          });
+          if (!r.body) throw new Error("no stream");
+          const reader = r.body.getReader();
+          const dec = new TextDecoder();
+          let buf = "";
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            const events = buf.split("\n\n");
+            buf = events.pop() ?? "";
+            for (const ev of events) {
+              const line = ev.split("\n").find((l) => l.startsWith("data: "));
+              if (!line) continue;
+              try {
+                const msg = JSON.parse(line.slice(6));
+                switch (msg.type) {
+                  case "session_id":
+                    // Resume context on the next turn (cross-reload continuity).
+                    if (msg.session_id) sessionIdRef.current = msg.session_id;
+                    break;
+                  case "text":
+                    if (msg.delta) {
+                      acc += msg.delta;
+                      setReply(acc);
+                    }
+                    break;
+                  case "tool_start":
+                    if (msg.name) setActiveTool(friendlyToolName(msg.name));
+                    break;
+                  case "tool_end":
+                    setActiveTool(null);
+                    break;
+                  case "done":
+                    // result is the final clean answer from the agent loop.
+                    if (msg.result) finalResult = msg.result;
+                    setActiveTool(null);
+                    break;
+                  case "error":
+                    // WS-A1: surface the REAL reason from kitsuAgent so PG can
+                    // debug, not the canned "snag" string. The route forwards
+                    // msg.error verbatim (Tool 'X' failed (..) etc.). If we
+                    // already streamed text before the error, keep it and
+                    // append the failure as a quiet parenthetical; otherwise
+                    // make the failure itself the visible reply.
+                    if (msg.error) {
+                      acc = acc
+                        ? `${acc}\n\n(${msg.error})`
+                        : `Couldn't finish that: ${msg.error}`;
+                    } else if (!acc) {
+                      acc = "Lost the thread reaching my tools. Try again?";
+                    }
+                    setActiveTool(null);
+                    break;
+                  default:
+                    break;
+                }
+              } catch {
+                /* skip malformed event */
               }
-            } catch {
-              /* skip malformed event */
             }
           }
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : String(e);
+          acc = acc || `Lost the thread: ${reason}`;
         }
-      } catch {
-        acc = acc || "I lost the thread there. Say again?";
+        setActiveTool(null);
+        // Prefer the final result for the spoken + recorded turn; fall back to
+        // the streamed accumulation if no done.result arrived.
+        const answer = finalResult || acc;
+        setReply(answer);
+        setTurns((t) => [...t, { role: "assistant", text: answer }]);
+        await speak(cleanForSpeech(answer));
+      } finally {
+        submittingRef.current = false;
       }
-      setActiveTool(null);
-      // Prefer the final result for the spoken + recorded turn; fall back to the
-      // streamed accumulation if no done.result arrived.
-      const answer = finalResult || acc;
-      setReply(answer);
-      setTurns((t) => [...t, { role: "assistant", text: answer }]);
-      await speak(cleanForSpeech(answer));
     },
-    [turns, speak],
+    [speak],
   );
 
   // ── Listen: Web Speech push-to-talk ──

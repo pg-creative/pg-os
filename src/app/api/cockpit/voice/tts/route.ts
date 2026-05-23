@@ -11,10 +11,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   let text = "";
   let voiceId: string | undefined;
+  let modelOverride: string | undefined;
   try {
     const body = await req.json();
     text = (body.text ?? "").toString().slice(0, 4000);
     voiceId = body.voiceId;
+    modelOverride = body.model;
   } catch {
     return NextResponse.json({ error: "bad_json" }, { status: 400 });
   }
@@ -23,13 +25,20 @@ export async function POST(req: Request) {
 
   const tried: string[] = [];
 
-  // --- ElevenLabs Flash v2.5 (the real Marvis voice; needs Creator plan) ---
+  // --- ElevenLabs (Kitsu's voice) ---
+  // Turbo v2.5 chosen for sub-300ms TTFB (vs multilingual_v2's 2-3s) so chat
+  // feels conversational. Uses the explicit /stream endpoint with
+  // optimize_streaming_latency=3 for the lowest perceived first-byte time.
+  // Voice settings tuned 2026-05-23 (WS-C): lower stability + higher style
+  // brings prosody variation; higher similarity keeps the timbre intact.
+  // For longer narrations where quality > latency, callers can pass
+  //   { model: "eleven_multilingual_v2" } in the request body to override.
   const elevenKey = process.env.ELEVENLABS_API_KEY;
   const vid = voiceId || process.env.ELEVENLABS_VOICE_ID;
   if (elevenKey && vid) {
     try {
       const r = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${vid}?output_format=mp3_44100_128`,
+        `https://api.elevenlabs.io/v1/text-to-speech/${vid}/stream?output_format=mp3_44100_128&optimize_streaming_latency=3`,
         {
           method: "POST",
           headers: {
@@ -38,12 +47,11 @@ export async function POST(req: Request) {
           },
           body: JSON.stringify({
             text,
-            // eleven_multilingual_v2 = high-quality, natural (vs flash = fast/flat/robotic).
-            model_id: "eleven_multilingual_v2",
+            model_id: modelOverride || "eleven_turbo_v2_5",
             voice_settings: {
-              stability: 0.45,
-              similarity_boost: 0.8,
-              style: 0.35,
+              stability: 0.35,
+              similarity_boost: 0.85,
+              style: 0.4,
               use_speaker_boost: true,
             },
           }),
