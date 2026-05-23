@@ -10,6 +10,9 @@ import { useEffect, useRef, useState } from "react";
 import { useMarvis } from "./useMarvis";
 import { CockpitLive2D } from "./skins/CockpitLive2D";
 import { PartyMode } from "./PartyMode";
+import { useMode } from "../../ModeProvider";
+import { phaseForMode } from "../../bento/emakiContext";
+import { FoxfireLayer } from "../../emaki/materials";
 
 const BOOTSTRAP_DISMISSED_KEY = "pg-os-kitsu-bootstrap-dismissed";
 
@@ -29,6 +32,10 @@ export function MarvisCorner({
   modelUrl?: string;
 }) {
   const m = useMarvis();
+  // Phase drives Kitsu's painted den background + foxfire palette (matches the
+  // rest of the OS's day/twilight/night theme).
+  const { mode } = useMode();
+  const phase = phaseForMode(mode);
   // Default COLLAPSED to the fox orb (still present bottom-right, but does not
   // occlude tab content). Click the orb to expand the panel. Auto-opens only
   // when Kitsu has something to say (speaking) or is actively listening.
@@ -89,7 +96,9 @@ export function MarvisCorner({
       .then((data: { wasUnbootstrapped?: boolean }) => {
         if (data.wasUnbootstrapped) setShowBootstrapBanner(true);
       })
-      .catch(() => { /* silent fail */ });
+      .catch(() => {
+        /* silent fail */
+      });
   }, []);
 
   useEffect(() => {
@@ -142,6 +151,17 @@ export function MarvisCorner({
       <style>{`
         .marvis-expanded { backdrop-filter: blur(6px); }
         @media (max-width: 767px) { .marvis-expanded { backdrop-filter: none !important; } }
+        /* Foxfire pulsing dots in the typing-indicator bubble. */
+        @keyframes kitsuDot {
+          0%, 80%, 100% { transform: scale(0.7); opacity: 0.45; }
+          40%           { transform: scale(1);   opacity: 1;    }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          /* hold steady for motion-sensitive PG-future-selves */
+          @keyframes kitsuDot {
+            0%, 100% { transform: scale(0.85); opacity: 0.7; }
+          }
+        }
       `}</style>
       <div
         className="marvis-expanded"
@@ -154,7 +174,18 @@ export function MarvisCorner({
           maxHeight: "calc(100vh - 130px)",
           display: "flex",
           flexDirection: "column",
-          background: C.panel,
+          // Kitsu's painted den (MJ, per-phase). Layered: dark base color, then
+          // the painting at low opacity via a linear-gradient scrim so the
+          // transcript text on top stays readable. Falls back to the flat color
+          // if the WebP fails to load.
+          background: `
+            linear-gradient(180deg, rgba(20,17,13,0.74) 0%, rgba(20,17,13,0.86) 100%),
+            url('/kitsu/den-${phase}.webp')
+          `,
+          backgroundColor: C.panel,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
           border: "1px solid rgba(214,163,103,.28)",
           borderRadius: 16,
           boxShadow: "0 18px 50px rgba(0,0,0,.55)",
@@ -164,6 +195,19 @@ export function MarvisCorner({
           touchAction: "manipulation",
         }}
       >
+        {/* foxfire particle layer floating over the painted den (reduced-motion safe) */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            opacity: 0.5,
+          }}
+        >
+          <FoxfireLayer phase={phase} />
+        </div>
+
         {/* header */}
         <div
           style={{
@@ -324,20 +368,22 @@ export function MarvisCorner({
               </button>
             </div>
           )}
-          {m.turns.length === 0 && m.state === "idle" && !showBootstrapBanner && (
-            <div
-              style={{
-                color: C.dim,
-                fontSize: "var(--text-sm)",
-                fontStyle: "italic",
-                textAlign: "center",
-                padding: "12px 4px",
-              }}
-            >
-              Ask me what&apos;s happening with the fleet — type below or hold
-              the mic.
-            </div>
-          )}
+          {m.turns.length === 0 &&
+            m.state === "idle" &&
+            !showBootstrapBanner && (
+              <div
+                style={{
+                  color: C.dim,
+                  fontSize: "var(--text-sm)",
+                  fontStyle: "italic",
+                  textAlign: "center",
+                  padding: "12px 4px",
+                }}
+              >
+                Ask me what&apos;s happening with the fleet — type below or hold
+                the mic.
+              </div>
+            )}
           {m.turns.map((t, i) => (
             <Bubble key={i} role={t.role} text={t.text} />
           ))}
@@ -345,6 +391,8 @@ export function MarvisCorner({
           {(m.state === "thinking" || m.state === "speaking") && m.reply && (
             <Bubble role="assistant" text={m.reply} live />
           )}
+          {/* typing indicator: Kitsu is thinking + no reply chunk has streamed yet */}
+          {m.state === "thinking" && !m.reply && <TypingBubble />}
           {/* tool-activity indicator: shows while Kitsu is using a tool */}
           {m.state === "thinking" && m.activeTool && (
             <div
@@ -531,34 +579,133 @@ export function MarvisCorner({
   );
 }
 
+function fmtTime(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 function Bubble({
   role,
   text,
   live,
+  createdAt,
 }: {
   role: "user" | "assistant";
   text: string;
   live?: boolean;
+  createdAt?: number;
 }) {
   const me = role === "user";
   return (
     <div
       style={{
         alignSelf: me ? "flex-end" : "flex-start",
-        maxWidth: "85%",
-        background: me ? "rgba(214,163,103,.16)" : "rgba(255,248,231,.05)",
-        border: `1px solid ${me ? "rgba(214,163,103,.3)" : "rgba(214,163,103,.14)"}`,
-        borderRadius: 12,
-        padding: "8px 11px",
-        color: "#EFE6D4",
-        fontSize: "var(--text-sm)",
-        lineHeight: 1.45,
-        opacity: live ? 0.85 : 1,
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
+        maxWidth: "88%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: me ? "flex-end" : "flex-start",
+        gap: 3,
       }}
     >
-      {text}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 6,
+          flexDirection: me ? "row-reverse" : "row",
+        }}
+      >
+        {/* Kitsu's fox glyph beside his bubbles, so PG sees who is speaking. */}
+        {!me && (
+          <span
+            aria-hidden
+            style={{
+              fontSize: 16,
+              lineHeight: 1,
+              flexShrink: 0,
+              filter: "drop-shadow(0 0 6px rgba(214,163,103,.4))",
+            }}
+          >
+            🦊
+          </span>
+        )}
+        <div
+          style={{
+            background: me ? "rgba(255,248,231,.10)" : "rgba(214,163,103,.20)",
+            border: `1px solid ${
+              me ? "rgba(255,248,231,.22)" : "rgba(214,163,103,.4)"
+            }`,
+            borderRadius: 12,
+            padding: "8px 11px",
+            color: "#EFE6D4",
+            fontSize: "var(--text-sm)",
+            lineHeight: 1.45,
+            opacity: live ? 0.85 : 1,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            // Foxfire glow on Kitsu's bubbles (kept off PG's so distinction reads).
+            boxShadow: me ? "none" : "0 0 14px rgba(214,163,103,.22)",
+          }}
+        >
+          {text}
+        </div>
+      </div>
+      {createdAt != null && !live && (
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: "var(--text-2xs, 10px)",
+            color: "rgba(239,230,212,.4)",
+            paddingInline: 2,
+          }}
+        >
+          {fmtTime(createdAt)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Three pulsing foxfire dots: shown while Kitsu is thinking. */
+function TypingBubble() {
+  return (
+    <div
+      style={{
+        alignSelf: "flex-start",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>
+        🦊
+      </span>
+      <div
+        aria-label="Kitsu is thinking"
+        style={{
+          background: "rgba(214,163,103,.20)",
+          border: "1px solid rgba(214,163,103,.4)",
+          borderRadius: 12,
+          padding: "10px 13px",
+          display: "flex",
+          gap: 5,
+          alignItems: "center",
+          boxShadow: "0 0 14px rgba(214,163,103,.22)",
+        }}
+      >
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#D6A367",
+              animation: `kitsuDot 1.2s ease-in-out ${i * 0.15}s infinite`,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
