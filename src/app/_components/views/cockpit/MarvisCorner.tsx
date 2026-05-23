@@ -174,12 +174,13 @@ export function MarvisCorner({
           maxHeight: "calc(100vh - 130px)",
           display: "flex",
           flexDirection: "column",
-          // Kitsu's painted den (MJ, per-phase). Layered: dark base color, then
-          // the painting at low opacity via a linear-gradient scrim so the
-          // transcript text on top stays readable. Falls back to the flat color
-          // if the WebP fails to load.
+          // Kitsu's painted den (MJ, per-phase). Layered: a LIGHT vignette scrim
+          // (heavier at bottom where input + bubbles live so text stays legible,
+          // very light at top so the painting reads) over the painting itself.
+          // Previous 0.74-0.86 scrim drowned the art; this lets the den show.
+          // Falls back to the flat color if the WebP fails to load.
           background: `
-            linear-gradient(180deg, rgba(20,17,13,0.74) 0%, rgba(20,17,13,0.86) 100%),
+            linear-gradient(180deg, rgba(20,17,13,0.18) 0%, rgba(20,17,13,0.45) 55%, rgba(20,17,13,0.72) 100%),
             url('/kitsu/den-${phase}.webp')
           `,
           backgroundColor: C.panel,
@@ -258,11 +259,13 @@ export function MarvisCorner({
           </span>
         </div>
 
-        {/* big fox avatar */}
+        {/* big fox avatar — needs a REAL height (not auto) because the inner
+            div is position:absolute and would otherwise collapse the parent to
+            0 (the bug PG hit: "cant see the avatar"). The clamp keeps it from
+            hogging the phone vertical screen. */}
         <div
           style={{
-            height: "auto",
-            maxHeight: "min(210px, 30vh)",
+            height: "min(210px, 30vh)",
             overflow: "hidden",
             position: "relative",
             background:
