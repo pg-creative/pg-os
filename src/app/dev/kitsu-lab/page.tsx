@@ -21,6 +21,9 @@ import { KitsuV4CardDeck } from "../../_components/views/kitsu/KitsuV4CardDeck";
 import { KitsuV5NotebookRail } from "../../_components/views/kitsu/KitsuV5NotebookRail";
 import { KitsuV6MissionNotebook } from "../../_components/views/kitsu/KitsuV6MissionNotebook";
 import { KitsuV7Marginalia } from "../../_components/views/kitsu/KitsuV7Marginalia";
+import { KitsuV8LanternPond } from "../../_components/views/kitsu/KitsuV8LanternPond";
+import { KitsuV9LivingCodex } from "../../_components/views/kitsu/KitsuV9LivingCodex";
+import { KitsuV10NohStage } from "../../_components/views/kitsu/KitsuV10NohStage";
 
 const VARIANTS = [
   { id: "1", label: "V1 · Kitsune Shrine", Component: KitsuV1Shrine },
@@ -34,6 +37,9 @@ const VARIANTS = [
     Component: KitsuV6MissionNotebook,
   },
   { id: "7", label: "V7 · Marginalia", Component: KitsuV7Marginalia },
+  { id: "8", label: "V8 · Lantern Pond", Component: KitsuV8LanternPond },
+  { id: "9", label: "V9 · Living Codex", Component: KitsuV9LivingCodex },
+  { id: "10", label: "V10 · Noh Stage (FALSIFIER)", Component: KitsuV10NohStage },
 ] as const;
 
 function LabBody() {
