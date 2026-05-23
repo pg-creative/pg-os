@@ -18,12 +18,20 @@ import { KitsuV1Shrine } from "../../_components/views/kitsu/KitsuV1Shrine";
 import { KitsuV2Mission } from "../../_components/views/kitsu/KitsuV2Mission";
 import { KitsuV3Notebook } from "../../_components/views/kitsu/KitsuV3Notebook";
 import { KitsuV4CardDeck } from "../../_components/views/kitsu/KitsuV4CardDeck";
+import { KitsuV5NotebookRail } from "../../_components/views/kitsu/KitsuV5NotebookRail";
+import { KitsuV6MissionNotebook } from "../../_components/views/kitsu/KitsuV6MissionNotebook";
 
 const VARIANTS = [
-  { id: "1", label: "V1 · Kitsune Shrine",  Component: KitsuV1Shrine },
+  { id: "1", label: "V1 · Kitsune Shrine", Component: KitsuV1Shrine },
   { id: "2", label: "V2 · Mission Control", Component: KitsuV2Mission },
-  { id: "3", label: "V3 · Notebook",        Component: KitsuV3Notebook },
-  { id: "4", label: "V4 · Companion Deck",  Component: KitsuV4CardDeck },
+  { id: "3", label: "V3 · Notebook", Component: KitsuV3Notebook },
+  { id: "4", label: "V4 · Companion Deck", Component: KitsuV4CardDeck },
+  { id: "5", label: "V5 · Notebook + Rail", Component: KitsuV5NotebookRail },
+  {
+    id: "6",
+    label: "V6 · Mission + Notebook",
+    Component: KitsuV6MissionNotebook,
+  },
 ] as const;
 
 function LabBody() {
@@ -70,7 +78,9 @@ function LabBody() {
                   ? "1px solid #D6A367"
                   : "1px solid transparent",
               background:
-                variant.id === active.id ? "rgba(214,163,103,.18)" : "transparent",
+                variant.id === active.id
+                  ? "rgba(214,163,103,.18)"
+                  : "transparent",
               color: variant.id === active.id ? "#D6A367" : "#9C8B70",
               fontSize: 12,
               textDecoration: "none",
