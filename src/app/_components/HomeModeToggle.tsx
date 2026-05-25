@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useSound } from "./SoundProvider";
 
 const KEY = "pg-os-home-mode";
 
@@ -13,6 +14,7 @@ function readStored(): boolean {
 
 export function HomeModeToggle() {
   const [on, setOn] = useState(false);
+  const { play } = useSound();
 
   useEffect(() => {
     const initial = readStored();
@@ -21,13 +23,18 @@ export function HomeModeToggle() {
   }, []);
 
   const toggle = useCallback(() => {
+    play("confirm");
     setOn((prev) => {
       const next = !prev;
-      try { localStorage.setItem(KEY, next ? "1" : "0"); } catch { /* quota */ }
+      try {
+        localStorage.setItem(KEY, next ? "1" : "0");
+      } catch {
+        /* quota */
+      }
       document.documentElement.dataset.homeMode = next ? "true" : "false";
       return next;
     });
-  }, []);
+  }, [play]);
 
   return (
     <button

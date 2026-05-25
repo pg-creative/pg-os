@@ -5,7 +5,8 @@ import { phaseForMode } from "./bento/emakiContext";
 import { PHASES } from "./emaki/theme";
 import { CityTemp } from "./LocationLive";
 import { LiveStamp } from "./LiveClock";
-import { SoundToggle } from "./SoundProvider";
+import { SoundToggle, useSound } from "./SoundProvider";
+import { MusicLauncher } from "./MusicLauncher";
 
 const PHASE_MODES = [
   { mode: "laputa-day", glyph: "☀", title: "Day · 陽光の庭" },
@@ -18,6 +19,7 @@ export function EmakiShellBar() {
   const phase = phaseForMode(mode);
   const tk = PHASES[phase];
   const { active, setActive } = useActiveTab();
+  const { play } = useSound();
 
   function handleTabClick(e: React.MouseEvent<HTMLAnchorElement>, id: Tab) {
     if (
@@ -28,6 +30,7 @@ export function EmakiShellBar() {
       !e.altKey
     ) {
       e.preventDefault();
+      play("cursor");
       setActive(id);
     }
   }
@@ -256,6 +259,7 @@ export function EmakiShellBar() {
               AUTO
             </button>
           </span>
+          <MusicLauncher />
           <SoundToggle />
           <span className="emaki-shellbar-online">
             <span className="emaki-shellbar-online-pip" />

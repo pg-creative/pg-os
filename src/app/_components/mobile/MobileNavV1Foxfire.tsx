@@ -5,6 +5,9 @@ import { TABS, useActiveTab } from "../useActiveTab";
 import { useMode } from "../ModeProvider";
 import { phaseForMode } from "../bento/emakiContext";
 import { FoxfireLayer } from "../emaki/materials";
+import { usePlayer } from "../PlayerProvider";
+import { STATIONS } from "@/lib/musicSources";
+import { SourceBadge } from "../SourceBadge";
 
 /* ── palette ── */
 const CREAM = "#EFE6D4";
@@ -32,6 +35,14 @@ export function MobileNavV1Foxfire() {
   const { active, setActive } = useActiveTab();
   const { mode } = useMode();
   const phase = phaseForMode(mode);
+  const {
+    currentStation,
+    isPlaying,
+    volume,
+    selectStation,
+    toggle,
+    setVolume,
+  } = usePlayer();
 
   /* lock body scroll while open */
   useEffect(() => {
@@ -301,6 +312,167 @@ export function MobileNavV1Foxfire() {
         .foxfire-tab-row.is-active .foxfire-tab-kanji {
           color: rgba(214,163,103,0.75);
         }
+
+        /* ── Music section (below tabs) ──────────────────────────── */
+        .foxfire-music {
+          flex-shrink: 0;
+          padding: 12px 20px 8px;
+          border-top: 1px solid rgba(214,163,103,0.22);
+          background: linear-gradient(
+            180deg,
+            transparent 0%,
+            rgba(19,17,13,0.18) 100%
+          );
+        }
+        .foxfire-music-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .foxfire-music-title {
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: 14px;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: ${CREAM};
+          text-shadow: 0 1px 8px ${FOXGLOW_MID};
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .foxfire-music-sub {
+          font-family: "JetBrains Mono", ui-monospace, monospace;
+          font-size: 9px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(214,163,103,0.7);
+          margin-top: 2px;
+        }
+        .foxfire-music-playbtn {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: ${AMBER};
+          color: ${INK};
+          border: none;
+          font-size: 13px;
+          cursor: pointer;
+          flex-shrink: 0;
+          box-shadow: 0 0 16px ${FOXGLOW_MID};
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+        }
+        .foxfire-music-playbtn:disabled {
+          background: rgba(214,163,103,0.25);
+          color: rgba(239,230,212,0.45);
+          box-shadow: none;
+          cursor: default;
+        }
+        .foxfire-station-list {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          max-height: 38vh;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          margin-bottom: 10px;
+        }
+        .foxfire-station-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid rgba(214,163,103,0.18);
+          background: rgba(19,17,13,0.32);
+          text-align: left;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+          transition: border-color 150ms, background 150ms;
+        }
+        .foxfire-station-row.is-active {
+          border-color: ${AMBER};
+          background: ${FOXGLOW_MID};
+          box-shadow: 0 0 12px ${FOXGLOW_MID};
+        }
+        .foxfire-station-info {
+          flex: 1;
+          min-width: 0;
+        }
+        .foxfire-station-title {
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: 14px;
+          color: ${CREAM};
+          font-weight: 500;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          line-height: 1.2;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .foxfire-station-sub {
+          font-family: "JetBrains Mono", ui-monospace, monospace;
+          font-size: 10px;
+          color: rgba(239,230,212,0.55);
+          letter-spacing: 0.04em;
+          margin-top: 2px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .foxfire-vol-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding-top: 8px;
+        }
+        .foxfire-vol-label {
+          font-family: "JetBrains Mono", ui-monospace, monospace;
+          font-size: 10px;
+          letter-spacing: 0.15em;
+          text-transform: uppercase;
+          color: rgba(214,163,103,0.7);
+          flex-shrink: 0;
+        }
+        .foxfire-vol-slider {
+          flex: 1;
+          accent-color: ${AMBER};
+          cursor: pointer;
+        }
+
+        /* ── Mobile EQ bars (mirrors the desktop topbar animation) ── */
+        .foxfire-eq {
+          display: inline-flex;
+          align-items: flex-end;
+          gap: 2px;
+          width: 12px;
+          height: 12px;
+          margin-left: 2px;
+        }
+        .foxfire-eq-bar {
+          width: 2px;
+          background: ${AMBER};
+          border-radius: 1px;
+          transform-origin: bottom center;
+          animation: foxfire-eq-bounce 0.9s ease-in-out infinite;
+        }
+        .foxfire-eq-bar:nth-child(1) { height: 7px;  animation-delay: 0s; }
+        .foxfire-eq-bar:nth-child(2) { height: 11px; animation-delay: 0.15s; }
+        .foxfire-eq-bar:nth-child(3) { height: 5px;  animation-delay: 0.30s; }
+        @keyframes foxfire-eq-bounce {
+          0%, 100% { transform: scaleY(0.35); }
+          50%      { transform: scaleY(1);    }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .foxfire-eq-bar { animation: none; transform: scaleY(0.7); }
+        }
       `}</style>
 
       {/* ── FAB: always-visible open trigger (line 196) ── */}
@@ -379,6 +551,85 @@ export function MobileNavV1Foxfire() {
                   </a>
                 ))}
               </nav>
+
+              {/* ── MUSIC section — Kitsu's radio cabinet inside the den ── */}
+              <section className="foxfire-music" aria-label="Music">
+                <div className="foxfire-music-head">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="foxfire-music-title">
+                      {currentStation ? currentStation.title : "PG RADIO"}
+                      {currentStation && isPlaying && (
+                        <span className="foxfire-eq" aria-hidden="true">
+                          <span className="foxfire-eq-bar" />
+                          <span className="foxfire-eq-bar" />
+                          <span className="foxfire-eq-bar" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="foxfire-music-sub">
+                      {currentStation
+                        ? currentStation.subtitle
+                        : "Select a station"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="foxfire-music-playbtn"
+                    onClick={toggle}
+                    disabled={!currentStation}
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? "❚❚" : "▶"}
+                  </button>
+                </div>
+
+                <div className="foxfire-station-list">
+                  {STATIONS.map((s) => {
+                    const isActive = currentStation?.id === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={`foxfire-station-row${isActive ? " is-active" : ""}`}
+                        onClick={() => selectStation(s.id)}
+                        aria-label={`Play ${s.title}`}
+                      >
+                        <div className="foxfire-station-info">
+                          <div className="foxfire-station-title">
+                            {s.title}
+                            {isActive && (
+                              <span
+                                style={{ color: AMBER, fontSize: "10px" }}
+                                aria-hidden
+                              >
+                                ♪
+                              </span>
+                            )}
+                          </div>
+                          <div className="foxfire-station-sub">
+                            {s.subtitle}
+                          </div>
+                        </div>
+                        <SourceBadge source={s.source} size="sm" />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="foxfire-vol-row">
+                  <span className="foxfire-vol-label">Vol</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={volume}
+                    onChange={(e) => setVolume(parseFloat(e.target.value))}
+                    className="foxfire-vol-slider"
+                    aria-label="Volume"
+                  />
+                </div>
+              </section>
             </div>
           </div>
         )}
