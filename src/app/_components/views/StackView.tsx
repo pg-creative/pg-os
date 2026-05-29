@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { TabShell } from "../bento/TabShell";
+import { BentoBox } from "../bento/BentoBox";
+import { useEmaki } from "../bento/emakiContext";
 
 type Verdict = "INSTALL" | "CONDITIONAL" | "DEFER" | "SKIP" | "PENDING";
 
@@ -51,6 +54,18 @@ const STATUS_META: Record<string, { glyph: string; label: string }> = {
   installed: { glyph: "●", label: "Installed" },
   passed: { glyph: "—", label: "Passed" },
 };
+
+// Verdict tone -> color mapping using Emaki token references
+function verdictColor(
+  tone: string,
+  tk: ReturnType<typeof useEmaki>["tk"],
+): string {
+  if (tone === "go") return "#7C9A6E";
+  if (tone === "warn") return tk.gold;
+  if (tone === "hold") return tk.textSub;
+  if (tone === "stop") return "#B8536F";
+  return tk.textMuted;
+}
 
 export function StackView() {
   const [data, setData] = useState<StackData | null>(null);
@@ -104,156 +119,599 @@ export function StackView() {
     }
   }
 
+  const eyebrow = data
+    ? `FIELD MAP // ${data.evals.length} evals`
+    : "FIELD MAP";
+
+  const actions = (
+    <CategoryFilters filter={filter} setFilter={setFilter} counts={counts} />
+  );
+
   if (loading) {
     return (
-      <section
-        className="view"
-        id="view-stack"
-        role="tabpanel"
-        aria-labelledby="tab-stack"
-      >
-        <h1 className="view-title">Stack</h1>
-        <p className="view-empty">Loading the field map…</p>
-      </section>
+      <TabShell title="Stack" eyebrow={eyebrow}>
+        <LoadingTile />
+      </TabShell>
     );
   }
 
   if (!data) {
     return (
-      <section
-        className="view"
-        id="view-stack"
-        role="tabpanel"
-        aria-labelledby="tab-stack"
-      >
-        <h1 className="view-title">Stack</h1>
-        <p className="view-empty">Couldn&apos;t reach the stack API.</p>
-      </section>
+      <TabShell title="Stack" eyebrow={eyebrow}>
+        <ErrorTile />
+      </TabShell>
     );
   }
 
   return (
-    <section
-      className="view stack-view"
-      id="view-stack"
-      role="tabpanel"
-      aria-labelledby="tab-stack"
-    >
-      <header className="stack-header">
-        <div>
-          <h1 className="view-title">Stack</h1>
-          <p className="stack-sub">
-            Claude Code extension landscape — plugins, skills, MCPs. Three
-            lenses: novel-since-last-rebuild, community-favored,
-            best-fit-for-PG.
-          </p>
-        </div>
-        <div className="stack-meta">
-          <span className="stack-meta-line">
-            <span className="stack-meta-label">Last run</span>
-            <span className="stack-meta-value">{data.lastRun ?? "—"}</span>
-          </span>
-          <span className="stack-meta-line">
-            <span className="stack-meta-label">Next scheduled</span>
-            <span className="stack-meta-value">{data.nextScheduled}</span>
-          </span>
-        </div>
-      </header>
+    <TabShell title="Stack" eyebrow={eyebrow} actions={actions}>
+      <MetaTile data={data} />
+      <EvalList
+        evals={filteredEvals}
+        status={data.status}
+        openEval={openEval}
+        setOpenEval={setOpenEval}
+        setStatus={setStatus}
+      />
+      <BrainTile brain={data.brain} />
+    </TabShell>
+  );
+}
 
-      <nav className="stack-tabs" role="tablist" aria-label="Stack categories">
-        {CATEGORIES.map((c) => (
-          <button
-            key={c}
-            role="tab"
-            aria-selected={filter === c}
-            className={`stack-tab${filter === c ? " active" : ""}`}
-            onClick={() => setFilter(c)}
-          >
-            {c}
-            {typeof counts[c] === "number" && (
-              <span className="stack-tab-count">{counts[c]}</span>
-            )}
-          </button>
-        ))}
-      </nav>
+// Inner components that consume useEmaki() inside EmakiProvider
 
-      <div className="stack-grid">
-        {filteredEvals.map((e) => {
-          const v = VERDICT_META[e.verdict];
-          const itemStatus = data.status[e.id] ?? "pending";
-          const s = STATUS_META[itemStatus];
-          const isOpen = openEval === e.id;
-          return (
-            <article
-              key={e.id}
-              className={`stack-card stack-card-${v.tone}${isOpen ? " open" : ""}`}
+function CategoryFilters({
+  filter,
+  setFilter,
+  counts,
+}: {
+  filter: Category;
+  setFilter: (c: Category) => void;
+  counts: Record<string, number>;
+}) {
+  const { tk } = useEmaki();
+  return (
+    <>
+      {CATEGORIES.map((c) => (
+        <button
+          key={c}
+          role="tab"
+          aria-selected={filter === c}
+          onClick={() => setFilter(c)}
+          style={{
+            background: filter === c ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.10)",
+            border: `1px solid ${filter === c ? tk.accent : tk.divider}`,
+            borderRadius: 6,
+            color: filter === c ? tk.accent : tk.textMuted,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-2xs)",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            padding: "5px 11px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            transition: "border-color 160ms ease, color 160ms ease",
+          }}
+        >
+          {c}
+          {typeof counts[c] === "number" && (
+            <span
+              style={{
+                background: filter === c ? tk.accent : tk.divider,
+                color: filter === c ? tk.panelBg : tk.textMuted,
+                borderRadius: 999,
+                padding: "0 5px",
+                fontSize: "var(--text-2xs)",
+                lineHeight: 1.5,
+                fontWeight: 700,
+              }}
             >
-              <button
-                className="stack-card-summary"
-                onClick={() => setOpenEval(isOpen ? null : e.id)}
-                aria-expanded={isOpen}
-              >
-                <div className="stack-card-top">
-                  <span className={`stack-verdict stack-verdict-${v.tone}`}>
-                    {v.glyph} {v.label}
-                  </span>
-                  <span className="stack-score">{e.score}</span>
-                </div>
-                <h3 className="stack-card-title">{e.title}</h3>
-                <div className="stack-card-meta">
-                  <span className="stack-pill">{e.category}</span>
-                  <span className="stack-pill stack-pill-lens">{e.lens}</span>
-                  <span className={`stack-status stack-status-${itemStatus}`}>
-                    {s.glyph} {s.label}
-                  </span>
-                </div>
-                <p className="stack-card-verdict">
-                  {e.verdictText.slice(0, 220)}
-                </p>
-              </button>
+              {counts[c]}
+            </span>
+          )}
+        </button>
+      ))}
+    </>
+  );
+}
 
-              {isOpen && (
-                <div className="stack-card-body">
-                  {e.install && (
-                    <pre className="stack-install">
-                      <code>{e.install}</code>
-                    </pre>
-                  )}
-                  <pre className="stack-raw">{e.raw}</pre>
-                  <div className="stack-actions">
-                    <button
-                      className={`stack-act${itemStatus === "installed" ? " active" : ""}`}
-                      onClick={() => setStatus(e.id, "installed")}
-                    >
-                      ● Installed
-                    </button>
-                    <button
-                      className={`stack-act${itemStatus === "passed" ? " active" : ""}`}
-                      onClick={() => setStatus(e.id, "passed")}
-                    >
-                      — Passed
-                    </button>
-                    <button
-                      className={`stack-act${itemStatus === "pending" ? " active" : ""}`}
-                      onClick={() => setStatus(e.id, "pending")}
-                    >
-                      ○ Reset
-                    </button>
-                  </div>
-                </div>
-              )}
-            </article>
-          );
-        })}
-        {filteredEvals.length === 0 && (
-          <p className="view-empty">No items in this category.</p>
-        )}
+function LoadingTile() {
+  const { tk } = useEmaki();
+  return (
+    <BentoBox cols={12} eyebrow="01 // FIELD MAP">
+      <div
+        style={{
+          color: tk.textMuted,
+          fontStyle: "italic",
+          padding: "20px 0",
+          textAlign: "center",
+        }}
+      >
+        loading the field map...
       </div>
+    </BentoBox>
+  );
+}
 
-      <details className="stack-report">
-        <summary>Full landscape report (brain entry)</summary>
-        <pre className="stack-report-body">{data.brain}</pre>
+function ErrorTile() {
+  const { tk } = useEmaki();
+  return (
+    <BentoBox cols={12} eyebrow="01 // FIELD MAP">
+      <div
+        style={{
+          color: tk.textMuted,
+          fontStyle: "italic",
+          padding: "20px 0",
+          textAlign: "center",
+        }}
+      >
+        couldn&apos;t reach the stack API.
+      </div>
+    </BentoBox>
+  );
+}
+
+function MetaTile({ data }: { data: StackData }) {
+  const { tk } = useEmaki();
+  return (
+    <BentoBox cols={12} eyebrow="01 // LANDSCAPE" kanji="評">
+      <div
+        style={{
+          display: "flex",
+          gap: 32,
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+        }}
+      >
+        <p
+          style={{
+            flex: 1,
+            minWidth: 260,
+            margin: 0,
+            fontSize: "var(--text-sm)",
+            color: tk.textSub,
+            lineHeight: 1.65,
+          }}
+        >
+          Claude Code extension landscape — plugins, skills, MCPs. Three lenses:
+          novel-since-last-rebuild, community-favored, best-fit-for-PG.
+        </p>
+        <div
+          style={{
+            display: "flex",
+            gap: 24,
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+          }}
+        >
+          <span>
+            <span style={{ color: tk.textMuted, marginRight: 6 }}>
+              last run
+            </span>
+            <span style={{ color: tk.textPrimary }}>{data.lastRun ?? "—"}</span>
+          </span>
+          <span>
+            <span style={{ color: tk.textMuted, marginRight: 6 }}>next</span>
+            <span style={{ color: tk.textPrimary }}>{data.nextScheduled}</span>
+          </span>
+        </div>
+      </div>
+    </BentoBox>
+  );
+}
+
+function EvalList({
+  evals,
+  status,
+  openEval,
+  setOpenEval,
+  setStatus,
+}: {
+  evals: EvalRecord[];
+  status: Record<string, "pending" | "installed" | "passed">;
+  openEval: string | null;
+  setOpenEval: (id: string | null) => void;
+  setStatus: (id: string, s: "pending" | "installed" | "passed") => void;
+}) {
+  const { tk } = useEmaki();
+
+  if (evals.length === 0) {
+    return (
+      <BentoBox cols={12}>
+        <div
+          style={{
+            color: tk.textMuted,
+            fontStyle: "italic",
+            textAlign: "center",
+            padding: "12px 0",
+          }}
+        >
+          no items in this category.
+        </div>
+      </BentoBox>
+    );
+  }
+
+  return (
+    <>
+      {evals.map((e) => (
+        <EvalTile
+          key={e.id}
+          record={e}
+          itemStatus={status[e.id] ?? "pending"}
+          isOpen={openEval === e.id}
+          onToggle={() => setOpenEval(openEval === e.id ? null : e.id)}
+          onSetStatus={(s) => setStatus(e.id, s)}
+        />
+      ))}
+    </>
+  );
+}
+
+function EvalTile({
+  record,
+  itemStatus,
+  isOpen,
+  onToggle,
+  onSetStatus,
+}: {
+  record: EvalRecord;
+  itemStatus: "pending" | "installed" | "passed";
+  isOpen: boolean;
+  onToggle: () => void;
+  onSetStatus: (s: "pending" | "installed" | "passed") => void;
+}) {
+  const { tk } = useEmaki();
+  const v = VERDICT_META[record.verdict];
+  const s = STATUS_META[itemStatus];
+  const vColor = verdictColor(v.tone, tk);
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    try {
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(record.install).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      });
+    } catch {
+      // clipboard unavailable or denied -- silent no-op
+    }
+  }
+
+  // Semantic badge colors for status
+  function statusBadgeColor(st: "pending" | "installed" | "passed"): string {
+    if (st === "installed") return "#7C9A6E";
+    if (st === "passed") return "#7C9A6E";
+    return tk.gold;
+  }
+
+  return (
+    <BentoBox
+      cols={4}
+      style={{
+        outline: isOpen ? `1.5px solid ${tk.accent}` : undefined,
+        transition: "outline-color 160ms ease",
+        cursor: "pointer",
+      }}
+    >
+      <button
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          width: "100%",
+          textAlign: "left",
+          cursor: "pointer",
+          color: "inherit",
+          /* Enforce consistent collapsed height so bento grid stays aligned */
+          minHeight: 96,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Verdict + score row */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 6,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              color: vColor,
+              background: `${vColor}18`,
+              border: `1px solid ${vColor}80`,
+              borderRadius: 4,
+              padding: "2px 7px",
+            }}
+          >
+            {v.glyph} {v.label}
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              color: tk.gold,
+              fontWeight: 700,
+            }}
+          >
+            {record.score}
+          </span>
+        </div>
+
+        {/* Title */}
+        <div
+          style={{
+            fontFamily: "var(--serif), Georgia, serif",
+            fontSize: "var(--text-base)",
+            fontWeight: 500,
+            color: tk.textPrimary,
+            marginBottom: 6,
+            lineHeight: 1.3,
+          }}
+        >
+          {record.title}
+        </div>
+
+        {/* Pills row */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            marginBottom: 8,
+            alignItems: "center",
+          }}
+        >
+          <PillTag tk={tk}>{record.category}</PillTag>
+          <PillTag tk={tk} dim>
+            {record.lens}
+          </PillTag>
+          {/* Status badge — semantic color, visible border */}
+          <span
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              color: statusBadgeColor(itemStatus),
+              background: `${statusBadgeColor(itemStatus)}18`,
+              border: `1px solid ${statusBadgeColor(itemStatus)}80`,
+              borderRadius: 4,
+              padding: "2px 7px",
+              marginLeft: "auto",
+            }}
+          >
+            {s.glyph} {s.label}
+          </span>
+        </div>
+
+        {/* Verdict text preview — clamped to 2 lines with fade */}
+        <p
+          style={{
+            margin: 0,
+            fontSize: "var(--text-xs)",
+            color: tk.textSub,
+            lineHeight: 1.55,
+            opacity: 0.85,
+            /* Hard clamp to 2 lines so all cards align */
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {record.verdictText}
+        </p>
+      </button>
+
+      {/* Expanded body */}
+      {isOpen && (
+        <div
+          style={{
+            marginTop: 14,
+            borderTop: `1px solid ${tk.divider}`,
+            paddingTop: 12,
+          }}
+        >
+          {record.install && (
+            <div style={{ position: "relative", marginBottom: 10 }}>
+              <pre
+                style={{
+                  background: "rgba(0,0,0,0.20)",
+                  border: `1px solid ${tk.divider}`,
+                  borderRadius: 6,
+                  padding: "8px 40px 8px 12px",
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-xs)",
+                  color: tk.textSub,
+                  overflowX: "auto",
+                  margin: 0,
+                }}
+              >
+                <code>{record.install}</code>
+              </pre>
+              <button
+                onClick={handleCopy}
+                aria-label={copied ? "Copied" : "Copy install command"}
+                style={{
+                  position: "absolute",
+                  top: 5,
+                  right: 6,
+                  background: copied ? `${tk.gold}22` : "rgba(0,0,0,0.28)",
+                  border: `1px solid ${copied ? tk.gold : tk.divider}`,
+                  borderRadius: 4,
+                  padding: "2px 7px",
+                  cursor: "pointer",
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-2xs)",
+                  color: copied ? tk.gold : tk.textMuted,
+                  letterSpacing: "0.06em",
+                  transition: "all 150ms ease",
+                  lineHeight: 1.6,
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          )}
+          <pre
+            style={{
+              background: "rgba(0,0,0,0.14)",
+              border: `1px solid ${tk.divider}`,
+              borderRadius: 6,
+              padding: "8px 12px",
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              color: tk.textMuted,
+              overflowX: "auto",
+              marginBottom: 12,
+              maxHeight: 180,
+              overflowY: "auto",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {record.raw}
+          </pre>
+          <div style={{ display: "flex", gap: 8 }}>
+            <ActionButton
+              active={itemStatus === "installed"}
+              tk={tk}
+              onClick={() => onSetStatus("installed")}
+            >
+              ● Installed
+            </ActionButton>
+            <ActionButton
+              active={itemStatus === "passed"}
+              tk={tk}
+              onClick={() => onSetStatus("passed")}
+            >
+              — Passed
+            </ActionButton>
+            <ActionButton
+              active={itemStatus === "pending"}
+              tk={tk}
+              onClick={() => onSetStatus("pending")}
+            >
+              ○ Reset
+            </ActionButton>
+          </div>
+        </div>
+      )}
+    </BentoBox>
+  );
+}
+
+function PillTag({
+  tk,
+  dim,
+  children,
+}: {
+  tk: ReturnType<typeof useEmaki>["tk"];
+  dim?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      style={{
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-2xs)",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        color: dim ? tk.textMuted : tk.textSub,
+        border: `1px solid ${tk.divider}`,
+        borderRadius: 4,
+        padding: "1px 6px",
+        opacity: dim ? 0.7 : 1,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ActionButton({
+  active,
+  tk,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  tk: ReturnType<typeof useEmaki>["tk"];
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? "rgba(0,0,0,0.28)" : "transparent",
+        border: `1px solid ${active ? tk.accent : tk.divider}`,
+        borderRadius: 6,
+        color: active ? tk.accent : tk.textMuted,
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-2xs)",
+        letterSpacing: "0.08em",
+        padding: "4px 10px",
+        cursor: "pointer",
+        transition: "border-color 160ms ease, color 160ms ease",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BrainTile({ brain }: { brain: string }) {
+  const { tk } = useEmaki();
+  return (
+    <BentoBox cols={12} eyebrow="02 // BRAIN ENTRY" kanji="脳">
+      <details>
+        <summary
+          style={{
+            cursor: "pointer",
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            color: tk.textSub,
+            letterSpacing: "0.08em",
+            listStyle: "none",
+            userSelect: "none",
+          }}
+        >
+          full landscape report
+        </summary>
+        <pre
+          style={{
+            marginTop: 12,
+            background: "rgba(0,0,0,0.14)",
+            border: `1px solid ${tk.divider}`,
+            borderRadius: 6,
+            padding: "12px 14px",
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-2xs)",
+            color: tk.textMuted,
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+            maxHeight: 320,
+            overflowY: "auto",
+          }}
+        >
+          {brain}
+        </pre>
       </details>
-    </section>
+    </BentoBox>
   );
 }

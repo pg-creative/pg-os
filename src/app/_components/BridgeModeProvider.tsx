@@ -1,5 +1,12 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
 
 export type HomeMode = "bridge" | "personal";
 
@@ -31,7 +38,9 @@ function withViewTransition(mutate: () => void) {
 }
 
 export function BridgeModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<HomeMode>("bridge");
+  // Default Home is the locked Emaki x Laputa top-bar broadsheet ("personal").
+  // Bridge stays reachable via the cmd-/ toggle and persists in localStorage.
+  const [mode, setModeState] = useState<HomeMode>("personal");
 
   useEffect(() => {
     const saved = localStorage.getItem(KEY);
@@ -41,7 +50,11 @@ export function BridgeModeProvider({ children }: { children: ReactNode }) {
   const setMode = useCallback((m: HomeMode) => {
     withViewTransition(() => {
       setModeState(m);
-      try { localStorage.setItem(KEY, m); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(KEY, m);
+      } catch {
+        /* ignore */
+      }
     });
   }, []);
 
@@ -49,7 +62,11 @@ export function BridgeModeProvider({ children }: { children: ReactNode }) {
     withViewTransition(() => {
       setModeState((prev) => {
         const next: HomeMode = prev === "bridge" ? "personal" : "bridge";
-        try { localStorage.setItem(KEY, next); } catch { /* ignore */ }
+        try {
+          localStorage.setItem(KEY, next);
+        } catch {
+          /* ignore */
+        }
         return next;
       });
     });
@@ -58,7 +75,12 @@ export function BridgeModeProvider({ children }: { children: ReactNode }) {
   // ⌘/ global hotkey
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "/" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      if (
+        e.key === "/" &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey
+      ) {
         e.preventDefault();
         toggle();
       }
@@ -76,7 +98,8 @@ export function BridgeModeProvider({ children }: { children: ReactNode }) {
 
 export function useBridgeMode() {
   const ctx = useContext(BridgeModeCtx);
-  if (!ctx) throw new Error("useBridgeMode must be used within BridgeModeProvider");
+  if (!ctx)
+    throw new Error("useBridgeMode must be used within BridgeModeProvider");
   return ctx;
 }
 

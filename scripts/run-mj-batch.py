@@ -157,6 +157,7 @@ def generate_one(p: Prompt, api_key: str, out_dir: Path) -> dict:
                 urls = [output["image_url"]]
             for i, url in enumerate(urls[:4]):
                 dest = out_dir / f"{p.filename_base}_{i}.png"
+                dest.parent.mkdir(parents=True, exist_ok=True)  # support subdir slugs (characters/, environments/)
                 try:
                     download(url, dest, {"User-Agent": UA})
                 except Exception as e:
@@ -180,6 +181,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None, help="Cap on number of prompts to submit")
     parser.add_argument("--parallel", type=int, default=4, help="Parallel submissions (default 4)")
     parser.add_argument("--filter", type=str, default=None, help="Substring filter on filename_base")
+    parser.add_argument("--prompts-file", type=str, default=str(PROMPTS_FILE), help="Prompts markdown file")
+    parser.add_argument("--out-dir", type=str, default=str(OUT_DIR), help="Output dir for generated images")
     parser.add_argument("--dry-run", action="store_true", help="Print prompts without submitting")
     args = parser.parse_args()
 
@@ -188,7 +191,9 @@ def main() -> int:
         print("LEGNEXT_API_KEY not set in environment.", file=sys.stderr)
         return 2
 
-    md = PROMPTS_FILE.read_text(encoding="utf-8")
+    prompts_file = Path(args.prompts_file)
+    out_dir = Path(args.out_dir)
+    md = prompts_file.read_text(encoding="utf-8")
     prompts = parse_prompts(md)
     if args.filter:
         prompts = [p for p in prompts if args.filter in p.filename_base]
@@ -204,7 +209,7 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     bal = check_balance(api_key)

@@ -58,11 +58,14 @@ function DeadlineTag({ days, isoDate }: { days: number | null; isoDate?: string 
 
 interface ProjectActiveCardProps {
   project: Project;
+  cockpitSessionId?: string | null;
+  onLaunchCockpit?: (projectId: string) => Promise<void>;
 }
 
-export function ProjectActiveCard({ project }: ProjectActiveCardProps) {
+export function ProjectActiveCard({ project, cockpitSessionId, onLaunchCockpit }: ProjectActiveCardProps) {
   const router = useRouter();
   const [launching, setLaunching] = useState(false);
+  const [cockpitLaunching, setCockpitLaunching] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
   const showToast = (message: string, variant: NonNullable<ToastState>["variant"]) => {
@@ -97,6 +100,23 @@ export function ProjectActiveCard({ project }: ProjectActiveCardProps) {
       setLaunching(false);
     }
   }, [project.id]);
+
+  const handleCockpitLaunch = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onLaunchCockpit) return;
+    setCockpitLaunching(true);
+    try {
+      await onLaunchCockpit(project.id);
+    } catch (err) {
+      showToast(
+        `✺ ${err instanceof Error ? err.message : "Cockpit daemon down"}`,
+        "error",
+      );
+    } finally {
+      setCockpitLaunching(false);
+    }
+  }, [onLaunchCockpit, project.id]);
 
   const handleOpen = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -163,6 +183,48 @@ export function ProjectActiveCard({ project }: ProjectActiveCardProps) {
         <div className="pr-memory pr-active-card-memory">{project.memorySnippet}</div>
       )}
 
+      {/* Live in Cockpit badge */}
+      {cockpitSessionId && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            sessionStorage.setItem("pg-os-cockpit-select", cockpitSessionId);
+            onLaunchCockpit?.(project.id).catch(() => { /* tab switch only; errors handled by parent */ });
+          }}
+          aria-label={`${project.name} is live in Cockpit. Switch to Cockpit tab.`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            background: "rgba(91,173,126,0.08)",
+            border: "1px solid rgba(91,173,126,0.35)",
+            borderRadius: 6,
+            padding: "5px 12px",
+            cursor: "pointer",
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-2xs)",
+            letterSpacing: "0.1em",
+            color: "#5BAD7E",
+            marginBottom: 8,
+            width: "100%",
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: "#5BAD7E",
+              flexShrink: 0,
+              animation: "pg-cockpit-pulse 2s ease-in-out infinite",
+            }}
+          />
+          LIVE IN COCKPIT →
+        </button>
+      )}
+
       {/* Footer CTAs */}
       <div className="pr-active-card-cta">
         <button
@@ -172,6 +234,19 @@ export function ProjectActiveCard({ project }: ProjectActiveCardProps) {
         >
           OPEN →
         </button>
+        {onLaunchCockpit && (
+          <button
+            className="pr-active-cta-btn"
+            onClick={handleCockpitLaunch}
+            disabled={cockpitLaunching}
+            aria-label={`Launch ${project.name} in Cockpit terminal`}
+            aria-busy={cockpitLaunching}
+            type="button"
+            style={{ borderColor: "var(--color-gold, #C9A84C)", color: "var(--color-gold, #C9A84C)", opacity: cockpitLaunching ? 0.6 : 1 }}
+          >
+            {cockpitLaunching ? "OPENING…" : "✺ COCKPIT"}
+          </button>
+        )}
         <button
           className="pr-active-cta-btn pr-active-cta-launch"
           onClick={handleLaunch}

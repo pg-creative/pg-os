@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { SparkleCorner, CardGlyph } from "../CardGlyph";
+import { CardGlyph } from "../CardGlyph";
 import { Skeleton } from "../Skeleton";
 import { useMode } from "../ModeProvider";
 import { MODE_CONFIG, applyModeFilter } from "../../../lib/modes";
@@ -12,9 +12,24 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { RealtimeConfig } from "../../api/realtime/config/route";
 import { TasksRegion } from "../Tasks/TasksRegion";
 import { ProjectActiveCard } from "./ProjectActiveCard";
-import { getActiveChestId, setActiveChestId, getDefaultActiveChestId } from "../../../lib/projects";
+import {
+  getActiveChestId,
+  setActiveChestId,
+  getDefaultActiveChestId,
+} from "../../../lib/projects";
+import { TabShell } from "../bento/TabShell";
+import { BentoBox } from "../bento/BentoBox";
+import { useEmaki } from "../bento/emakiContext";
+import { useActiveTab } from "../useActiveTab";
 
-type Glyph = "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
+type Glyph =
+  | "sun"
+  | "star"
+  | "heart"
+  | "sparkles"
+  | "feather"
+  | "music"
+  | "compass";
 
 interface Project {
   id: string;
@@ -41,6 +56,22 @@ interface LaunchResult {
   error?: string;
 }
 
+interface CockpitLaunchResult {
+  ok: boolean;
+  target?: string;
+  sessionId?: string;
+  error?: string;
+  hint?: string;
+}
+
+interface CockpitSession {
+  id: string;
+  cwd: string;
+  label: string;
+  projectId: string | null;
+  createdAt: string;
+}
+
 type ToastState = {
   message: string;
   variant: "success" | "copy" | "error";
@@ -60,27 +91,57 @@ function relTime(ms: number): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function DeadlineTag({ days, isoDate }: { days: number | null; isoDate?: string }) {
+function DeadlineTag({
+  days,
+  isoDate,
+}: {
+  days: number | null;
+  isoDate?: string;
+}) {
+  const { tk } = useEmaki();
   if (days === null) return null;
+
+  let label: string;
+  let color: string;
   if (days < 0) {
-    return <span className="pr-deadline pr-deadline-overdue">OVERDUE</span>;
-  }
-  if (days === 0) {
-    return <span className="pr-deadline pr-deadline-ember">TODAY</span>;
-  }
-  if (days <= 14) {
-    return <span className="pr-deadline pr-deadline-ember">{days} DAYS</span>;
-  }
-  if (days <= 45) {
-    return <span className="pr-deadline pr-deadline-amber">{days} DAYS</span>;
-  }
-  // > 45 days — show formatted date
-  if (isoDate) {
+    label = "OVERDUE";
+    color = "#B8536F";
+  } else if (days === 0) {
+    label = "TODAY";
+    color = tk.foxfire;
+  } else if (days <= 14) {
+    label = `${days} DAYS`;
+    color = tk.foxfire;
+  } else if (days <= 45) {
+    label = `${days} DAYS`;
+    color = tk.accent;
+  } else {
+    if (!isoDate) return null;
     const d = new Date(isoDate);
-    const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
-    return <span className="pr-deadline pr-deadline-gold">{label}</span>;
+    label = d
+      .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      .toUpperCase();
+    color = tk.gold;
   }
-  return null;
+
+  return (
+    <span
+      style={{
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-2xs)",
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color,
+        border: `1px solid ${color}`,
+        borderRadius: 4,
+        padding: "2px 7px",
+        opacity: 0.9,
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function ProjectCard({
@@ -88,58 +149,99 @@ function ProjectCard({
   num,
   compressed,
   onSetActive,
+  cockpitSessionId,
+  onLaunchCockpit,
 }: {
   project: Project;
   num: number;
   compressed?: boolean;
   onSetActive?: () => void;
+  cockpitSessionId?: string | null;
+  onLaunchCockpit?: (projectId: string) => Promise<void>;
 }) {
+  const { tk } = useEmaki();
   const [launching, setLaunching] = useState(false);
+  const [cockpitLaunching, setCockpitLaunching] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [contextText, setContextText] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const showToast = (message: string, variant: NonNullable<ToastState>["variant"]) => {
+  const showToast = (
+    message: string,
+    variant: NonNullable<ToastState>["variant"],
+  ) => {
     setToast({ message, variant });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleLaunch = useCallback(async (e?: React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    setLaunching(true);
-    try {
-      const res = await fetch("/api/launch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: project.id }),
-      });
-      const data: LaunchResult = await res.json();
-      if (!res.ok || !data.ok) {
-        showToast(`⚠ Launch failed: ${data.error ?? "unknown error"}`, "error");
-        return;
+  const handleLaunch = useCallback(
+    async (e?: React.MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      setLaunching(true);
+      try {
+        const res = await fetch("/api/launch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: project.id }),
+        });
+        const data: LaunchResult = await res.json();
+        if (!res.ok || !data.ok) {
+          showToast(
+            `⚠ Launch failed: ${data.error ?? "unknown error"}`,
+            "error",
+          );
+          return;
+        }
+        if (data.autoLaunched) {
+          showToast("✓ Launched in Ghostty", "success");
+        } else {
+          await navigator.clipboard.writeText(data.command);
+          setContextText(data.contextPrompt);
+          showToast("📋 Copied — paste in your terminal", "copy");
+        }
+      } catch (err) {
+        showToast(
+          `⚠ Launch failed: ${err instanceof Error ? err.message : "network error"}`,
+          "error",
+        );
+      } finally {
+        setLaunching(false);
       }
-      if (data.autoLaunched) {
-        showToast("✓ Launched in Ghostty", "success");
-      } else {
-        await navigator.clipboard.writeText(data.command);
-        setContextText(data.contextPrompt);
-        showToast("📋 Copied — paste in your terminal", "copy");
+    },
+    [project.id],
+  );
+
+  const handleCockpitLaunch = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!onLaunchCockpit) return;
+      setCockpitLaunching(true);
+      try {
+        await onLaunchCockpit(project.id);
+      } catch (err) {
+        showToast(
+          `✺ ${err instanceof Error ? err.message : "Cockpit daemon down"}`,
+          "error",
+        );
+      } finally {
+        setCockpitLaunching(false);
       }
-    } catch (err) {
-      showToast(`⚠ Launch failed: ${err instanceof Error ? err.message : "network error"}`, "error");
-    } finally {
-      setLaunching(false);
-    }
-  }, [project.id]);
+    },
+    [onLaunchCockpit, project.id],
+  );
 
   // Close context menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     function handleOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
-      if (!target.closest(".pr-context-menu") && !target.closest(".pr-context-menu-trigger")) {
+      if (
+        !target.closest(".pr-context-menu") &&
+        !target.closest(".pr-context-menu-trigger")
+      ) {
         setMenuOpen(false);
       }
     }
@@ -148,142 +250,493 @@ function ProjectCard({
   }, [menuOpen]);
 
   const pad = String(num).padStart(2, "0");
+  const running = project.uncommittedCount > 0 || project.queueCount > 0;
 
   return (
-    <Link
-      href={`/projects/${project.id}`}
-      className={`card pr-card pr-card-link spring-hover${compressed ? " pr-card-compressed" : ""}`}
-      prefetch={false}
+    <BentoBox
+      cols={compressed ? 4 : 6}
+      eyebrow={`${pad} // ${project.name.toUpperCase()}`}
+      kanji="事"
+      count={
+        <DeadlineTag
+          days={project.daysUntilDeadline}
+          isoDate={project.deadline}
+        />
+      }
     >
-      <SparkleCorner />
-
-      {/* Header row */}
-      <div className="card-label pr-header">
-        <div className="pr-header-left">
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          position: "relative",
+        }}
+      >
+        {/* Project name + glyph */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <CardGlyph name={project.glyph ?? "compass"} />
-          <span className="pr-num-name">
-            {pad} // {project.name.toUpperCase()}
-          </span>
-        </div>
-        <DeadlineTag days={project.daysUntilDeadline} isoDate={project.deadline} />
-      </div>
-
-      {/* Title */}
-      <div className="pr-name">{project.name}</div>
-
-      {/* Sub line */}
-      <div className="pr-sub">{project.sub}</div>
-
-      {/* State row */}
-      <div className="pr-state">
-        <span className="pr-stat">
-          LAST SHIP ·{" "}
-          {project.lastCommitAt ? relTime(project.lastCommitAt) : "never"}
-        </span>
-        {project.uncommittedCount > 0 && (
-          <span className="pr-stat amber">{project.uncommittedCount} UNCOMMITTED</span>
-        )}
-        {project.queueCount > 0 && (
-          <span className="pr-stat accent">{project.queueCount} QUEUED</span>
-        )}
-      </div>
-
-      {/* Last commit message */}
-      {project.lastCommitMsg && (
-        <div className="pr-commit-msg">
-          {project.lastCommitMsg.length > 70
-            ? project.lastCommitMsg.slice(0, 70) + "…"
-            : project.lastCommitMsg}
-        </div>
-      )}
-
-      {/* Top blocker (queue item awaiting decision) */}
-      {project.topBlocker && (
-        <div className="pr-blocker">
-          <span className="pr-blocker-label">BLOCKED ·</span> {project.topBlocker}
-        </div>
-      )}
-
-      {/* Top action items (open tasks) */}
-      {project.topActions.length > 0 && (
-        <ul className="pr-actions">
-          {project.topActions.map((a) => (
-            <li key={a.id} className="pr-action">
-              <span className="pr-action-dot">›</span> {a.title}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Memory snippet (fallback signal when no actions) */}
-      {project.memorySnippet && project.topActions.length === 0 && !project.topBlocker && (
-        <div className="pr-memory">{project.memorySnippet}</div>
-      )}
-
-      {/* Footer: open arrow + launch button */}
-      <div className="pr-footer">
-        <span className="pr-open-hint">OPEN →</span>
-        <button
-          className="pr-launch spring-hover"
-          onClick={handleLaunch}
-          disabled={launching}
-          type="button"
-        >
-          {launching ? "LAUNCHING…" : "LAUNCH SESSION →"}
-        </button>
-      </div>
-
-      {/* Context preview (shown after clipboard copy) */}
-      {contextText && (
-        <div className="pr-context-preview" onClick={(e) => e.stopPropagation()}>
-          <button
-            className="pr-context-toggle"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setContextOpen((v) => !v); }}
-            type="button"
+          <Link
+            href={`/projects/${project.id}`}
+            prefetch={false}
+            style={{
+              fontFamily: "var(--serif), Georgia, serif",
+              fontSize: "var(--text-lg)",
+              fontWeight: 500,
+              color: tk.textPrimary,
+              textDecoration: "none",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              flex: 1,
+            }}
           >
-            {contextOpen ? "▾ HIDE CONTEXT" : "▸ SHOW CONTEXT"}
-          </button>
-          {contextOpen && (
-            <pre className="pr-context-body">{contextText}</pre>
+            {project.name}
+          </Link>
+        </div>
+
+        {/* Sub line */}
+        <div
+          style={{
+            fontFamily: "var(--mono), ui-monospace, monospace",
+            fontSize: "var(--text-xs)",
+            color: tk.textMuted,
+            lineHeight: 1.4,
+          }}
+        >
+          {project.sub}
+        </div>
+
+        {/* State row */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.08em",
+              color: tk.textMuted,
+            }}
+          >
+            LAST SHIP ·{" "}
+            {project.lastCommitAt ? relTime(project.lastCommitAt) : "never"}
+          </span>
+          {project.uncommittedCount > 0 && (
+            <StatPill color={tk.accent}>
+              {project.uncommittedCount} UNCOMMITTED
+            </StatPill>
+          )}
+          {project.queueCount > 0 && (
+            <StatPill color={tk.foxfire}>{project.queueCount} QUEUED</StatPill>
           )}
         </div>
-      )}
 
-      {/* Toast */}
-      {toast && (
-        <div className={`pr-toast pr-toast-${toast.variant}`}>{toast.message}</div>
-      )}
-
-      {/* 3-dot context menu — "Set active" */}
-      {onSetActive && (
-        <>
-          <button
-            className="pr-context-menu-trigger"
-            type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen((v) => !v); }}
-            aria-label="Project options"
+        {/* Last commit message */}
+        {project.lastCommitMsg && (
+          <div
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              color: tk.textSub,
+              opacity: 0.8,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
           >
-            …
-          </button>
-          {menuOpen && (
-            <div className="pr-context-menu" onClick={(e) => e.stopPropagation()}>
-              <button
-                className="pr-context-menu-item"
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setMenuOpen(false);
-                  onSetActive();
+            {project.lastCommitMsg.length > 70
+              ? project.lastCommitMsg.slice(0, 70) + "…"
+              : project.lastCommitMsg}
+          </div>
+        )}
+
+        {/* Top blocker */}
+        {project.topBlocker && (
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              alignItems: "flex-start",
+              padding: "6px 10px",
+              background: "rgba(184,83,111,0.08)",
+              borderRadius: 6,
+              borderLeft: `2px solid #B8536F`,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--mono), ui-monospace, monospace",
+                fontSize: "var(--text-2xs)",
+                letterSpacing: "0.1em",
+                color: "#B8536F",
+                flexShrink: 0,
+              }}
+            >
+              BLOCKED ·
+            </span>
+            <span
+              style={{
+                fontSize: "var(--text-xs)",
+                color: tk.textSub,
+                lineHeight: 1.4,
+              }}
+            >
+              {project.topBlocker}
+            </span>
+          </div>
+        )}
+
+        {/* Top action items */}
+        {project.topActions.length > 0 && (
+          <ul
+            style={{
+              margin: 0,
+              padding: 0,
+              listStyle: "none",
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+            }}
+          >
+            {project.topActions.map((a) => (
+              <li
+                key={a.id}
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "flex-start",
+                  fontSize: "var(--text-xs)",
+                  color: tk.textSub,
+                  lineHeight: 1.4,
                 }}
               >
-                Set active
-              </button>
+                <span style={{ color: tk.gold, flexShrink: 0 }}>›</span>
+                {a.title}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Memory snippet (fallback) */}
+        {project.memorySnippet &&
+          project.topActions.length === 0 &&
+          !project.topBlocker && (
+            <div
+              style={{
+                fontSize: "var(--text-xs)",
+                color: tk.textMuted,
+                fontStyle: "italic",
+                lineHeight: 1.5,
+              }}
+            >
+              {project.memorySnippet}
             </div>
           )}
-        </>
-      )}
-    </Link>
+
+        {/* Live in Cockpit badge */}
+        {cockpitSessionId && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              sessionStorage.setItem("pg-os-cockpit-select", cockpitSessionId);
+              onLaunchCockpit?.(project.id);
+            }}
+            aria-label={`${project.name} is live in Cockpit — switch to Cockpit tab`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              background: "rgba(91,173,126,0.08)",
+              border: "1px solid rgba(91,173,126,0.35)",
+              borderRadius: 5,
+              padding: "3px 9px",
+              cursor: "pointer",
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.08em",
+              color: "#5BAD7E",
+              whiteSpace: "nowrap",
+              width: "100%",
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#5BAD7E",
+                flexShrink: 0,
+                animation: "pg-cockpit-pulse 2s ease-in-out infinite",
+              }}
+              aria-hidden="true"
+            />
+            LIVE IN COCKPIT →
+          </button>
+        )}
+
+        {/* Footer: open link + launch buttons */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingTop: 8,
+            borderTop: `1px solid ${tk.divider}`,
+            marginTop: 4,
+            gap: 6,
+            flexWrap: "wrap",
+          }}
+        >
+          <Link
+            href={`/projects/${project.id}`}
+            prefetch={false}
+            style={{
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.1em",
+              color: tk.textMuted,
+              textDecoration: "none",
+            }}
+          >
+            OPEN →
+          </Link>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {onLaunchCockpit && (
+              <button
+                onClick={handleCockpitLaunch}
+                disabled={cockpitLaunching}
+                type="button"
+                aria-label={`Launch ${project.name} in Cockpit terminal`}
+                aria-busy={cockpitLaunching}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${tk.gold}`,
+                  borderRadius: 5,
+                  color: tk.gold,
+                  fontFamily: "var(--mono), ui-monospace, monospace",
+                  fontSize: "var(--text-2xs)",
+                  letterSpacing: "0.08em",
+                  padding: "4px 10px",
+                  cursor: cockpitLaunching ? "default" : "pointer",
+                  opacity: cockpitLaunching ? 0.6 : 1,
+                  transition: "opacity 160ms ease",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {cockpitLaunching ? "OPENING…" : "✺ COCKPIT"}
+              </button>
+            )}
+            <button
+              onClick={handleLaunch}
+              disabled={launching}
+              type="button"
+              aria-label={`Launch ${project.name} session in Ghostty`}
+              style={{
+                background: "transparent",
+                border: `1px solid ${running ? tk.foxfire : tk.accent}`,
+                borderRadius: 5,
+                color: running ? tk.foxfire : tk.accent,
+                fontFamily: "var(--mono), ui-monospace, monospace",
+                fontSize: "var(--text-2xs)",
+                letterSpacing: "0.08em",
+                padding: "4px 10px",
+                cursor: launching ? "default" : "pointer",
+                opacity: launching ? 0.6 : 1,
+                transition: "opacity 160ms ease",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {launching ? "LAUNCHING…" : "LAUNCH SESSION →"}
+            </button>
+          </div>
+        </div>
+
+        {/* Context preview (shown after clipboard copy) */}
+        {contextText && (
+          <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 4 }}>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setContextOpen((v) => !v);
+              }}
+              type="button"
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "var(--mono), ui-monospace, monospace",
+                fontSize: "var(--text-2xs)",
+                letterSpacing: "0.08em",
+                color: tk.textMuted,
+                padding: 0,
+              }}
+            >
+              {contextOpen ? "▾ HIDE CONTEXT" : "▸ SHOW CONTEXT"}
+            </button>
+            {contextOpen && (
+              <pre
+                style={{
+                  margin: "6px 0 0",
+                  padding: "8px 10px",
+                  background: "rgba(0,0,0,0.18)",
+                  borderRadius: 6,
+                  fontSize: "var(--text-2xs)",
+                  color: tk.textSub,
+                  overflowX: "auto",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                }}
+              >
+                {contextText}
+              </pre>
+            )}
+          </div>
+        )}
+
+        {/* Toast */}
+        {toast && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: -4,
+              right: 0,
+              fontFamily: "var(--mono), ui-monospace, monospace",
+              fontSize: "var(--text-2xs)",
+              letterSpacing: "0.08em",
+              padding: "4px 10px",
+              borderRadius: 5,
+              background:
+                toast.variant === "success"
+                  ? "rgba(124,154,110,0.2)"
+                  : toast.variant === "error"
+                    ? "rgba(184,83,111,0.2)"
+                    : "rgba(0,0,0,0.22)",
+              color:
+                toast.variant === "success"
+                  ? "#7C9A6E"
+                  : toast.variant === "error"
+                    ? "#B8536F"
+                    : tk.textSub,
+              border: `1px solid ${
+                toast.variant === "success"
+                  ? "rgba(124,154,110,0.4)"
+                  : toast.variant === "error"
+                    ? "rgba(184,83,111,0.4)"
+                    : tk.divider
+              }`,
+              zIndex: 10,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {toast.message}
+          </div>
+        )}
+
+        {/* 3-dot context menu — "Set active" */}
+        {onSetActive && (
+          <div style={{ position: "absolute", top: 0, right: 0 }}>
+            <button
+              className="pr-context-menu-trigger"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMenuOpen((v) => !v);
+              }}
+              aria-label="Project options"
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: tk.textMuted,
+                fontSize: "var(--text-base)",
+                lineHeight: 1,
+                padding: "2px 4px",
+              }}
+            >
+              …
+            </button>
+            {menuOpen && (
+              <div
+                className="pr-context-menu"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  background: "rgba(10,10,14,0.92)",
+                  border: `1px solid ${tk.divider}`,
+                  borderRadius: 6,
+                  padding: "4px 0",
+                  zIndex: 20,
+                  minWidth: 120,
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+                }}
+              >
+                <button
+                  className="pr-context-menu-item"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onSetActive();
+                  }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    fontFamily: "var(--mono), ui-monospace, monospace",
+                    fontSize: "var(--text-xs)",
+                    color: tk.textSub,
+                    padding: "7px 14px",
+                    textAlign: "left",
+                  }}
+                >
+                  Set active
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </BentoBox>
+  );
+}
+
+function StatPill({
+  color,
+  children,
+}: {
+  color: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      style={{
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-2xs)",
+        letterSpacing: "0.08em",
+        color,
+        border: `1px solid ${color}`,
+        borderRadius: 4,
+        padding: "1px 6px",
+        opacity: 0.9,
+        flexShrink: 0,
+      }}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -292,6 +745,70 @@ export function ProjectsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { brand } = useMode();
+  const { setActive } = useActiveTab();
+
+  // Map projectId -> cockpit sessionId for live sessions
+  const [cockpitMap, setCockpitMap] = useState<Record<string, string>>({});
+  const cockpitPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchCockpitSessions = useCallback(() => {
+    fetch("/api/cockpit/sessions", { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error("cockpit-sessions unavailable");
+        return r.json();
+      })
+      .then((data: { running: boolean; sessions: CockpitSession[] }) => {
+        const map: Record<string, string> = {};
+        for (const s of data.sessions) {
+          if (s.projectId) map[s.projectId] = s.id;
+        }
+        setCockpitMap(map);
+      })
+      .catch(() => {
+        /* daemon may be down; silently ignore */
+      });
+  }, []);
+
+  useEffect(() => {
+    fetchCockpitSessions();
+    cockpitPollRef.current = setInterval(fetchCockpitSessions, 5000);
+    return () => {
+      if (cockpitPollRef.current) clearInterval(cockpitPollRef.current);
+    };
+  }, [fetchCockpitSessions]);
+
+  const handleLaunchCockpit = useCallback(
+    async (projectId: string) => {
+      // If there is already a live session for this project, just switch tabs
+      const existingSessionId = cockpitMap[projectId];
+      if (existingSessionId) {
+        sessionStorage.setItem("pg-os-cockpit-select", existingSessionId);
+        setActive("cockpit");
+        return;
+      }
+      const res = await fetch("/api/launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, target: "cockpit" }),
+      });
+      const data = (await res.json()) as CockpitLaunchResult;
+      if (res.status === 503 || !data.ok) {
+        // Non-blocking hint via a short-lived DOM toast handled by caller
+        const hint = data.hint ?? data.error ?? "Cockpit daemon not running";
+        // Surface via console + a brief custom event; ProjectCard shows its own toast
+        console.warn("[cockpit]", hint);
+        // Re-throw so the caller (ProjectCard) can catch and show inline toast
+        throw new Error(hint);
+      }
+      if (data.sessionId) {
+        sessionStorage.setItem("pg-os-cockpit-select", data.sessionId);
+      }
+      setActive("cockpit");
+      // Refresh cockpit map after a short delay to pick up the new session
+      setTimeout(fetchCockpitSessions, 800);
+    },
+    [cockpitMap, setActive, fetchCockpitSessions],
+  );
 
   const fetchProjects = useCallback(() => {
     fetch("/api/projects", { cache: "no-store" })
@@ -303,7 +820,9 @@ export function ProjectsView() {
         setProjects(data.projects);
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Failed to load projects");
+        setError(
+          err instanceof Error ? err.message : "Failed to load projects",
+        );
       })
       .finally(() => setLoading(false));
   }, []);
@@ -312,10 +831,11 @@ export function ProjectsView() {
     fetchProjects();
   }, [fetchProjects]);
 
-  // ── Realtime: subscribe to PG OS `tasks` table ────────────────────────────
+  // Realtime: subscribe to PG OS `tasks` table
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
-    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null = null;
+    let supabaseClient: import("@supabase/supabase-js").SupabaseClient | null =
+      null;
     let destroyed = false;
 
     async function setupRealtime() {
@@ -323,9 +843,12 @@ export function ProjectsView() {
         const res = await fetch("/api/realtime/config");
         if (!res.ok) return;
         const cfg: RealtimeConfig = await res.json();
-        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return; // graceful no-op
+        if (!cfg.pgosUrl || !cfg.pgosPublishableKey) return;
 
-        const client = await createBrowserSupabaseClient(cfg.pgosUrl, cfg.pgosPublishableKey);
+        const client = await createBrowserSupabaseClient(
+          cfg.pgosUrl,
+          cfg.pgosPublishableKey,
+        );
         if (!client || destroyed) return;
 
         supabaseClient = client;
@@ -333,10 +856,12 @@ export function ProjectsView() {
           client,
           channelName: "tasks-realtime",
           table: "tasks",
-          onchange: () => { fetchProjects(); },
+          onchange: () => {
+            fetchProjects();
+          },
         });
       } catch {
-        // Realtime is best-effort — never surface errors to the user.
+        // Realtime is best-effort
       }
     }
 
@@ -350,9 +875,7 @@ export function ProjectsView() {
     };
   }, [fetchProjects]);
 
-  // ── Local-only: SSE stream that emits `refresh` on git/memory changes ─────
-  // In dev the Node server can fs.watch each project's .git/logs/HEAD and
-  // .git/index. The stream returns 501 in cloud — silently skipped.
+  // SSE stream for git/memory changes
   useEffect(() => {
     let es: EventSource | null = null;
     let cancelled = false;
@@ -363,17 +886,18 @@ export function ProjectsView() {
       try {
         es = new EventSource("/api/projects/events");
         es.addEventListener("refresh", () => fetchProjects());
-        es.onopen = () => { backoffMs = 2000; };
+        es.onopen = () => {
+          backoffMs = 2000;
+        };
         es.onerror = () => {
           es?.close();
           es = null;
           if (cancelled) return;
-          // Re-attempt with capped backoff (covers transient hot-reload disconnects)
           setTimeout(connect, Math.min(backoffMs, 30_000));
           backoffMs = Math.min(backoffMs * 2, 30_000);
         };
       } catch {
-        /* EventSource unavailable — silently skip */
+        /* EventSource unavailable */
       }
     };
 
@@ -384,12 +908,11 @@ export function ProjectsView() {
     };
   }, [fetchProjects]);
 
-  // ── Active Chest state ────────────────────────────────────────────────────
-  const [activeId, setActiveId] = useState<string | null>(() => getActiveChestId());
+  // Active Chest state
+  const [activeId, setActiveId] = useState<string | null>(() =>
+    getActiveChestId(),
+  );
 
-  // Hydrate from localStorage on mount (handles SSR mismatch); fall back to
-  // the default first-active project so the hero card always renders unless
-  // the 14-day idle effect has explicitly cleared it.
   useEffect(() => {
     const stored = getActiveChestId();
     setActiveId(stored ?? getDefaultActiveChestId());
@@ -398,15 +921,21 @@ export function ProjectsView() {
   const filtered = applyModeFilter(projects, brand, "id");
   const brandCfg = brand ? MODE_CONFIG[brand] : null;
 
-  // ── Keyboard navigation [ and ] ───────────────────────────────────────────
+  // Keyboard navigation [ and ]
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       if (e.key !== "[" && e.key !== "]") return;
       e.preventDefault();
       const list = filtered;
       if (list.length === 0) return;
-      const currentIdx = activeId ? list.findIndex((p) => p.id === activeId) : -1;
+      const currentIdx = activeId
+        ? list.findIndex((p) => p.id === activeId)
+        : -1;
       let nextIdx: number;
       if (e.key === "]") nextIdx = (currentIdx + 1) % list.length;
       else nextIdx = currentIdx <= 0 ? list.length - 1 : currentIdx - 1;
@@ -417,10 +946,10 @@ export function ProjectsView() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, filtered]);
 
-  // ── 14-day idle auto-clear ────────────────────────────────────────────────
+  // 14-day idle auto-clear
   useEffect(() => {
     if (!activeId) return;
     const p = projects.find((x) => x.id === activeId);
@@ -435,28 +964,32 @@ export function ProjectsView() {
     }
   }, [activeId, projects]);
 
-  // ── Split filtered into active + rest ─────────────────────────────────────
-  const activeProject = activeId ? filtered.find((p) => p.id === activeId) ?? null : null;
+  // Split filtered into active + rest
+  const activeProject = activeId
+    ? (filtered.find((p) => p.id === activeId) ?? null)
+    : null;
   const restProjects = filtered.filter((p) => p.id !== activeProject?.id);
 
-  return (
-    <div className="view view-projects">
-      <div className="view-header">
-        <h1 className="view-title">Projects</h1>
-        <div className="view-sub">MASTER VIEW · STATE · LAUNCHERS</div>
-      </div>
+  const count = filtered.length;
+  const eyebrow = `PROJECTS // ${count} active${brandCfg ? ` · ${brandCfg.label}` : ""}`;
 
+  return (
+    <TabShell title="Projects" eyebrow={eyebrow}>
+      {/* Cockpit live-dot pulse keyframe */}
+      <style>{`@keyframes pg-cockpit-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.45;transform:scale(0.7)}}`}</style>
+
+      {/* Brand mode filter hint */}
       {brandCfg && (
-        <div className="cm-filter-hint">
-          <span className="cm-filter-glyph">{brandCfg.glyph}</span>
-          {" "}filtered by {brandCfg.label}
-        </div>
+        <BentoBox cols={12}>
+          <ProjectsFilterHint brandCfg={brandCfg} />
+        </BentoBox>
       )}
 
+      {/* Loading skeletons */}
       {loading && (
-        <div className="pr-grid pr-grid-loading">
+        <>
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="card pr-card pr-card-skeleton">
+            <BentoBox key={i} cols={6}>
               <Skeleton variant="text" width="40%" height={11} />
               <div style={{ height: 12 }} />
               <Skeleton variant="text" width="70%" height={20} />
@@ -466,38 +999,119 @@ export function ProjectsView() {
               <Skeleton variant="text" lines={2} />
               <div style={{ height: 16 }} />
               <Skeleton variant="pill" width={140} height={24} />
-            </div>
+            </BentoBox>
           ))}
-        </div>
-      )}
-      {error && <div className="pr-error">⚠ {error}</div>}
-
-      {!loading && !error && filtered.length === 0 && brand && (
-        <p className="cm-filter-empty">No projects in {brandCfg?.label} mode. Clear the mode filter to see all.</p>
-      )}
-
-      {!loading && !error && (
-        <>
-          {activeProject && <ProjectActiveCard project={activeProject} />}
-          <div className={activeProject ? "pr-grid pr-grid-compressed" : "pr-grid"}>
-            {(activeProject ? restProjects : filtered).map((project, i) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                num={i + 1}
-                compressed={!!activeProject}
-                onSetActive={() => {
-                  setActiveChestId(project.id);
-                  setActiveId(project.id);
-                }}
-              />
-            ))}
-          </div>
         </>
       )}
 
-      {/* Tasks layer — full cross-project list below project cards */}
-      <TasksRegion />
+      {/* Error */}
+      {error && (
+        <BentoBox cols={12}>
+          <ErrorMessage error={error} />
+        </BentoBox>
+      )}
+
+      {/* Empty state for filtered brand mode */}
+      {!loading && !error && filtered.length === 0 && brand && (
+        <BentoBox cols={12}>
+          <EmptyState brandCfg={brandCfg} />
+        </BentoBox>
+      )}
+
+      {/* Active project hero */}
+      {!loading && !error && activeProject && (
+        <BentoBox cols={12} style={{ padding: 0, overflow: "hidden" }}>
+          <ProjectActiveCard
+            project={activeProject}
+            cockpitSessionId={cockpitMap[activeProject.id] ?? null}
+            onLaunchCockpit={handleLaunchCockpit}
+          />
+        </BentoBox>
+      )}
+
+      {/* Project grid cards */}
+      {!loading &&
+        !error &&
+        (activeProject ? restProjects : filtered).map((project, i) => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            num={i + 1}
+            compressed={!!activeProject}
+            onSetActive={() => {
+              setActiveChestId(project.id);
+              setActiveId(project.id);
+            }}
+            cockpitSessionId={cockpitMap[project.id] ?? null}
+            onLaunchCockpit={handleLaunchCockpit}
+          />
+        ))}
+
+      {/* Tasks layer */}
+      {!loading && !error && (
+        <BentoBox cols={12} eyebrow="TASKS" scroll>
+          <TasksRegion />
+        </BentoBox>
+      )}
+    </TabShell>
+  );
+}
+
+// Inner components that use useEmaki() (must be inside EmakiProvider = inside TabShell)
+
+function ProjectsFilterHint({
+  brandCfg,
+}: {
+  brandCfg: { glyph: string; label: string };
+}) {
+  const { tk } = useEmaki();
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-xs)",
+        color: tk.textMuted,
+      }}
+    >
+      <span style={{ fontSize: "var(--text-base)" }}>{brandCfg.glyph}</span>
+      filtered by {brandCfg.label}
     </div>
+  );
+}
+
+function ErrorMessage({ error }: { error: string }) {
+  const { tk } = useEmaki();
+  return (
+    <div
+      style={{
+        color: "#B8536F",
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-sm)",
+        padding: "8px 0",
+      }}
+    >
+      <span style={{ color: tk.textMuted }}>⚠</span> {error}
+    </div>
+  );
+}
+
+function EmptyState({ brandCfg }: { brandCfg: { label: string } | null }) {
+  const { tk } = useEmaki();
+  return (
+    <p
+      style={{
+        fontFamily: "var(--mono), ui-monospace, monospace",
+        fontSize: "var(--text-sm)",
+        color: tk.textMuted,
+        margin: 0,
+        padding: "16px 0",
+        textAlign: "center",
+      }}
+    >
+      No projects in {brandCfg?.label} mode. Clear the mode filter to see all.
+    </p>
   );
 }

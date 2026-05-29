@@ -14,6 +14,7 @@ export type Tab =
   | "flow"
   | "timeline"
   | "claude"
+  | "cockpit"
   | "stack"
   | "brain";
 
@@ -24,8 +25,9 @@ export const TABS: { id: Tab; num: string; label: string; glyph: string }[] = [
   { id: "flow", num: "03", label: "FLOW", glyph: "≋" },
   { id: "timeline", num: "04", label: "TIMELINE", glyph: "◴" },
   { id: "claude", num: "05", label: "CLAUDE", glyph: "◆" },
-  { id: "stack", num: "06", label: "STACK", glyph: "⬢" },
-  { id: "brain", num: "07", label: "BRAIN", glyph: "◉" },
+  { id: "cockpit", num: "06", label: "COCKPIT", glyph: "✺" },
+  { id: "stack", num: "07", label: "STACK", glyph: "⬢" },
+  { id: "brain", num: "08", label: "BRAIN", glyph: "◉" },
 ];
 
 const KEY = "pg-os-active-tab";
@@ -36,6 +38,7 @@ const VALID: Tab[] = [
   "flow",
   "timeline",
   "claude",
+  "cockpit",
   "stack",
   "brain",
 ];

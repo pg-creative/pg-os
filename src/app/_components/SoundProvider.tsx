@@ -1,7 +1,20 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { play as playChime, unlockAudio, type ChimeName } from "../../lib/sound";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  play as playChime,
+  playThrottled as playChimeThrottled,
+  unlockAudio,
+  setEnabled as setSoundEnabled,
+  type ChimeName,
+} from "../../lib/sound";
 
 const STORAGE_KEY = "pg-os-sound-enabled";
 
@@ -10,6 +23,7 @@ interface SoundContextValue {
   toggle: () => void;
   setEnabled: (next: boolean) => void;
   play: (name: ChimeName) => void;
+  playThrottled: (name: ChimeName, cooldownMs: number) => void;
 }
 
 const SoundContext = createContext<SoundContextValue | null>(null);
@@ -30,6 +44,12 @@ export function SoundProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setEnabledState(readStored());
   }, []);
+
+  // Sync enabled state into the module-level gate so raw play() imports
+  // (e.g. ModeProvider) also respect the SoundToggle preference.
+  useEffect(() => {
+    setSoundEnabled(enabled);
+  }, [enabled]);
 
   const setEnabled = useCallback((next: boolean) => {
     setEnabledState(next);
@@ -55,8 +75,18 @@ export function SoundProvider({ children }: { children: ReactNode }) {
     [enabled],
   );
 
+  const playThrottled = useCallback(
+    (name: ChimeName, cooldownMs: number) => {
+      if (!enabled) return;
+      playChimeThrottled(name, cooldownMs);
+    },
+    [enabled],
+  );
+
   return (
-    <SoundContext.Provider value={{ enabled, toggle, setEnabled, play }}>
+    <SoundContext.Provider
+      value={{ enabled, toggle, setEnabled, play, playThrottled }}
+    >
       {children}
     </SoundContext.Provider>
   );
@@ -72,6 +102,7 @@ export function useSound(): SoundContextValue {
       toggle: () => {},
       setEnabled: () => {},
       play: () => {},
+      playThrottled: () => {},
     };
   }
   return ctx;
@@ -95,10 +126,14 @@ export function SoundToggle() {
       className={`sound-toggle${enabled ? " on" : ""}`}
       onClick={onClick}
       aria-pressed={enabled}
-      aria-label={enabled ? "Sound on — click to mute" : "Sound off — click to enable"}
+      aria-label={
+        enabled ? "Sound on — click to mute" : "Sound off — click to enable"
+      }
       title={enabled ? "Sound on" : "Sound off"}
     >
-      <span className="sound-toggle-icon" aria-hidden>{enabled ? "♪" : "♪̸"}</span>
+      <span className="sound-toggle-icon" aria-hidden>
+        {enabled ? "♪" : "♪̸"}
+      </span>
       <span className="sound-toggle-label">{enabled ? "ON" : "OFF"}</span>
     </button>
   );

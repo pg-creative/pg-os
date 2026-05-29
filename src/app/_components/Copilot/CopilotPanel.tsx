@@ -6,13 +6,8 @@
  * Focus-trapped when open. 420px wide, full height, slides from right.
  */
 
-import {
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  useId,
-} from "react";
+import { useState, useCallback, useEffect, useRef, useId } from "react";
+import { useSound } from "../SoundProvider";
 import { CopilotMessage, CopilotMsg, ToolCallEvent } from "./CopilotMessage";
 import { CopilotInput } from "./CopilotInput";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
@@ -292,11 +287,7 @@ export function CopilotPanel({ open, onClose }: CopilotPanelProps) {
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="cp-backdrop"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="cp-backdrop" onClick={onClose} aria-hidden="true" />
 
       {/* Panel */}
       <aside
@@ -309,8 +300,12 @@ export function CopilotPanel({ open, onClose }: CopilotPanelProps) {
         {/* Header */}
         <div className="cp-header">
           <div className="cp-header-left">
-            <span className="cp-header-icon" aria-hidden="true">⬡</span>
-            <h2 className="cp-title" id={titleId}>CO-PILOT</h2>
+            <span className="cp-header-icon" aria-hidden="true">
+              ⬡
+            </span>
+            <h2 className="cp-title" id={titleId}>
+              CO-PILOT
+            </h2>
           </div>
           <div className="cp-header-actions">
             {messages.length > 0 && (
@@ -335,12 +330,18 @@ export function CopilotPanel({ open, onClose }: CopilotPanelProps) {
         </div>
 
         {/* Message list */}
-        <div className="cp-messages" ref={scrollRef} aria-live="polite" aria-atomic="false">
+        <div
+          className="cp-messages"
+          ref={scrollRef}
+          aria-live="polite"
+          aria-atomic="false"
+        >
           {messages.length === 0 && (
             <div className="cp-empty">
               <p className="cp-empty-heading">What&apos;s next?</p>
               <p className="cp-empty-hint">
-                Ask about your calendar, recovery, queue depth, or what to work on next.
+                Ask about your calendar, recovery, queue depth, or what to work
+                on next.
               </p>
               <div className="cp-suggestions">
                 {[
@@ -390,8 +391,14 @@ export function CopilotPanel({ open, onClose }: CopilotPanelProps) {
 
 export function CopilotLauncher() {
   const [open, setOpen] = useState(false);
+  const { play } = useSound();
 
-  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const toggle = useCallback(() => {
+    setOpen((v) => {
+      if (!v) play("copilotOpen");
+      return !v;
+    });
+  }, [play]);
   const close = useCallback(() => setOpen(false), []);
 
   // ⌘J global keyboard shortcut

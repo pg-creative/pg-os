@@ -1,6 +1,18 @@
 "use client";
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { type BrandMode, MODE_CONFIG, nextBrandMode, prevBrandMode } from "../../lib/modes";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import {
+  type BrandMode,
+  MODE_CONFIG,
+  nextBrandMode,
+  prevBrandMode,
+} from "../../lib/modes";
+import { play } from "../../lib/sound";
 
 export type Mode =
   | "laputa-day"
@@ -14,9 +26,9 @@ export const MODE_LABELS: Record<Mode, string> = {
   "laputa-day": "LAPUTA DAY",
   "laputa-twilight": "LAPUTA TWILIGHT",
   "laputa-midnight": "LAPUTA MIDNIGHT",
-  "howls": "HOWL'S GOLDEN HOUR",
-  "totoro": "TOTORO DUSK",
-  "mononoke": "MONONOKE FOREST",
+  howls: "HOWL'S GOLDEN HOUR",
+  totoro: "TOTORO DUSK",
+  mononoke: "MONONOKE FOREST",
 };
 
 function modeForHour(h: number): Mode {
@@ -37,7 +49,13 @@ const KEY_BRAND = "pg-os-brand-mode";
 // permanently disabled by a leftover value.
 const STALE_KEYS = ["pg-os-laputa-manual", "pg-os-laputa-auto"];
 
-const VALID_BRAND_MODES: BrandMode[] = ["alchmy", "voyager", "writer", "metrasens", "recovery"];
+const VALID_BRAND_MODES: BrandMode[] = [
+  "alchmy",
+  "voyager",
+  "writer",
+  "metrasens",
+  "recovery",
+];
 
 type Ctx = {
   // Laputa palette state. autoMode is IN-MEMORY ONLY (no localStorage):
@@ -125,18 +143,29 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   };
 
   const cycleBrandForward = () => {
+    play("brandCycle");
     setBrand(nextBrandMode(brand));
   };
 
   const cycleBrandBack = () => {
+    play("brandCycle");
     setBrand(prevBrandMode(brand));
   };
 
   return (
-    <ModeCtx.Provider value={{
-      mode, autoMode, greeting, setMode, setAutoMode,
-      brand, setBrand, cycleBrandForward, cycleBrandBack,
-    }}>
+    <ModeCtx.Provider
+      value={{
+        mode,
+        autoMode,
+        greeting,
+        setMode,
+        setAutoMode,
+        brand,
+        setBrand,
+        cycleBrandForward,
+        cycleBrandBack,
+      }}
+    >
       {children}
     </ModeCtx.Provider>
   );

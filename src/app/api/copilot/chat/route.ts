@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { messages?: MessageParam[] };
+  let body: { messages?: MessageParam[]; mode?: string };
   try {
     body = await req.json();
   } catch {
@@ -55,14 +55,26 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Assemble context (reads live state: ships, queue counts)
-  const ctx = await assembleCopilotContext();
+  // Marvis mode swaps the persona to the cockpit orchestrator + live fleet view,
+  // keeping the SAME tools + agentic loop. Default mode = the ⌘J copilot.
+  let systemText: string;
+  if (body.mode === "marvis") {
+    const [{ buildMarvisSystem }, { buildMarvisFleet }] = await Promise.all([
+      import("@/lib/cockpit/marvis"),
+      import("@/lib/cockpit/marvisFleet"),
+    ]);
+    systemText = buildMarvisSystem(await buildMarvisFleet());
+  } else {
+    // Assemble context (reads live state: ships, queue counts)
+    const ctx = await assembleCopilotContext();
+    systemText = ctx.systemPrompt;
+  }
 
   // Build cached system prompt block (prompt caching — ephemeral cache)
   const systemBlock = [
     {
       type: "text" as const,
-      text: ctx.systemPrompt,
+      text: systemText,
       cache_control: { type: "ephemeral" as const },
     },
   ];
@@ -72,9 +84,7 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: unknown) => {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
-        );
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
       try {
@@ -131,10 +141,14 @@ export async function POST(req: NextRequest) {
           totalInputTokens += usage.input_tokens;
           totalOutputTokens += usage.output_tokens;
           if ("cache_read_input_tokens" in usage) {
-            totalCacheRead += (usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
+            totalCacheRead +=
+              (usage as { cache_read_input_tokens?: number })
+                .cache_read_input_tokens ?? 0;
           }
           if ("cache_creation_input_tokens" in usage) {
-            totalCacheCreation += (usage as { cache_creation_input_tokens?: number }).cache_creation_input_tokens ?? 0;
+            totalCacheCreation +=
+              (usage as { cache_creation_input_tokens?: number })
+                .cache_creation_input_tokens ?? 0;
           }
 
           // Extract tool use blocks from the final message
@@ -147,7 +161,10 @@ export async function POST(req: NextRequest) {
           // ── Handle tool calls ─────────────────────────────────────────────
           if (stopReason === "tool_use" && toolUses.length > 0) {
             // Append assistant turn to messages
-            messages.push({ role: "assistant", content: finalMsg.content as ContentBlock[] });
+            messages.push({
+              role: "assistant",
+              content: finalMsg.content as ContentBlock[],
+            });
 
             // Execute all tool calls in parallel
             const toolResults = await Promise.all(
@@ -158,7 +175,10 @@ export async function POST(req: NextRequest) {
                   input: toolUse.input,
                 });
                 try {
-                  const result = await executeTool(toolUse.name, toolUse.input as ToolInput);
+                  const result = await executeTool(
+                    toolUse.name,
+                    toolUse.input as ToolInput,
+                  );
                   send({ type: "tool_result", name: toolUse.name, ok: true });
                   return {
                     type: "tool_result" as const,
@@ -166,8 +186,14 @@ export async function POST(req: NextRequest) {
                     content: JSON.stringify(result),
                   };
                 } catch (err) {
-                  const errMsg = err instanceof Error ? err.message : String(err);
-                  send({ type: "tool_result", name: toolUse.name, ok: false, error: errMsg });
+                  const errMsg =
+                    err instanceof Error ? err.message : String(err);
+                  send({
+                    type: "tool_result",
+                    name: toolUse.name,
+                    ok: false,
+                    error: errMsg,
+                  });
                   return {
                     type: "tool_result" as const,
                     tool_use_id: toolUse.id,

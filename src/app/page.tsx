@@ -1,26 +1,20 @@
 "use client";
-import { ModeLabel } from "./_components/ModeSwitcher";
-import {
-  BridgeModeProvider,
-  HomeModeBadge,
-} from "./_components/BridgeModeProvider";
+import { BridgeModeProvider } from "./_components/BridgeModeProvider";
 import { ToastDeck } from "./_components/Toast";
-import { LiveStamp } from "./_components/LiveClock";
-import { CityTemp } from "./_components/LocationLive";
-import { HomeModeToggle } from "./_components/HomeModeToggle";
 import { AmbientParticles } from "./_components/AmbientParticles";
-import { TabBar } from "./_components/TabBar";
+import { EmakiShellBar } from "./_components/EmakiShellBar";
+import { MobileNavV1Foxfire } from "./_components/mobile/MobileNavV1Foxfire";
+import { EmakiBackdrop } from "./_components/emaki/EmakiBackdrop";
+import { MarvisCorner } from "./_components/views/cockpit/MarvisCorner";
 import { CaptureFAB } from "./_components/CaptureFAB";
-import { BrandModePicker } from "./_components/BrandModePicker";
 import { CopilotLauncher } from "./_components/Copilot/CopilotPanel";
-import { SoundToggle } from "./_components/SoundProvider";
 import { useActiveTab } from "./_components/useActiveTab";
-import { useIsCloud } from "./_components/useIsCloud";
 import { HomeView } from "./_components/views/HomeView";
 import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
 import { FlowView } from "./_components/views/FlowView";
 import { ClaudeView } from "./_components/views/ClaudeView";
+import { CockpitView } from "./_components/views/CockpitView";
 import { StackView } from "./_components/views/StackView";
 import { TimelineView } from "./_components/views/TimelineView";
 import { BrainView } from "./_components/views/BrainView";
@@ -33,56 +27,17 @@ import CommandPalette, {
 
 export default function Page() {
   const { active } = useActiveTab();
-  const isCloud = useIsCloud();
   useCommandPaletteHotkey();
   return (
     <BridgeModeProvider>
       <NowProvider>
+        <EmakiBackdrop />
         <AmbientParticles />
-        <div className="shell">
-          {/* TOP BAR */}
-          <div className="topbar">
-            <div className="brand">
-              <span className="dot" />
-              <span>PG OS</span>
-              <span className="ver">
-                // v0.3 // <ModeLabel /> · <HomeModeBadge />
-                {isCloud === true && (
-                  <span
-                    className="ver-cloud"
-                    title="Cloud mode — laptop-only actions are gated. Open 127.0.0.1:3030 from your Mac for full access."
-                  >
-                    {" "}
-                    · CLOUD
-                  </span>
-                )}
-                {isCloud === false && (
-                  <span
-                    className="ver-local"
-                    title="Local mode — full access including subprocess spawning."
-                  >
-                    {" "}
-                    · LOCAL
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="telemetry">
-              <span>
-                <CityTemp />
-              </span>
-              <span>
-                <LiveStamp />
-              </span>
-              <BrandModePicker />
-              <HomeModeToggle />
-              <SoundToggle />
-            </div>
-          </div>
-
-          {/* TAB BAR */}
-          <TabBar />
-
+        {/* Global shell nav — the home-lab top bar. Tabs are hidden on mobile
+            via EmakiShellBar's @media (max-width: 767px) rule; the Foxfire
+            drawer (mounted below) takes over for mobile navigation. */}
+        <EmakiShellBar />
+        <div className={`shell${active === "home" ? " shell-bleed" : ""}`}>
           {/* ACTIVE VIEW */}
           {active === "home" && (
             <>
@@ -95,6 +50,7 @@ export default function Page() {
           {active === "flow" && <FlowView />}
           {active === "timeline" && <TimelineView />}
           {active === "claude" && <ClaudeView />}
+          {active === "cockpit" && <CockpitView />}
           {active === "stack" && <StackView />}
           {active === "brain" && <BrainView />}
 
@@ -104,8 +60,17 @@ export default function Page() {
           </div>
         </div>
 
-        <CaptureFAB />
-        <CopilotLauncher />
+        {/* Kitsu (MarvisCorner) is a GLOBAL persistent presence, bottom-right on every tab. */}
+        <MarvisCorner modelUrl="/live2d/fox/standard_fox.model3.json" />
+        {/* On the cockpit, the global FABs are hidden so they don't crowd Kitsu's terminal. */}
+        {active !== "cockpit" && <CaptureFAB />}
+        {active !== "cockpit" && <CopilotLauncher />}
+        {/* MOBILE NAV — Foxfire Drawer (PG pick, 2026-05-23, from /dev/mobile-nav-v2 bake-off).
+            A foxfire-glow FAB sits bottom-left at <768px; tap to slide in a full-screen
+            painted-kitsune-den drawer with all 9 tabs (anchor pattern, iOS hydration safe).
+            Replaces the crammed 9-slot TabBar that this round's audit found unusable on phone.
+            Hidden above 767px by the component's own inline @media rule. */}
+        <MobileNavV1Foxfire />
         <CommandPalette />
         <AmbientIdle />
         <ToastDeck />

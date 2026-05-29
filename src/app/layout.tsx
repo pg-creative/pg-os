@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { ModeProvider } from "./_components/ModeProvider";
 import { TabProvider } from "./_components/useActiveTab";
 import { SoundProvider } from "./_components/SoundProvider";
+import { PlayerProvider } from "./_components/PlayerProvider";
 import { RegisterSW } from "./_components/RegisterSW";
 import "./globals.css";
 
@@ -38,11 +39,15 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#E8F0F7" },
-    { media: "(prefers-color-scheme: dark)",  color: "#091433" },
+    { media: "(prefers-color-scheme: dark)", color: "#091433" },
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" data-variant="laputa-day" suppressHydrationWarning>
       <head>
@@ -63,7 +68,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,500&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&family=Space+Mono:wght@400;700&family=Press+Start+2P&family=VT323&display=swap"
           rel="stylesheet"
@@ -73,7 +82,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <RegisterSW />
         <ModeProvider>
           <SoundProvider>
-            <TabProvider>{children}</TabProvider>
+            <PlayerProvider>
+              <TabProvider>{children}</TabProvider>
+            </PlayerProvider>
           </SoundProvider>
         </ModeProvider>
       </body>

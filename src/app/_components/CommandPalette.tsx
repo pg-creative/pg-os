@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useSound } from "./SoundProvider";
 import { score } from "../../lib/fuzzySearch";
 import { useCommands, type Command } from "../../lib/commands";
 
@@ -44,7 +45,11 @@ function usePaletteContext(): PaletteCtx {
 export function useCommandPaletteHotkey() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "k") {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "k"
+      ) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("pgos:cmd-toggle"));
       }
@@ -64,7 +69,9 @@ function readRecent(): string[] {
     const raw = localStorage.getItem(RECENT_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as string[]).slice(0, RECENT_CAP) : [];
+    return Array.isArray(parsed)
+      ? (parsed as string[]).slice(0, RECENT_CAP)
+      : [];
   } catch {
     return [];
   }
@@ -75,7 +82,9 @@ function pushRecent(id: string) {
     const list = readRecent().filter((x) => x !== id);
     list.unshift(id);
     localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_CAP)));
-  } catch { /* quota */ }
+  } catch {
+    /* quota */
+  }
 }
 
 // ── Scoring + grouping ────────────────────────────────────────────────────────
@@ -85,8 +94,8 @@ type ScoredCommand = Command & { _score: number };
 function scoreCommands(query: string, commands: Command[]): ScoredCommand[] {
   return commands
     .map((c) => {
-      const labelScore   = score(query, c.label)                    * 0.5;
-      const groupScore   = score(query, c.group)                    * 0.2;
+      const labelScore = score(query, c.label) * 0.5;
+      const groupScore = score(query, c.group) * 0.2;
       const keywordScore = score(query, (c.keywords ?? []).join(" ")) * 0.3;
       return { ...c, _score: labelScore + groupScore + keywordScore };
     })
@@ -108,6 +117,7 @@ function groupBy<T extends { group: string }>(items: T[]): [string, T[]][] {
 
 export default function CommandPalette() {
   const { open, setOpen } = usePaletteContext();
+  const { play } = useSound();
   const commands = useCommands();
 
   const [query, setQuery] = useState("");
@@ -135,6 +145,7 @@ export default function CommandPalette() {
   // Open/close effects
   useEffect(() => {
     if (open) {
+      play("modalOpen");
       returnFocusRef.current = document.activeElement as HTMLElement | null;
       setQuery("");
       setSelectedIndex(0);
@@ -213,8 +224,8 @@ export default function CommandPalette() {
   const groups = query.trim()
     ? groupBy(results)
     : results.length > 0
-    ? [["Recent", results] as [string, ScoredCommand[]]]
-    : [];
+      ? [["Recent", results] as [string, ScoredCommand[]]]
+      : [];
 
   // Compute absolute index for each item across groups (for aria-selected)
   let cursor = 0;

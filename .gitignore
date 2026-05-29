@@ -41,3 +41,17 @@ scripts/ex-*.png
 scripts/mj-portrait-live.png
 scripts/mj-log-*.txt
 scripts/mj-state-*.json
+
+# Cockpit local binary assets
+public/live2d/
+public/agent-office/pixel
+
+# Party mode: PG's own song stays LOCAL (copyrighted — not distributed via the
+# public Vercel deploy). The synthesized party-default.mp3 IS tracked.
+public/audio/party.mp3
+public/audio/party.m4a
+public/audio/party.ogg
+public/audio/party.wav
+
+# Aesthetic bake-off MJ candidates (regenerable via scripts/run-mj-aesthetic.py; winner committed deliberately)
+public/art/

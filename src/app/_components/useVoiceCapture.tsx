@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMusicStore } from "@/lib/musicStore";
 
 /**
  * Browser Web Speech API wrapper.
@@ -32,7 +33,9 @@ interface SpeechRecognitionLike extends EventTarget {
   start(): void;
   stop(): void;
   abort(): void;
-  onresult: ((this: SpeechRecognitionLike, ev: SpeechRecognitionEventLike) => void) | null;
+  onresult:
+    | ((this: SpeechRecognitionLike, ev: SpeechRecognitionEventLike) => void)
+    | null;
   onerror: ((this: SpeechRecognitionLike, ev: Event) => void) | null;
   onend: ((this: SpeechRecognitionLike, ev: Event) => void) | null;
 }
@@ -41,7 +44,8 @@ export function isVoiceSupported(): boolean {
   if (typeof window === "undefined") return false;
   return !!(
     (window as unknown as { SpeechRecognition?: Recog }).SpeechRecognition ||
-    (window as unknown as { webkitSpeechRecognition?: Recog }).webkitSpeechRecognition
+    (window as unknown as { webkitSpeechRecognition?: Recog })
+      .webkitSpeechRecognition
   );
 }
 
@@ -64,7 +68,11 @@ export function useVoiceCapture() {
 
   const stop = useCallback(() => {
     if (recRef.current) {
-      try { recRef.current.stop(); } catch { /* noop */ }
+      try {
+        recRef.current.stop();
+      } catch {
+        /* noop */
+      }
     }
   }, []);
 
@@ -75,9 +83,13 @@ export function useVoiceCapture() {
       return;
     }
     if (recRef.current) {
-      try { recRef.current.abort(); } catch { /* noop */ }
+      try {
+        recRef.current.abort();
+      } catch {
+        /* noop */
+      }
     }
-    finalRef.current = transcript;  // keep what user had typed/spoken so far
+    finalRef.current = transcript; // keep what user had typed/spoken so far
     const rec = new Ctor();
     rec.continuous = true;
     rec.interimResults = true;
@@ -98,15 +110,21 @@ export function useVoiceCapture() {
     rec.onerror = (ev) => {
       const err = (ev as unknown as { error?: string }).error ?? "unknown";
       if (err !== "aborted" && err !== "no-speech") setError(err);
+      // Restore music volume on any error
+      useMusicStore.getState?.()?.setDuck(1);
     };
     rec.onend = () => {
       setListening(false);
       setInterim("");
+      // Restore music volume when recognition ends
+      useMusicStore.getState?.()?.setDuck(1);
     };
     try {
       rec.start();
       setListening(true);
       setError(null);
+      // Duck music while voice capture is active
+      useMusicStore.getState?.()?.setDuck(0.25);
     } catch (err) {
       setError(err instanceof Error ? err.message : "start_failed");
     }
@@ -125,11 +143,18 @@ export function useVoiceCapture() {
     setError(null);
   }, []);
 
-  useEffect(() => () => {
-    if (recRef.current) {
-      try { recRef.current.abort(); } catch { /* noop */ }
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (recRef.current) {
+        try {
+          recRef.current.abort();
+        } catch {
+          /* noop */
+        }
+      }
+    },
+    [],
+  );
 
   return {
     listening,

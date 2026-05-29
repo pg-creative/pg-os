@@ -136,7 +136,7 @@
 }
 
 .title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: 0.02em;
   position: relative;
@@ -147,7 +147,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--accent-2, #f0b557);
   font-weight: 600;
   position: relative;
@@ -164,7 +164,7 @@
 }
 
 .desc {
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.4;
   opacity: 0.7;
   position: relative;
@@ -175,7 +175,7 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-3, #b8a78a);
@@ -195,7 +195,7 @@
   background: rgba(218, 165, 90, 0.12);
   border: 1px solid rgba(218, 165, 90, 0.32);
   color: var(--fg, #f5e9d6);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   position: relative;
 }
@@ -212,7 +212,7 @@
   position: absolute;
   top: -8px;
   right: -8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--accent-2, #f0b557);
   font-weight: 700;
   pointer-events: none;
@@ -336,7 +336,7 @@
 }
 
 .rarityTag {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   padding: 3px 9px;
@@ -351,7 +351,7 @@
 .rarityTag.legendary{ background: rgba(255, 200, 120, 0.2);  color: #ffd896; }
 
 .rewardLabel {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: 0.01em;
   opacity: 0;
@@ -359,7 +359,7 @@
 }
 
 .rewardFlavour {
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   opacity: 0;
   color: var(--fg-2, #d6c5a3);
@@ -381,7 +381,7 @@
   background: transparent;
   color: var(--fg, #f5e9d6);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   min-height: 44px;

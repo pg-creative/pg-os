@@ -1,0 +1,3 @@
+# Symlink in worktrees back into the parent repo; Vercel follows it into a self-referential
+# copy and the deploy errors. The pixel assets are gitignored anyway; skip explicitly here.
+public/agent-office/pixel
