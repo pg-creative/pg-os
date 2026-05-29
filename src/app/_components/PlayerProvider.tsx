@@ -43,6 +43,11 @@ interface YTPlayerInstance {
   playVideo(): void;
   pauseVideo(): void;
   setVolume(vol: number): void; // 0–100
+  // Mute state is INDEPENDENT of volume in the YT API. autoplay:1 forces the
+  // player to boot muted (browser autoplay policy), so we must explicitly
+  // unMute() on a user gesture or setVolume() alone produces silence.
+  mute(): void;
+  unMute(): void;
   destroy(): void;
 }
 
@@ -88,10 +93,22 @@ function ytLoadVideo(id: string) {
     ytPendingVideoId = id;
   }
 }
+function ytUnMute() {
+  if (ytPlayer && typeof ytPlayer.unMute === "function") {
+    try {
+      ytPlayer.unMute();
+    } catch {
+      /* noop */
+    }
+  }
+}
 function ytPlay() {
   if (ytPlayer && typeof ytPlayer.playVideo === "function") {
     try {
       ytPlayer.playVideo();
+      // autoplay boots the player muted; unmute on this user-gesture-driven
+      // play call so audio is actually audible (volume alone won't do it).
+      ytUnMute();
     } catch {
       /* noop */
     }
@@ -189,8 +206,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         },
         events: {
           onReady: () => {
-            // setVolume IS bound by the time onReady fires; safe path.
+            // setVolume + unMute ARE bound by the time onReady fires; safe path.
+            // unMute first so the volume we set is actually audible — the player
+            // boots muted under autoplay policy.
+            ytUnMute();
             ytSetVolume(effectiveVolume * 100);
+            ytPlay();
           },
           onError: (e) => {
             console.warn("[PlayerProvider] YouTube player error code:", e.data);
