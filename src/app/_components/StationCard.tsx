@@ -1,7 +1,7 @@
 "use client";
 
 import type { Station } from "@/lib/musicSources";
-import { SourceBadge } from "./SourceBadge";
+import { GenreBadge } from "./SourceBadge";
 
 interface StationCardProps {
   station: Station;
@@ -114,7 +114,7 @@ export function StationCard({ station, isActive, onSelect }: StationCardProps) {
           >
             {station.title}
           </span>
-          <SourceBadge source={station.source} size="sm" />
+          <GenreBadge genre={station.genre} size="sm" />
         </div>
         <span
           style={{

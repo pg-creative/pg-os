@@ -15,10 +15,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "./PlayerProvider";
-import { STATIONS, type MusicSource } from "@/lib/musicSources";
-import { SourceBadge } from "./SourceBadge";
-
-const FILTERS: ("all" | MusicSource)[] = ["all", "spotify", "youtube", "radio"];
+import { STATIONS } from "@/lib/musicSources";
+import { GenreBadge } from "./SourceBadge";
 
 export function MusicLauncher() {
   const {
@@ -30,7 +28,6 @@ export function MusicLauncher() {
     setVolume,
   } = usePlayer();
   const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | MusicSource>("all");
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // Close on click-outside + Escape
@@ -49,9 +46,6 @@ export function MusicLauncher() {
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  const visible =
-    filter === "all" ? STATIONS : STATIONS.filter((s) => s.source === filter);
 
   const buttonLabel = currentStation
     ? currentStation.title.toUpperCase().slice(0, 14)
@@ -74,8 +68,7 @@ export function MusicLauncher() {
       >
         {livePlaying ? (
           // Faux audio visualizer — 3 bars bouncing on staggered timings.
-          // (YT/Spotify don't expose their audio streams cross-origin, so this
-          // is an "is-playing" vibe signal, not a real-time waveform.)
+          // An "is-playing" vibe signal, not a real-time waveform.
           <span className="ml-eq" aria-hidden>
             <span className="ml-eq-bar" />
             <span className="ml-eq-bar" />
@@ -256,45 +249,6 @@ export function MusicLauncher() {
               </button>
             </div>
 
-            {/* Source filter chips */}
-            <div
-              style={{
-                display: "flex",
-                gap: "4px",
-                marginBottom: "10px",
-              }}
-            >
-              {FILTERS.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  style={{
-                    flex: 1,
-                    padding: "6px 8px",
-                    borderRadius: "8px",
-                    border: "1px solid",
-                    borderColor:
-                      filter === f ? "var(--accent)" : "var(--border-soft)",
-                    background:
-                      filter === f
-                        ? "color-mix(in srgb, var(--accent) 12%, transparent)"
-                        : "transparent",
-                    color: filter === f ? "var(--fg)" : "var(--muted)",
-                    fontFamily: "var(--mono), monospace",
-                    fontSize: "9px",
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    cursor: "pointer",
-                    transition: "all 150ms",
-                  }}
-                  aria-pressed={filter === f}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
             {/* Vertical station list (scrollable) */}
             <div
               style={{
@@ -305,7 +259,7 @@ export function MusicLauncher() {
                 overflowY: "auto",
               }}
             >
-              {visible.map((station) => {
+              {STATIONS.map((station) => {
                 const active = currentStation?.id === station.id;
                 return (
                   <button
@@ -379,7 +333,7 @@ export function MusicLauncher() {
                         {station.subtitle}
                       </div>
                     </div>
-                    <SourceBadge source={station.source} size="sm" />
+                    <GenreBadge genre={station.genre} size="sm" />
                   </button>
                 );
               })}

@@ -7,7 +7,7 @@ import { phaseForMode } from "../bento/emakiContext";
 import { FoxfireLayer } from "../emaki/materials";
 import { usePlayer } from "../PlayerProvider";
 import { STATIONS } from "@/lib/musicSources";
-import { SourceBadge } from "../SourceBadge";
+import { GenreBadge } from "../SourceBadge";
 
 /* ── palette ── */
 const CREAM = "#EFE6D4";
@@ -610,7 +610,7 @@ export function MobileNavV1Foxfire() {
                             {s.subtitle}
                           </div>
                         </div>
-                        <SourceBadge source={s.source} size="sm" />
+                        <GenreBadge genre={s.genre} size="sm" />
                       </button>
                     );
                   })}

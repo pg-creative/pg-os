@@ -1,38 +1,52 @@
 "use client";
 
-import type { MusicSource } from "@/lib/musicSources";
+import type { MusicGenre } from "@/lib/musicSources";
 
-interface SourceBadgeProps {
-  source: MusicSource;
+interface GenreBadgeProps {
+  genre: MusicGenre;
   size?: "sm" | "md";
 }
 
-const SOURCE_CONFIG: Record<
-  MusicSource,
-  { label: string; color: string; bg: string; border: string }
+// Genre colors drawn from PG's palette: warm golds for lofi, powder blue for
+// chill, jewel tones for game/jazz, deep indigo for ambient/midnight.
+const GENRE_CONFIG: Record<
+  MusicGenre,
+  { color: string; bg: string; border: string }
 > = {
-  spotify: {
-    label: "SPOTIFY",
-    color: "#1DB954",
-    bg: "rgba(29,185,84,0.10)",
-    border: "rgba(29,185,84,0.35)",
+  Lofi: {
+    color: "#E5C58A",
+    bg: "rgba(229,197,138,0.12)",
+    border: "rgba(229,197,138,0.38)",
   },
-  youtube: {
-    label: "YOUTUBE",
-    color: "#FF4444",
-    bg: "rgba(255,68,68,0.10)",
-    border: "rgba(255,68,68,0.35)",
+  Chill: {
+    color: "#8FB8D8",
+    bg: "rgba(143,184,216,0.12)",
+    border: "rgba(143,184,216,0.38)",
   },
-  radio: {
-    label: "RADIO",
-    color: "#F2B585",
-    bg: "rgba(242,181,133,0.12)",
-    border: "rgba(242,181,133,0.38)",
+  Game: {
+    color: "#7BB58F",
+    bg: "rgba(123,181,143,0.12)",
+    border: "rgba(123,181,143,0.38)",
+  },
+  Jazz: {
+    color: "#D98A6A",
+    bg: "rgba(217,138,106,0.12)",
+    border: "rgba(217,138,106,0.38)",
+  },
+  Ambient: {
+    color: "#8190C0",
+    bg: "rgba(129,144,192,0.12)",
+    border: "rgba(129,144,192,0.38)",
   },
 };
 
-export function SourceBadge({ source, size = "sm" }: SourceBadgeProps) {
-  const cfg = SOURCE_CONFIG[source];
+/**
+ * GenreBadge — small uppercase chip showing a station's genre.
+ * (Replaced the old source-based badge on 2026-05-29 when every station became
+ * a direct audio stream, making a "RADIO/YOUTUBE/SPOTIFY" badge meaningless.)
+ */
+export function GenreBadge({ genre, size = "sm" }: GenreBadgeProps) {
+  const cfg = GENRE_CONFIG[genre];
   const fontSize = size === "sm" ? "9px" : "11px";
   const padding = size === "sm" ? "2px 6px" : "3px 8px";
 
@@ -55,7 +69,7 @@ export function SourceBadge({ source, size = "sm" }: SourceBadgeProps) {
         whiteSpace: "nowrap",
       }}
     >
-      {cfg.label}
+      {genre}
     </span>
   );
 }
