@@ -6,7 +6,8 @@
  * Mounts:
  *  - A hidden <div id="pgos-yt-player"> for the YouTube IFrame Player singleton
  *  - A single <audio> element for SomaFM / radio streams
- *  - Loads the YouTube IFrame API via next/script (lazyOnload)
+ *  - Loads the YouTube IFrame API via next/script (afterInteractive) and
+ *    pre-creates the player IDLE so the first click can play within the gesture
  *
  * The YT.Player instance is held in module scope (outside React) to survive
  * React 19 StrictMode double-mount without re-creating the player.
@@ -65,7 +66,15 @@ declare global {
 // ─── Module-scope singletons (survive StrictMode double-mount) ───────────────
 let ytPlayer: YTPlayerInstance | null = null;
 let ytApiReady = false;
+// True once the player's onReady has fired (methods bound + safe to play).
+let ytPlayerReady = false;
+// `ytPendingVideoId` doubles as "play this as soon as the player is ready."
 let ytPendingVideoId: string | null = null;
+// Cued silently so the player is fully booted BEFORE the first click. Browsers
+// only allow a YouTube iframe to play WITH SOUND as a direct result of a recent
+// user gesture — so the player must already exist when the click happens, or the
+// play call lands async (after the gesture) and gets blocked. Lofi Girl stream.
+const YT_IDLE_VIDEO_ID = "jfKfPfyJRdk";
 
 // ─── Safe call helpers ───────────────────────────────────────────────────────
 // `new YT.Player()` returns an object IMMEDIATELY, but its methods are only
@@ -176,42 +185,40 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // ── YouTube helpers ────────────────────────────────────────────────────────
 
-  function initYTPlayer(videoId: string) {
-    if (!ytApiReady || !window.YT?.Player) {
-      ytPendingVideoId = videoId;
-      return;
-    }
-    if (ytPlayer) {
-      ytLoadVideo(videoId);
-      ytSetVolume(effectiveVolume * 100);
-      return;
-    }
+  // Pre-create the player IDLE (no autoplay) so it's fully booted and
+  // method-bound before the user's first click. We do NOT start playback here —
+  // doing so on page load would be background autoplay and the browser blocks it.
+  function ensureYTPlayer() {
+    if (ytPlayer || !ytApiReady || !window.YT?.Player) return;
     // Confirm the inner mount div exists before handing it to YT.Player —
     // protects against init before the wrapper useEffect has run.
-    if (!document.getElementById("pgos-yt-player")) {
-      ytPendingVideoId = videoId;
-      return;
-    }
+    if (!document.getElementById("pgos-yt-player")) return;
     try {
       ytPlayer = new window.YT.Player("pgos-yt-player", {
-        videoId,
+        videoId: ytPendingVideoId || YT_IDLE_VIDEO_ID,
         playerVars: {
-          autoplay: 1,
+          autoplay: 0,
           controls: 0,
           disablekb: 1,
           fs: 0,
           iv_load_policy: 3,
           modestbranding: 1,
+          playsinline: 1,
           rel: 0,
         },
         events: {
           onReady: () => {
-            // setVolume + unMute ARE bound by the time onReady fires; safe path.
-            // unMute first so the volume we set is actually audible — the player
-            // boots muted under autoplay policy.
-            ytUnMute();
-            ytSetVolume(effectiveVolume * 100);
-            ytPlay();
+            ytPlayerReady = true;
+            // If the user already picked a station while the player was booting,
+            // fulfill that play now (still close enough to the gesture on desktop).
+            if (ytPendingVideoId) {
+              const vid = ytPendingVideoId;
+              ytPendingVideoId = null;
+              ytLoadVideo(vid);
+              ytUnMute();
+              ytSetVolume(effectiveVolume * 100);
+              ytPlay();
+            }
           },
           onError: (e) => {
             console.warn("[PlayerProvider] YouTube player error code:", e.data);
@@ -223,19 +230,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Play a YouTube station. Called from the station-change effect, which runs
+  // right after the user's click — so when the player is already ready we issue
+  // load + unmute + play synchronously, inside the user-activation window.
+  function initYTPlayer(videoId: string) {
+    if (!ytApiReady || !window.YT?.Player) {
+      ytPendingVideoId = videoId;
+      return;
+    }
+    if (!ytPlayer) {
+      ytPendingVideoId = videoId;
+      ensureYTPlayer(); // create now; onReady will fulfill the pending play
+      return;
+    }
+    if (!ytPlayerReady) {
+      ytPendingVideoId = videoId; // still booting; onReady will fulfill it
+      return;
+    }
+    // Ready → switch + unmute + play within the click's activation window.
+    ytLoadVideo(videoId);
+    ytUnMute();
+    ytSetVolume(effectiveVolume * 100);
+    ytPlay();
+  }
+
   // Register the global callback so the IFrame API can fire it.
   // We set this once; any re-render that fires before the script loads
   // will overwrite with the same function, which is safe.
   if (typeof window !== "undefined") {
     window.onYouTubeIframeAPIReady = () => {
       ytApiReady = true;
-      if (ytPendingVideoId) {
-        const vid = ytPendingVideoId;
-        ytPendingVideoId = null;
-        initYTPlayer(vid);
-      }
+      // Pre-create the idle player the moment the API is ready. If a play was
+      // already requested, ensureYTPlayer's onReady fulfills it.
+      ensureYTPlayer();
     };
   }
+
+  // If the IFrame API was already loaded (cached / fired before this mounted),
+  // the global callback won't fire again — pre-create the player here.
+  useEffect(() => {
+    if (ytApiReady && !ytPlayer) ensureYTPlayer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── React to station change ────────────────────────────────────────────────
 
@@ -379,7 +415,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       {/* YouTube IFrame API — loaded lazily, fires onYouTubeIframeAPIReady when ready */}
       <Script
         src="https://www.youtube.com/iframe_api"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
         onError={() => {
           console.warn(
             "[PlayerProvider] YouTube IFrame API script failed to load",
