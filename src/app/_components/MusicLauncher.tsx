@@ -5,18 +5,68 @@
  *
  * Pattern (chosen by PG 2026-05-23): top-right in the .telemetry nav cluster.
  * Click the button to drop a popover beneath it. Click-outside or Escape closes.
- * Active-state shows the currently-playing station name on the button label
- * instead of the default "RADIO".
  *
- * The dropdown is the WHOLE music UI — header + transport + source filter
- * chips + station list + volume slider. No separate sheet, no separate mini-
- * player chrome, no floating cabinet.
+ * Design: "ScenePanel" (PG pick 2026-05-29, from /dev/music-player-lab). The
+ * dropdown opens with a per-genre illustrated scene header (gradient sky +
+ * station title in serif + a monoline genre glyph), a kintsugi seam, then the
+ * station list (each row led by its genre glyph) and a volume slider. Theming
+ * is genre-keyed via src/lib/genreTheme.ts. Closed pill leads with the active
+ * genre glyph + a genre-colored glow + waveform when playing.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "./PlayerProvider";
-import { STATIONS } from "@/lib/musicSources";
-import { GenreBadge } from "./SourceBadge";
+import { STATIONS, type MusicGenre } from "@/lib/musicSources";
+import { GENRE_THEMES } from "@/lib/genreTheme";
+
+// Monoline genre glyphs (stroke-based, no emoji).
+function GenreGlyph({
+  genre,
+  color,
+  size = 14,
+}: {
+  genre: MusicGenre;
+  color: string;
+  size?: number;
+}) {
+  const p = { stroke: color, strokeWidth: 1.6, fill: "none" as const };
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      {genre === "Lofi" && (
+        <path
+          {...p}
+          d="M8 2 C5 5 5 9 8 14 C11 9 11 5 8 2 Z M8 2 L8 14"
+          strokeLinejoin="round"
+        />
+      )}
+      {genre === "Chill" && (
+        <path
+          {...p}
+          d="M1 6 Q4 3 7 6 T13 6 M1 10 Q4 7 7 10 T13 10"
+          strokeLinecap="round"
+        />
+      )}
+      {genre === "Game" && (
+        <path
+          {...p}
+          d="M3 13 L11 5 M9 3 L13 7 L11 5 M3 13 L5 13 L3 11 Z"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+      {genre === "Jazz" && (
+        <path
+          {...p}
+          d="M8 1.5 L9.6 6 L14 6 L10.4 8.8 L11.8 13 L8 10.3 L4.2 13 L5.6 8.8 L2 6 L6.4 6 Z"
+          strokeLinejoin="round"
+        />
+      )}
+      {genre === "Ambient" && (
+        <circle {...p} cx="8" cy="8" r="5.5" strokeDasharray="2 2.4" />
+      )}
+    </svg>
+  );
+}
 
 export function MusicLauncher() {
   const {
@@ -47,11 +97,12 @@ export function MusicLauncher() {
     };
   }, [open]);
 
-  const buttonLabel = currentStation
-    ? currentStation.title.toUpperCase().slice(0, 14)
-    : "RADIO";
-
+  const activeGenre: MusicGenre = currentStation?.genre ?? "Lofi";
+  const gt = GENRE_THEMES[activeGenre];
   const livePlaying = !!(currentStation && isPlaying);
+  const buttonLabel = currentStation
+    ? currentStation.title.toUpperCase().slice(0, 12)
+    : "RADIO";
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
@@ -65,21 +116,27 @@ export function MusicLauncher() {
         title={
           currentStation ? `Playing: ${currentStation.title}` : "Open music"
         }
+        style={livePlaying ? { boxShadow: `0 0 10px ${gt.glow}` } : undefined}
       >
-        {livePlaying ? (
-          // Faux audio visualizer — 3 bars bouncing on staggered timings.
-          // An "is-playing" vibe signal, not a real-time waveform.
-          <span className="ml-eq" aria-hidden>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-flex",
+            animation: livePlaying
+              ? "ml-pulse 2.4s ease-in-out infinite"
+              : "none",
+          }}
+        >
+          <GenreGlyph genre={activeGenre} color={gt.seed} />
+        </span>
+        <span className="sound-toggle-label">{buttonLabel}</span>
+        {livePlaying && (
+          <span className="ml-eq" aria-hidden style={{ color: gt.seed }}>
             <span className="ml-eq-bar" />
             <span className="ml-eq-bar" />
             <span className="ml-eq-bar" />
-          </span>
-        ) : (
-          <span className="sound-toggle-icon" aria-hidden>
-            ♪
           </span>
         )}
-        <span className="sound-toggle-label">{buttonLabel}</span>
       </button>
 
       {open && (
@@ -90,150 +147,113 @@ export function MusicLauncher() {
             position: "absolute",
             top: "calc(100% + 8px)",
             right: 0,
-            width: "340px",
-            // Anime-y painted Ghibli background: layered radial gradients for
-            // golden-hour glow + a base panel color underneath. The decorative
-            // cloud SVG below adds quiet visual weight without competing with
-            // the station list for attention.
-            background: `
-              radial-gradient(ellipse 280px 180px at 88% 8%, rgba(229,197,138,0.28) 0%, transparent 60%),
-              radial-gradient(ellipse 260px 220px at 12% 95%, rgba(140,180,210,0.22) 0%, transparent 65%),
-              radial-gradient(ellipse 200px 140px at 50% 50%, rgba(196,144,68,0.08) 0%, transparent 70%),
-              var(--panel-solid)
-            `,
-            border: "1px solid var(--border)",
+            width: "360px",
+            background: "var(--panel-solid)",
+            border: `1px solid ${gt.seed}44`,
             borderRadius: "14px",
-            boxShadow:
-              "0 20px 60px rgba(0,0,0,0.22), 0 4px 12px rgba(0,0,0,0.10), 0 0 0 1px rgba(255,255,255,0.16) inset",
-            padding: "14px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.26)",
             zIndex: 1000,
             overflow: "hidden",
           }}
         >
-          {/* Anime-y decorative cloud silhouette — Ghibli-style cumulus at
-              very low opacity in the bottom-right. Pure decoration, doesn't
-              participate in layout. */}
-          <svg
-            viewBox="0 0 200 80"
-            aria-hidden
+          {/* Scene header — per-genre painted mood */}
+          <div
             style={{
-              position: "absolute",
-              right: -20,
-              bottom: -10,
-              width: 220,
-              height: 88,
-              opacity: 0.18,
-              pointerEvents: "none",
-              zIndex: 0,
+              position: "relative",
+              height: "100px",
+              padding: "16px 18px",
+              background: `${gt.sceneBg}, var(--panel-solid)`,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              overflow: "hidden",
             }}
           >
-            <path
-              d="M30,60 Q30,40 50,42 Q55,22 80,28 Q90,12 115,22 Q140,18 145,38 Q170,38 172,55 Q178,62 165,68 L40,68 Q22,66 30,60 Z"
-              fill="#E5C58A"
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 12,
+                opacity: 0.16,
+              }}
+            >
+              <GenreGlyph genre={activeGenre} color={gt.seed} size={48} />
+            </span>
+            <div
+              style={{
+                fontFamily: "var(--mono), monospace",
+                fontSize: "9px",
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: gt.seed,
+                marginBottom: "4px",
+              }}
+            >
+              {livePlaying ? "Now Playing" : "PG Radio"} · {activeGenre}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--serif), serif",
+                fontSize: "19px",
+                fontWeight: 600,
+                color: "var(--fg)",
+                lineHeight: 1.1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {currentStation ? currentStation.title : "Select a station"}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono), monospace",
+                fontSize: "10px",
+                color: "var(--muted)",
+                marginTop: "2px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {currentStation ? currentStation.subtitle : "Pick a vibe below"}
+            </div>
+          </div>
+
+          {/* Kintsugi seam (genre gold) */}
+          <div style={{ height: "1px", position: "relative" }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: `linear-gradient(90deg, transparent, ${gt.gold}aa 30%, ${gt.seed} 50%, ${gt.gold}aa 70%, transparent)`,
+                clipPath:
+                  "polygon(0% 50%, 8% 20%, 16% 70%, 26% 30%, 36% 64%, 46% 12%, 56% 74%, 66% 26%, 76% 60%, 86% 22%, 94% 66%, 100% 50%)",
+              }}
             />
-            <path
-              d="M85,52 Q85,42 100,44 Q105,32 122,38 Q138,38 138,50 Q150,52 148,58 L90,58 Q80,57 85,52 Z"
-              fill="#FFF8E8"
-              opacity="0.6"
-            />
-          </svg>
-          {/* Tiny torii silhouette in the top-left, also decorative. */}
-          <svg
-            viewBox="0 0 40 40"
-            aria-hidden
-            style={{
-              position: "absolute",
-              left: 10,
-              top: 6,
-              width: 22,
-              height: 22,
-              opacity: 0.14,
-              pointerEvents: "none",
-              zIndex: 0,
-            }}
-          >
-            <path
-              d="M4 10 L36 10 L34 13 L28 13 L28 36 L26 36 L26 13 L14 13 L14 36 L12 36 L12 13 L6 13 Z M4 6 L36 6 L36 9 L4 9 Z M14 17 L26 17 L26 19 L14 19 Z"
-              fill="#1F3258"
-            />
-          </svg>
-          {/* Content wrapper — sits above decorations */}
-          <div style={{ position: "relative", zIndex: 1 }}>
-            {/* Header: title + transport */}
+          </div>
+
+          <div style={{ padding: "12px" }}>
+            {/* Transport */}
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginBottom: "10px",
+                justifyContent: "flex-end",
+                marginBottom: "8px",
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  {currentStation && isPlaying && (
-                    <span
-                      style={{
-                        width: "6px",
-                        height: "6px",
-                        borderRadius: "50%",
-                        background: "var(--accent)",
-                        boxShadow: "0 0 8px var(--accent)",
-                        flexShrink: 0,
-                        animation: "ml-pulse 2s ease-in-out infinite",
-                      }}
-                      aria-hidden
-                    />
-                  )}
-                  <div
-                    style={{
-                      fontFamily: "var(--serif), serif",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      color: "var(--fg)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {currentStation ? currentStation.title : "PG Radio"}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--mono), monospace",
-                    fontSize: "9px",
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: "var(--muted)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    marginTop: "2px",
-                  }}
-                >
-                  {currentStation
-                    ? currentStation.subtitle
-                    : "Select a station"}
-                </div>
-              </div>
               <button
                 type="button"
                 onClick={toggle}
                 disabled={!currentStation}
+                aria-label={isPlaying ? "Pause" : "Play"}
                 style={{
-                  width: "32px",
-                  height: "32px",
+                  width: "30px",
+                  height: "30px",
                   borderRadius: "50%",
-                  background: currentStation
-                    ? "var(--fg)"
-                    : "var(--border-soft)",
-                  color: "var(--bg-0)",
+                  background: currentStation ? gt.seed : "var(--border-soft)",
+                  color: "#160f08",
                   border: "none",
                   cursor: currentStation ? "pointer" : "default",
                   display: "flex",
@@ -241,99 +261,81 @@ export function MusicLauncher() {
                   justifyContent: "center",
                   fontSize: "10px",
                   fontFamily: "inherit",
-                  flexShrink: 0,
                 }}
-                aria-label={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? "❚❚" : "▶"}
               </button>
             </div>
 
-            {/* Vertical station list (scrollable) */}
+            {/* Station list */}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 gap: "4px",
-                maxHeight: "320px",
+                maxHeight: "260px",
                 overflowY: "auto",
               }}
             >
               {STATIONS.map((station) => {
                 const active = currentStation?.id === station.id;
+                const sg = GENRE_THEMES[station.genre];
                 return (
                   <button
                     key={station.id}
                     type="button"
                     onClick={() => selectStation(station.id)}
+                    aria-label={`Play ${station.title}`}
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: "10px",
                       padding: "8px 10px",
                       borderRadius: "8px",
-                      border: "1px solid",
-                      borderColor: active
-                        ? "var(--accent)"
-                        : "var(--border-soft)",
-                      background: active
-                        ? "color-mix(in srgb, var(--accent) 10%, transparent)"
-                        : "transparent",
+                      border: `1px solid ${active ? sg.seed : "var(--border-soft)"}`,
+                      background: active ? sg.seed + "16" : "transparent",
                       cursor: "pointer",
                       textAlign: "left",
                       transition: "all 150ms",
                     }}
-                    aria-label={`Play ${station.title}`}
                   >
+                    <GenreGlyph genre={station.genre} color={sg.seed} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
+                          fontFamily: "var(--serif), serif",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "var(--fg)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
                         }}
                       >
-                        <span
-                          style={{
-                            fontFamily: "var(--serif), serif",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            color: "var(--fg)",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {station.title}
-                        </span>
-                        {active && (
-                          <span
-                            style={{
-                              fontSize: "10px",
-                              color: "var(--accent)",
-                            }}
-                            aria-hidden
-                          >
-                            ♪
-                          </span>
-                        )}
+                        {station.title}
                       </div>
                       <div
                         style={{
                           fontFamily: "var(--mono), monospace",
                           fontSize: "9px",
                           color: "var(--muted)",
-                          letterSpacing: "0.06em",
                           marginTop: "2px",
+                          whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
                         }}
                       >
                         {station.subtitle}
                       </div>
                     </div>
-                    <GenreBadge genre={station.genre} size="sm" />
+                    {active && (
+                      <span
+                        aria-hidden
+                        style={{ fontSize: "10px", color: sg.seed }}
+                      >
+                        ♪
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -369,39 +371,25 @@ export function MusicLauncher() {
                 step={0.01}
                 value={volume}
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
-                style={{
-                  flex: 1,
-                  accentColor: "var(--accent)",
-                  cursor: "pointer",
-                }}
+                style={{ flex: 1, accentColor: gt.seed, cursor: "pointer" }}
                 aria-label="Volume"
               />
             </div>
           </div>
-          {/* Visualizer + pulse animations. Defined here so the keyframes
-              ship with the component and don't need a globals.css touch. */}
+
+          {/* Keyframes ship with the component (no globals.css touch). */}
           <style>{`
-            @keyframes ml-pulse {
-              0%, 100% { opacity: 1; }
-              50% { opacity: 0.4; }
-            }
+            @keyframes ml-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
             .ml-eq {
-              display: inline-flex;
-              align-items: flex-end;
-              justify-content: center;
-              gap: 2px;
-              width: 12px;
-              height: 14px;
-              vertical-align: middle;
+              display: inline-flex; align-items: flex-end; justify-content: center;
+              gap: 2px; width: 11px; height: 13px; vertical-align: middle;
             }
             .ml-eq-bar {
-              width: 2px;
-              background: currentColor;
-              border-radius: 1px;
+              width: 2px; background: currentColor; border-radius: 1px;
               transform-origin: bottom center;
               animation: ml-eq-bounce 0.9s ease-in-out infinite;
             }
-            .ml-eq-bar:nth-child(1) { height: 8px;  animation-delay: 0s; }
+            .ml-eq-bar:nth-child(1) { height: 7px;  animation-delay: 0s; }
             .ml-eq-bar:nth-child(2) { height: 12px; animation-delay: 0.15s; }
             .ml-eq-bar:nth-child(3) { height: 6px;  animation-delay: 0.30s; }
             @keyframes ml-eq-bounce {
