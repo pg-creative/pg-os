@@ -9,6 +9,7 @@ import {
 
 export type Tab =
   | "home"
+  | "morning"
   | "habits"
   | "projects"
   | "flow"
@@ -20,6 +21,7 @@ export type Tab =
 
 export const TABS: { id: Tab; num: string; label: string; glyph: string }[] = [
   { id: "home", num: "00", label: "HOME", glyph: "⌂" },
+  { id: "morning", num: "✶", label: "MORNING", glyph: "☀" },
   { id: "habits", num: "01", label: "HABITS", glyph: "✦" },
   { id: "projects", num: "02", label: "PROJECTS", glyph: "▣" },
   { id: "flow", num: "03", label: "FLOW", glyph: "≋" },
@@ -33,6 +35,7 @@ export const TABS: { id: Tab; num: string; label: string; glyph: string }[] = [
 const KEY = "pg-os-active-tab";
 const VALID: Tab[] = [
   "home",
+  "morning",
   "habits",
   "projects",
   "flow",

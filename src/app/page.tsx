@@ -10,6 +10,7 @@ import { CaptureFAB } from "./_components/CaptureFAB";
 import { CopilotLauncher } from "./_components/Copilot/CopilotPanel";
 import { useActiveTab } from "./_components/useActiveTab";
 import { HomeView } from "./_components/views/HomeView";
+import { MorningView } from "./_components/views/MorningView";
 import { HabitsView } from "./_components/views/HabitsView";
 import { ProjectsView } from "./_components/views/ProjectsView";
 import { FlowView } from "./_components/views/FlowView";
@@ -37,7 +38,11 @@ export default function Page() {
             via EmakiShellBar's @media (max-width: 767px) rule; the Foxfire
             drawer (mounted below) takes over for mobile navigation. */}
         <EmakiShellBar />
-        <div className={`shell${active === "home" ? " shell-bleed" : ""}`}>
+        {active === "morning" && <MorningView embedded />}
+        <div
+          className={`shell${active === "home" ? " shell-bleed" : ""}`}
+          style={active === "morning" ? { display: "none" } : undefined}
+        >
           {/* ACTIVE VIEW */}
           {active === "home" && (
             <>

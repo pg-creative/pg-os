@@ -20,6 +20,7 @@ export interface TabBackdrop {
 // Keyed by the tab id from useActiveTab(). Every tab has bespoke 3-phase art.
 const REGISTRY: Record<string, TabBackdrop> = {
   home: { prominence: "prominent" },
+  morning: { prominence: "prominent" },
   cockpit: { prominence: "prominent" },
   habits: { prominence: "prominent" },
   flow: { prominence: "subtle" },
