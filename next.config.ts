@@ -11,7 +11,7 @@ const config: NextConfig = {
   // serverExternalPackages: tell Next NOT to bundle these — Vercel installs
   // them into node_modules and the runtime loads them from there.
   serverExternalPackages: [
-    "googleapis",
+    "@googleapis/calendar",
     "google-auth-library",
     "mermaid",
     "chokidar",

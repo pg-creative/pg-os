@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { oauthClient } from "@/lib/google";
 import { setTokens } from "@/lib/tokenStore";
-import { google } from "googleapis";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -26,9 +25,16 @@ export async function GET(req: NextRequest) {
 
     let email: string | undefined;
     try {
-      const oauth2 = google.oauth2({ version: "v2", auth: client });
-      const info = await oauth2.userinfo.get();
-      email = info.data.email ?? undefined;
+      // Fetch userinfo directly (avoids pulling in the googleapis mega-package).
+      if (tokens.access_token) {
+        const r = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        if (r.ok) {
+          const info = (await r.json()) as { email?: string };
+          email = info.email ?? undefined;
+        }
+      }
     } catch {
       /* non-fatal */
     }
