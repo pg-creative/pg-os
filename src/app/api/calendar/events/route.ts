@@ -1,68 +1,135 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calendarClient } from "@/lib/google";
 import { getTokens } from "@/lib/tokenStore";
+import {
+  listEventsAcrossCalendars,
+  createEvent,
+  hasCalendarWrite,
+  type CalEvent,
+  type EventInput,
+} from "@/lib/calendarService";
+import { rangeForView, startOfDayLocal, endOfDayLocal } from "@/lib/dateUtils";
 
-export type CalEvent = {
-  id: string;
-  summary: string;
-  start: string;
-  end: string;
-  allDay: boolean;
-  location?: string;
-  description?: string;
-  htmlLink?: string;
-};
+export const runtime = "nodejs";
+
+// Re-export CalEvent so any existing imports from this route still resolve.
+export type { CalEvent };
 
 export type CalResponse =
   | { authed: false }
   | { authed: true; events: CalEvent[]; range: { from: string; to: string } };
 
-function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
-function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
+const RECONNECT_URL = "/api/auth/google";
+
+// ── GET /api/calendar/events ──────────────────────────────────────────────────
+//
+// Query params (all optional):
+//   view=today|week    (default: today)
+//   from=ISO           explicit range start (overrides view)
+//   to=ISO             explicit range end   (overrides view)
+//   calendarIds=a,b,c  comma-separated; omit to query all selected calendars
 
 export async function GET(req: NextRequest) {
   const current = await getTokens("google");
-  if (!current?.refreshToken) return NextResponse.json({ authed: false } satisfies CalResponse);
+  if (!current?.refreshToken) {
+    return NextResponse.json({ authed: false } satisfies CalResponse);
+  }
 
-  const view = req.nextUrl.searchParams.get("view") ?? "today";
-  const now = new Date();
-  const from = startOfDay(now);
-  const to = view === "week"
-    ? endOfDay(new Date(from.getTime() + 6 * 86_400_000))
-    : endOfDay(now);
+  const sp = req.nextUrl.searchParams;
+
+  // Resolve date range: explicit from/to beats view param
+  let from: Date;
+  let to: Date;
+  const fromParam = sp.get("from");
+  const toParam = sp.get("to");
+  if (fromParam && toParam) {
+    from = new Date(fromParam);
+    to = new Date(toParam);
+  } else {
+    const view = (sp.get("view") ?? "today") as "day" | "week";
+    // "today" maps to "day" view
+    const resolved = view === "week" ? "week" : "day";
+    const range = rangeForView(resolved, new Date());
+    from = range.from;
+    to = range.to;
+  }
+
+  // Ensure valid dates — fall back to today on parse failure
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    const fallback = rangeForView("day", new Date());
+    from = fallback.from;
+    to = fallback.to;
+  }
+
+  // Optional calendar filter
+  const calendarIdsParam = sp.get("calendarIds");
+  const calendarIds = calendarIdsParam
+    ? calendarIdsParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
 
   try {
-    // Google SDK handles refresh internally when we pass the refresh_token.
-    const cal = calendarClient(current.refreshToken);
-    const res = await cal.events.list({
-      calendarId: "primary",
-      timeMin: from.toISOString(),
-      timeMax: to.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 50,
-    });
-    const items = (res.data.items ?? []).map<CalEvent>((e) => {
-      const startDateTime = e.start?.dateTime ?? e.start?.date ?? "";
-      const endDateTime = e.end?.dateTime ?? e.end?.date ?? startDateTime;
-      return {
-        id: e.id ?? Math.random().toString(36).slice(2),
-        summary: e.summary ?? "(no title)",
-        start: startDateTime,
-        end: endDateTime,
-        allDay: !e.start?.dateTime,
-        location: e.location ?? undefined,
-        description: e.description ?? undefined,
-        htmlLink: e.htmlLink ?? undefined,
-      };
-    });
+    const events = await listEventsAcrossCalendars(
+      current.refreshToken,
+      from,
+      to,
+      { calendarIds, maxResults: 50 },
+    );
     return NextResponse.json({
       authed: true,
-      events: items,
+      events,
       range: { from: from.toISOString(), to: to.toISOString() },
     } satisfies CalResponse);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
-    return NextResponse.json({ error: "calendar_fetch_failed", detail: msg }, { status: 500 });
+    return NextResponse.json(
+      { error: "calendar_fetch_failed", detail: msg },
+      { status: 500 },
+    );
   }
 }
+
+// ── POST /api/calendar/events ─────────────────────────────────────────────────
+//
+// Body: EventInput (see calendarService.ts)
+// Requires full calendar scope. Returns { ok, event }.
+
+export async function POST(req: NextRequest) {
+  const current = await getTokens("google");
+  if (!current?.refreshToken) {
+    return NextResponse.json({ authed: false }, { status: 401 });
+  }
+  if (!hasCalendarWrite(current)) {
+    return NextResponse.json(
+      { error: "insufficient_scope", reconnect_url: RECONNECT_URL },
+      { status: 403 },
+    );
+  }
+
+  let input: EventInput;
+  try {
+    input = (await req.json()) as EventInput;
+    if (!input.summary || !input.start || !input.end || !input.calendarId) {
+      throw new Error("missing_required_fields");
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "invalid_json";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+
+  try {
+    const event = await createEvent(current.refreshToken, input);
+    return NextResponse.json({ ok: true, event });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    return NextResponse.json(
+      { error: "create_failed", detail: msg },
+      { status: 500 },
+    );
+  }
+}
+
+// Keep these for any internal callers that relied on the old local helpers.
+// They're no longer used in this file but re-exporting prevents import breaks.
+export { startOfDayLocal as startOfDay, endOfDayLocal as endOfDay };

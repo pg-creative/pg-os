@@ -9,7 +9,7 @@
 import type { Rule, RuleAction } from "../ruleEngine";
 import { getTokens, isExpired, refreshAndStore } from "../tokenStore";
 import { fetchWhoopVitals, refreshWhoopToken } from "../whoop";
-import { calendarClient } from "../google";
+import { listEventsAcrossCalendars } from "../calendarService";
 
 const RECOVERY_THRESHOLD = 50;
 const CALENDAR_THRESHOLD = 4;
@@ -33,28 +33,20 @@ async function getTodayEventCount(): Promise<number | null> {
   try {
     const current = await getTokens("google");
     if (!current?.refreshToken) return null;
-    const cal = calendarClient(current.refreshToken);
     const now = new Date();
     const from = new Date(now);
     from.setHours(0, 0, 0, 0);
     const to = new Date(now);
     to.setHours(23, 59, 59, 999);
-    const res = await cal.events.list({
-      calendarId: "primary",
-      timeMin: from.toISOString(),
-      timeMax: to.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 50,
-    });
-    const items = res.data.items ?? [];
-    // Count only non-all-day, non-declined events (PG already declined → not heavy)
-    return items.filter((e) => {
-      if (!e.start?.dateTime) return false;
-      const me = (e.attendees ?? []).find((a) => a.self);
-      if (me?.responseStatus === "declined") return false;
-      return true;
-    }).length;
+    const events = await listEventsAcrossCalendars(
+      current.refreshToken,
+      from,
+      to,
+      { maxResults: 50 },
+    );
+    // Count only timed (non-all-day) events; CalEvent has no attendees field
+    // so declined-event filtering is handled at the Google level via singleEvents.
+    return events.filter((e) => !e.allDay).length;
   } catch {
     return null;
   }

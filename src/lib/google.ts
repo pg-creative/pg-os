@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 
 export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/userinfo.email",
   "openid",
 ];

@@ -21,6 +21,7 @@ export interface TabBackdrop {
 const REGISTRY: Record<string, TabBackdrop> = {
   home: { prominence: "prominent" },
   morning: { prominence: "prominent" },
+  calendar: { prominence: "subtle" },
   cockpit: { prominence: "prominent" },
   habits: { prominence: "prominent" },
   flow: { prominence: "subtle" },
