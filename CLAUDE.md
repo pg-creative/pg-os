@@ -1,6 +1,6 @@
 # Personal OS
 
-> Sub-project of [CEREBRUM](../CLAUDE.md). Personal operating system dashboard — PG's daily command center.
+> Personal operating system dashboard — PG's daily command center.
 
 ## What This Is
 A Next.js 15 + React 19 + Tailwind v4 personal dashboard running at `http://127.0.0.1:3030`. Ghibli anime cel-shaded aesthetic with three Laputa time-responsive palettes (Day / Twilight / Midnight). Five tabs (Home / Habits / Projects / Flow / Claude) + floating Capture FAB with voice. File-backed OAuth tokens. Wired to Hero's Chronicle Supabase for habits/journal. Claude tab aggregates self-improvement signals from Claude Code transcripts, Cowork exports, and the web chat archive (FTS5).
@@ -115,7 +115,7 @@ Optional but unlocks Habits:
 
 ## Running
 ```bash
-cd ~/CEREBRUM/personal-os
+cd ~/pg/personal-os
 pnpm dev                                          # starts at :3030
 cloudflared tunnel --url http://127.0.0.1:3030   # public URL for phone
 ```
