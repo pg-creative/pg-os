@@ -1,5 +1,5 @@
 {
-  "_note": "Phase 2.5 asset batch for the agent-office redesign. 9 prompts × 4 candidates = 36 images. Run via: PROMPTS_FILE=mj-prompts-agent-office.json LEGNEXT_API_KEY=... node fire-mj.mjs",
+  "_note": "Phase 2.5 asset batch for the agent-office redesign. 9 prompts \u00d7 4 candidates = 36 images. Run via: PROMPTS_FILE=mj-prompts-agent-office.json LEGNEXT_API_KEY=... node fire-mj.mjs",
   "_outputs": "Land in personal-os/public/mj-assets/<id>-{0,1,2,3}.png. PG picks best per slot; chosen image gets copied to personal-os/public/agent-office/{characters,environments}/.",
   "_aesthetic_lock": "Studio Ghibli anime cel-animation + Howl's Moving Castle golden-hour palette + JRPG jewel accents. Per ~/.claude/rules/visual-style.md and ~/.claude/research/agent-office-character-system-2026-05-16.md",
   "jobs": [
@@ -47,6 +47,31 @@
       "id": "env-guild",
       "slot": "environment/guild",
       "text": "Studio Ghibli anime background art, cozy adventurers guild hall interior at golden hour, large stone hearth with warm fire on the back wall, long warm wood plank floor, mounted brass shields and warm parchment quest postings on the wooden walls, warm amber lantern light, golden hour sunlight streaming through tall amber-stained windows, deep warm blue ceiling shadows with exposed timber beams, polished bar counter on one side, magical floating dust motes in shafts of light, rich amber and warm cream palette with ruby accent on the hearth fire, Howls Moving Castle interior atmosphere, anime cel shading not watercolor, luminous painterly background, cinematic wide shot, no characters --v 7 --ar 16:9"
+    },
+    {
+      "id": "char-pixel-wayfarer",
+      "slot": "character/pixel-wayfarer",
+      "text": "Octopath Traveler HD-2D pixel sprite character, hooded wayfarer explorer with deep forest green hooded cloak and amber lantern on staff, calm reverent expression, crisp dithered pixel shading, retro JRPG sprite art in 3/4 view, golden hour warm amber and deep warm blue palette with cream and emerald accents, soft warm rim light, luminous, painterly bokeh suggestion behind the sprite, full body, transparent atmosphere --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-pixel-scribe",
+      "slot": "character/pixel-scribe",
+      "text": "Octopath Traveler HD-2D pixel sprite character, young scribe with feathered quill, warm cream linen robe with gold trim, ink-stained fingers, focused contemplative expression, crisp dithered pixel shading, retro JRPG sprite art in 3/4 view, golden hour warm amber and deep warm blue palette with cream and emerald accents, soft warm rim light, luminous, painterly bokeh suggestion behind the sprite, full body, transparent atmosphere --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-pixel-smith",
+      "slot": "character/pixel-smith",
+      "text": "Octopath Traveler HD-2D pixel sprite character, brawny smith holding small forging hammer, leather apron over warm cream tunic, soot streak on cheek, confident grounded expression, ruby red ember glow, crisp dithered pixel shading, retro JRPG sprite art in 3/4 view, golden hour warm amber and deep warm blue palette with cream and emerald accents, soft warm rim light, luminous, painterly bokeh suggestion behind the sprite, full body, transparent atmosphere --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-pixel-sage",
+      "slot": "character/pixel-sage",
+      "text": "Octopath Traveler HD-2D pixel sprite character, elderly sage holding an open leather book glowing softly with sapphire blue light, long warm cream robe, kind contemplative expression, crisp dithered pixel shading, retro JRPG sprite art in 3/4 view, golden hour warm amber and deep warm blue palette with cream and emerald accents, soft warm rim light, luminous, painterly bokeh suggestion behind the sprite, full body, transparent atmosphere --v 7 --ar 1:1"
+    },
+    {
+      "id": "char-pixel-ranger",
+      "slot": "character/pixel-ranger",
+      "text": "Octopath Traveler HD-2D pixel sprite character, ranger scout in worn brown leather and warm cream tunic with shortbow over shoulder, alert focused expression, emerald cloak, crisp dithered pixel shading, retro JRPG sprite art in 3/4 view, golden hour warm amber and deep warm blue palette with cream and emerald accents, soft warm rim light, luminous, painterly bokeh suggestion behind the sprite, full body, transparent atmosphere --v 7 --ar 1:1"
     }
   ]
 }
