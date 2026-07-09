@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { readFile, readdir, stat } from "fs/promises";
 import { homedir } from "os";
 import path from "path";
+import { pgPath } from "@/lib/paths";
 
-const BRAIN_ENTRY = path.join(
-  homedir(),
-  "CEREBRUM/brain/wiki/synthesis/claude-extension-landscape-2026-05-15.md",
+const BRAIN_ENTRY = pgPath(
+  "brain/wiki/synthesis/claude-extension-landscape-2026-05-15.md",
 );
 const EVALS_DIR = path.join(homedir(), ".claude/skill-evals-2026-05-15");
 const STATUS_FILE = path.join(homedir(), ".pg-os/extensions-status.json");

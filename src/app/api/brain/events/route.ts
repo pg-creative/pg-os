@@ -1,4 +1,4 @@
-// SSE: fires "refresh" whenever any file under ~/CEREBRUM/brain/wiki/ changes.
+// SSE: fires "refresh" whenever any file under ~/pg/brain/wiki/ changes.
 // Client listens via EventSource; on each event, refetches /api/brain/entries.
 // Pattern mirrors api/projects/events/route.ts.
 

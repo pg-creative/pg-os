@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
+import { pgPath } from "./paths";
 import { addShip } from "./shipLog";
 import { addQueueItem } from "./queueStore";
 import { upsertJournal } from "./habits";
@@ -16,11 +16,10 @@ export type CaptureDestination =
   | "hc-journal"
   | "todo";
 
-const HOME = os.homedir();
 const DEST_DIRS: Record<"essay" | "linkedin" | "yuriko", string> = {
-  essay:    path.join(HOME, "CEREBRUM", "pg-creative", "essays", "drafts"),
-  linkedin: path.join(HOME, "CEREBRUM", "pg-creative", "linkedin-queue"),
-  yuriko:   path.join(HOME, "CEREBRUM", "yuriko", "notebook"),
+  essay: pgPath("pg-creative", "essays", "drafts"),
+  linkedin: pgPath("pg-creative", "linkedin-queue"),
+  yuriko: pgPath("yuriko", "notebook"),
 };
 
 function slugify(s: string): string {

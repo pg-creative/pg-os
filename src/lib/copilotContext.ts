@@ -4,8 +4,13 @@
  * This block is passed with cache_control: { type: "ephemeral" } to save tokens.
  */
 
-import os from "node:os";
-import { listShips, currentStreak, velocityPerWeek, shippedToday } from "./shipLog";
+import { pgPath } from "./paths";
+import {
+  listShips,
+  currentStreak,
+  velocityPerWeek,
+  shippedToday,
+} from "./shipLog";
 import { listQueue } from "./queueStore";
 
 // ── Laputa variant detection (mirrors ModeProvider logic) ────────────────────
@@ -67,7 +72,9 @@ export async function assembleCopilotContext(): Promise<CopilotContext> {
     shipStreak = await currentStreak();
     shipVelocity = await velocityPerWeek();
     shippedTodayBool = await shippedToday();
-    recentShipTexts = ships.map((s) => `  - ${s.text}${s.context ? ` [${s.context}]` : ""}`);
+    recentShipTexts = ships.map(
+      (s) => `  - ${s.text}${s.context ? ` [${s.context}]` : ""}`,
+    );
   } catch {
     // ship log unavailable — non-fatal
   }
@@ -77,7 +84,9 @@ export async function assembleCopilotContext(): Promise<CopilotContext> {
   try {
     const queueItems = await listQueue();
     queueCount = queueItems.length;
-    queueTitles = queueItems.slice(0, 5).map((q) => `  - "${q.title}" (${q.source ?? "unknown"})`);
+    queueTitles = queueItems
+      .slice(0, 5)
+      .map((q) => `  - "${q.title}" (${q.source ?? "unknown"})`);
   } catch {
     // queue unavailable — non-fatal
   }
@@ -139,7 +148,7 @@ You have 9 tools to gather context and take action:
 ## User Context
 - PG's email: pgsmith00@gmail.com
 - Home: macOS Apple Silicon
-- Working directory: ${os.homedir()}/CEREBRUM/personal-os
+- Working directory: ${pgPath("personal-os")}
 - Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
 
   return {

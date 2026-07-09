@@ -5,9 +5,9 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import type { BrainEntry, BrainEntryFrontmatter, FileType } from "./types";
+import { pgPath } from "@/lib/paths";
 
-const BRAIN_ROOT =
-  process.env.BRAIN_LOCAL_ROOT || `${process.env.HOME}/CEREBRUM/brain`;
+const BRAIN_ROOT = process.env.BRAIN_LOCAL_ROOT || pgPath("brain");
 const WIKI_ROOT = path.join(BRAIN_ROOT, "wiki");
 
 const NAV_FILES = new Set(["index.md", "log.md", "by-tag.md"]);

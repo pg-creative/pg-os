@@ -1,9 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
-import path from "node:path";
-import os from "node:os";
 import fs from "node:fs";
+import { pgPath } from "./paths";
 
-const DB_PATH = path.join(os.homedir(), "CEREBRUM", "claude-web-history", "db", "archive.db");
+const DB_PATH = pgPath("claude-web-history", "db", "archive.db");
 
 export type ArchiveStats = {
   totalConversations: number;

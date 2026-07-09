@@ -1,7 +1,9 @@
 import os from "node:os";
 import path from "node:path";
+import { pgPath } from "./paths";
 
-export type ProjectGlyph = "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
+export type ProjectGlyph =
+  "sun" | "star" | "heart" | "sparkles" | "feather" | "music" | "compass";
 
 export type ProjectConfig = {
   id: string;
@@ -13,16 +15,59 @@ export type ProjectConfig = {
 };
 
 const HOME = os.homedir();
-const cereb = (rel: string) => path.join(HOME, "CEREBRUM", rel);
 
 export const ACTIVE_PROJECTS: ProjectConfig[] = [
-  { id: "metrasens",        name: "Metrasens",        path: cereb("metrasens"),        sub: "GTM ENGINEER · W2",         deadline: "2026-05-31", glyph: "compass" },
-  { id: "heros-chronicle",  name: "Hero's Chronicle", path: cereb("heros-chronicle"),  sub: "LIFE RPG · 1.0",            deadline: "2026-10-02", glyph: "star" },
-  { id: "pg-creative",      name: "PG Creative",      path: cereb("pg-creative"),      sub: "PRODUCTS · CONSULTING",     glyph: "sparkles" },
-  { id: "voyager",          name: "Voyager",          path: cereb("voyager"),          sub: "GAMING · CONTENT",          glyph: "music" },
-  { id: "personal-os",      name: "personal-os",      path: cereb("personal-os"),      sub: "THIS APP",                  glyph: "sun" },
-  { id: "career-ops",       name: "career-ops",       path: cereb("career-ops"),       sub: "JOB SEARCH CLI",            glyph: "feather" },
-  { id: "claude-config",    name: "Claude Config",    path: path.join(HOME, ".claude"), sub: "GLOBAL CLAUDE CONFIG",     glyph: "sparkles" },
+  {
+    id: "metrasens",
+    name: "Metrasens",
+    path: pgPath("metrasens"),
+    sub: "GTM ENGINEER · W2",
+    deadline: "2026-05-31",
+    glyph: "compass",
+  },
+  {
+    id: "heros-chronicle",
+    name: "Hero's Chronicle",
+    path: pgPath("heros-chronicle"),
+    sub: "LIFE RPG · 1.0",
+    deadline: "2026-10-02",
+    glyph: "star",
+  },
+  {
+    id: "pg-creative",
+    name: "PG Creative",
+    path: pgPath("pg-creative"),
+    sub: "PRODUCTS · CONSULTING",
+    glyph: "sparkles",
+  },
+  {
+    id: "voyager",
+    name: "Voyager",
+    path: pgPath("voyager"),
+    sub: "GAMING · CONTENT",
+    glyph: "music",
+  },
+  {
+    id: "personal-os",
+    name: "personal-os",
+    path: pgPath("personal-os"),
+    sub: "THIS APP",
+    glyph: "sun",
+  },
+  {
+    id: "career-ops",
+    name: "career-ops",
+    path: pgPath("career-ops"),
+    sub: "JOB SEARCH CLI",
+    glyph: "feather",
+  },
+  {
+    id: "claude-config",
+    name: "Claude Config",
+    path: path.join(HOME, ".claude"),
+    sub: "GLOBAL CLAUDE CONFIG",
+    glyph: "sparkles",
+  },
 ];
 
 export function getProject(id: string): ProjectConfig | undefined {
@@ -47,7 +92,9 @@ export function setActiveChestId(id: string | null): void {
   try {
     if (id === null) window.localStorage.removeItem(ACTIVE_CHEST_KEY);
     else window.localStorage.setItem(ACTIVE_CHEST_KEY, id);
-  } catch { /* no-op */ }
+  } catch {
+    /* no-op */
+  }
 }
 
 export function getDefaultActiveChestId(): string {

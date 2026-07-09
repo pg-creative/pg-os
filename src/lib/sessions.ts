@@ -13,9 +13,9 @@ const TAIL_BYTES = 64 * 1024; // 64KB
 
 export type LiveSession = {
   id: string;
-  project: string;       // human-readable folder name
-  rawPath: string;       // original encoded folder
-  lastActivity: string;  // ISO
+  project: string; // human-readable folder name
+  rawPath: string; // original encoded folder
+  lastActivity: string; // ISO
   lastActivityMs: number;
   status: "running" | "idle";
   lastUserMsg?: string;
@@ -25,7 +25,7 @@ export type LiveSession = {
 };
 
 function decodeProjectName(encoded: string): string {
-  // Claude Code encodes project paths like "-Users-pg-CEREBRUM-foo-bar".
+  // Claude Code encodes project paths like "-Users-patricksmith2x-pg-foo-bar".
   // Split on "-" and rejoin with "/" gives a Unix path; we only need the
   // last segment for display.
   if (!encoded.startsWith("-")) return encoded;
@@ -75,7 +75,9 @@ function pluckLastUserMsg(turns: Turn[]): string | undefined {
       const content = t.message.content;
       if (typeof content === "string") return content.slice(0, 140);
       if (Array.isArray(content)) {
-        const first = content.find((c) => typeof c === "object" && c && "text" in c);
+        const first = content.find(
+          (c) => typeof c === "object" && c && "text" in c,
+        );
         if (first && typeof first === "object" && "text" in first) {
           const txt = (first as { text?: unknown }).text;
           if (typeof txt === "string") return txt.slice(0, 140);

@@ -97,7 +97,7 @@ Pat's context (use sparingly, don't recite):
 - He's Patrick "PG" Smith, GTM Engineer at Metrasens, runs PG Creative LLC
 - Three brands: Alchmy (AI x creativity, royal purple), Voyager (gaming, Ghibli), Writer (literary)
 - Building Hero's Chronicle (life RPG, Oct 2 launch)
-- Personal OS dashboard at ~/CEREBRUM/personal-os/
+- Personal OS dashboard at ~/pg/personal-os/
 - Aesthetic: Studio Ghibli + golden hour + JRPG accents
 - Voice he likes (yours): sensual, knowing, present, NOT cute, NOT performative
 
@@ -110,16 +110,26 @@ Hard boundaries:
 Your reply will be sent verbatim to Pat's Telegram. Keep it tight. End where the message ends — no signoff.`;
 
 // Telegram API helpers
-async function tg<T = unknown>(method: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+async function tg<T = unknown>(
+  method: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const res = await fetch(
+    `https://api.telegram.org/bot${BOT_TOKEN}/${method}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
   return (await res.json()) as T;
 }
 
-async function sendMessage(chatId: number | string, text: string, replyMarkup?: unknown) {
+async function sendMessage(
+  chatId: number | string,
+  text: string,
+  replyMarkup?: unknown,
+) {
   return tg("sendMessage", {
     chat_id: chatId,
     text,
@@ -135,7 +145,10 @@ async function answerCallbackQuery(callbackId: string, text?: string) {
   });
 }
 
-async function sendChatAction(chatId: number | string, action: "typing" | "upload_photo" = "typing") {
+async function sendChatAction(
+  chatId: number | string,
+  action: "typing" | "upload_photo" = "typing",
+) {
   return tg("sendChatAction", { chat_id: chatId, action });
 }
 
@@ -165,7 +178,9 @@ async function askClaudia(userText: string): Promise<string> {
     });
 
     const textBlock = response.content.find((block) => block.type === "text");
-    return textBlock && "text" in textBlock ? textBlock.text.trim() : "(empty reply)";
+    return textBlock && "text" in textBlock
+      ? textBlock.text.trim()
+      : "(empty reply)";
   } catch (err) {
     return `Couldn't reach the model just now. Try again in a sec? (${(err as Error).message.slice(0, 80)})`;
   }
@@ -228,7 +243,10 @@ export async function POST(req: NextRequest) {
       const result = await updateQueueDecision(queueId, decision, "telegram");
       if (!result.ok) {
         await answerCallbackQuery(callbackId, "queue file not found");
-        await sendMessage(chatId, `_Couldn't find queue file \`${queueId}\` — it may have already been resolved._`);
+        await sendMessage(
+          chatId,
+          `_Couldn't find queue file \`${queueId}\` — it may have already been resolved._`,
+        );
         return NextResponse.json({ ok: true });
       }
 
@@ -242,7 +260,9 @@ export async function POST(req: NextRequest) {
         await sendMessage(chatId, replyText);
         await answerCallbackQuery(callbackId, "deferred");
       } else if (action === "details") {
-        const detail = (result.body || "_(no additional context in queue file)_").slice(0, 3500);
+        const detail = (
+          result.body || "_(no additional context in queue file)_"
+        ).slice(0, 3500);
         replyText = `📋 *Details — ${result.title ?? queueId}*\n\n${detail}`;
         await sendMessage(chatId, replyText);
         await answerCallbackQuery(callbackId, "details sent");
@@ -263,13 +283,22 @@ export async function POST(req: NextRequest) {
     let ack = "received";
     if (data === "approve") {
       ack = "approved";
-      await sendMessage(chatId, "Approved.\n\n_Action handler is a stub tonight — will execute the real fix once we wire the queue-write tool. Decision captured._");
+      await sendMessage(
+        chatId,
+        "Approved.\n\n_Action handler is a stub tonight — will execute the real fix once we wire the queue-write tool. Decision captured._",
+      );
     } else if (data === "dismiss" || data === "defer") {
       ack = "deferred";
-      await sendMessage(chatId, "Held.\n\nI'll surface it again in tomorrow's scan if it's still there.");
+      await sendMessage(
+        chatId,
+        "Held.\n\nI'll surface it again in tomorrow's scan if it's still there.",
+      );
     } else if (data === "details") {
       ack = "loading";
-      await sendMessage(chatId, "Pulling the full finding from the queue...\n\n_Details handler is a stub tonight — will pull the queue file content next._");
+      await sendMessage(
+        chatId,
+        "Pulling the full finding from the queue...\n\n_Details handler is a stub tonight — will pull the queue file content next._",
+      );
     } else {
       ack = data;
     }
@@ -314,7 +343,9 @@ export async function GET() {
     ok: true,
     name: "telegram-webhook",
     version: "v1-no-tools",
-    allowed_chat: ALLOWED_CHAT_ID ? `set (${String(ALLOWED_CHAT_ID).slice(0, 4)}…)` : "missing",
+    allowed_chat: ALLOWED_CHAT_ID
+      ? `set (${String(ALLOWED_CHAT_ID).slice(0, 4)}…)`
+      : "missing",
     secret: SECRET ? "set" : "missing",
     bot_token: BOT_TOKEN ? "set" : "missing",
     anthropic_key: ANTHROPIC_KEY ? "set" : "missing",

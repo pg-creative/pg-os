@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
+import path from "node:path";
 
 export const dynamic = "force-dynamic";
 
 // Scans the PixelLab output dir and returns a manifest of every sprite +
 // its animation frames, so the client plays whatever actually generated.
 // Files: "<slug>.png" (base), "<slug>-<action>-<i>.png" (animation frames).
-const DIR = "/Users/pg/CEREBRUM/personal-os/public/agent-office/pixel";
+// This is the app's own gitignored PixelLab output under public/, so resolve it
+// from the repo root (process.cwd()) rather than a hardcoded home path.
+const DIR = path.join(process.cwd(), "public", "agent-office", "pixel");
 const FRAME_RE = /^(.+?)-(idle|talk)-(\d+)\.png$/;
 
 export async function GET() {
