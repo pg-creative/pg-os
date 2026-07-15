@@ -115,7 +115,7 @@ export async function pollNotionForChanges(since?: string): Promise<{
 }
 
 function extractSlugFromBrainPath(p: string): string | null {
-  // brain path looks like file:///Users/patricksmith2x/pg/brain/wiki/concepts/<slug>.md
+  // brain path looks like file:///Users/patricksmith2x/cortex/brain/wiki/concepts/<slug>.md
   const m = p.match(/\/([^/]+)\.md$/);
   return m ? m[1] : null;
 }

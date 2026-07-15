@@ -18,27 +18,18 @@ const HOME = os.homedir();
 
 export const ACTIVE_PROJECTS: ProjectConfig[] = [
   {
-    id: "metrasens",
-    name: "Metrasens",
-    path: pgPath("metrasens"),
-    sub: "GTM ENGINEER · W2",
-    deadline: "2026-05-31",
-    glyph: "compass",
-  },
-  {
-    id: "heros-chronicle",
-    name: "Hero's Chronicle",
-    path: pgPath("heros-chronicle"),
-    sub: "LIFE RPG · 1.0",
-    deadline: "2026-10-02",
-    glyph: "star",
-  },
-  {
     id: "pg-creative",
     name: "PG Creative",
     path: pgPath("pg-creative"),
     sub: "PRODUCTS · CONSULTING",
     glyph: "sparkles",
+  },
+  {
+    id: "alchmy",
+    name: "Alchmy",
+    path: pgPath("alchmy"),
+    sub: "THE AI ALCHEMIST",
+    glyph: "star",
   },
   {
     id: "voyager",
@@ -48,6 +39,13 @@ export const ACTIVE_PROJECTS: ProjectConfig[] = [
     glyph: "music",
   },
   {
+    id: "game-coach",
+    name: "Game Coach",
+    path: pgPath("game-coach"),
+    sub: "COACHING ENGINE",
+    glyph: "compass",
+  },
+  {
     id: "personal-os",
     name: "personal-os",
     path: pgPath("personal-os"),
@@ -55,10 +53,10 @@ export const ACTIVE_PROJECTS: ProjectConfig[] = [
     glyph: "sun",
   },
   {
-    id: "career-ops",
-    name: "career-ops",
-    path: pgPath("career-ops"),
-    sub: "JOB SEARCH CLI",
+    id: "meta-claude",
+    name: "Meta-Claude",
+    path: pgPath("meta-claude"),
+    sub: "CONFIG WORKSPACE",
     glyph: "feather",
   },
   {
@@ -98,5 +96,5 @@ export function setActiveChestId(id: string | null): void {
 }
 
 export function getDefaultActiveChestId(): string {
-  return ACTIVE_PROJECTS[0]?.id ?? "metrasens";
+  return ACTIVE_PROJECTS[0]?.id ?? "pg-creative";
 }
