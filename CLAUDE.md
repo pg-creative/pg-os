@@ -115,7 +115,7 @@ Optional but unlocks Habits:
 
 ## Running
 ```bash
-cd ~/pg/personal-os
+cd ~/cortex/personal-os
 pnpm dev                                          # starts at :3030
 cloudflared tunnel --url http://127.0.0.1:3030   # public URL for phone
 ```
