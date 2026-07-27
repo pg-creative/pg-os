@@ -1,5 +1,23 @@
 # Personal OS
 
+## Where it stands
+
+<!-- REPLACE this whole section each session. Never append. 20 lines max. -->
+<!-- Auto-seeded 2026-07-27 from git history; refine on first real session. -->
+
+**Recently shipped**
+- fix(docs): correct dead ~/pg/ paths to ~/cortex/ (2026-07-27)
+- chore: session drift — cortex path fix + project list update (2026-07-15)
+- fix: repoint CEREBRUM paths to ~/pg via shared PG_ROOT constant (2026-07-09)
+- chore: pre-mirror snapshot (2026-07-08)
+
+**Unpushed:** 1 commit(s) — not on the other laptop
+
+**Blocked:** _none recorded_
+
+**Next:** _needs a concrete, startable action_
+
+---
 > Personal operating system dashboard — PG's daily command center.
 
 ## What This Is
