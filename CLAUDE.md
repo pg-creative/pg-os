@@ -3,19 +3,19 @@
 ## Where it stands
 
 <!-- REPLACE this whole section each session. Never append. 20 lines max. -->
-<!-- Auto-seeded 2026-07-27 from git history; refine on first real session. -->
 
-**Recently shipped**
-- fix(docs): correct dead ~/pg/ paths to ~/cortex/ (2026-07-27)
-- chore: session drift — cortex path fix + project list update (2026-07-15)
-- fix: repoint CEREBRUM paths to ~/pg via shared PG_ROOT constant (2026-07-09)
-- chore: pre-mirror snapshot (2026-07-08)
+**Recently shipped (2026-07-27 /tidy pass)** — 28 files / 4,311 lines removed, tracked+pushed history recoverable via git:
+- Dead cockpit/kitsu session-resume docs + superseded Q2/Phase-C specs (worktree-cockpit merged long ago)
+- kitsu-overhaul + kitsu-orchestrator-architecture specs — reversed decision (Kitsu's runtime moved Agent SDK → Vercel AI SDK, b29acf8); docs asserted an architecture that's no longer real
+- Abandoned markdown-tracking-layer experiment (`modules/`, `dashboard/`, `integrations/`, `tiers.md`, `skills/personal-os-snapshot`) — one commit on 2026-05-15, never wired, dead `~/CEREBRUM` paths, unfilled TODOs since
+- Stale `design-system/README.md` (contradicted the locked Emaki x Laputa direction) + its own tracked `_archive/` + dead Marvis-era prototype pages (`public/marvis-directions.html`, `presence-lab.html`, `learn/agents-101.html`)
+- Fixed undated globals.css line count in Key Files (now `wc -l`-sourced, dated)
 
-**Unpushed:** 1 commit(s) — not on the other laptop
+**Unpushed:** 5 commits — not yet on the other laptop (2 pre-existing path fixes + 3 tidy commits above)
 
 **Blocked:** _none recorded_
 
-**Next:** _needs a concrete, startable action_
+**Next:** re-populate `docs/specs/redesign-2026-05-emaki-laputa.md` WS4 (module-by-module tab redesign is still mid-flight per CANON.md — "migrates surfaces to the locked direction tab by tab")
 
 ---
 > Personal operating system dashboard — PG's daily command center.
@@ -62,7 +62,7 @@ Kickoff: 2026-04-21. **Production: https://pg-os.vercel.app** (stable, no auth g
 src/app/
 ├── layout.tsx                 ← ModeProvider + TabProvider
 ├── page.tsx                   ← Topbar + TabBar + active view routing
-├── globals.css                ← ~11,100 lines (TOO LARGE — chunk-read): theme tokens, type-scale tokens (--text-*/--type-scale, 12px floor), per-variant palettes, layout, views, a11y foundation, Tier 1 polish, Claude view styles
+├── globals.css                ← 11,180 lines (`wc -l`, 2026-07-27; TOO LARGE — chunk-read): theme tokens, type-scale tokens (--text-*/--type-scale, 12px floor), per-variant palettes, layout, views, a11y foundation, Tier 1 polish, Claude view styles
 ├── _components/
 │   ├── ModeProvider.tsx       ← Laputa Day/Twilight/Midnight auto-switch
 │   ├── useActiveTab.tsx       ← tab state + view transitions
