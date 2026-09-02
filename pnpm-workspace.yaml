@@ -1,7 +1,17 @@
+# pnpm 11 consolidated onlyBuiltDependencies / neverBuiltDependencies /
+# ignoredBuiltDependencies into one allowBuilds map of name -> boolean, and it
+# lives HERE, not in package.json. The old package.json field is silently
+# ignored, which is why builds that used to be approved started failing.
+#
+# Each entry is a trust decision, not a formality. Reasons recorded so the next
+# person does not have to re-derive them.
 allowBuilds:
-  core-js: set this to true or false
-  core-js-pure: set this to true or false
-  es5-ext: set this to true or false
-  fsevents: set this to true or false
-  node-pty: set this to true or false
-  sharp: set this to true or false
+  # Native modules whose build output we actually need.
+  node-pty: true      # native pty; was the sole entry in the old package.json list
+  sharp: true         # next/image optimisation — this app is image-heavy
+  fsevents: true      # macOS native file watching for the dev watcher
+
+  # Postinstall scripts that only print messages. No build output is used.
+  core-js: false
+  core-js-pure: false
+  es5-ext: false
