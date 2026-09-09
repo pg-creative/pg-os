@@ -42,11 +42,17 @@ const PORTRAIT = "/agent-office/characters/wayfarer-0.png";
 /** A working name, and a draft until PG says "that one". */
 const HERO_NAME = "the Wayfarer";
 /**
- * A real screenshot of this scene, taken by the harness with the HUD hidden and
- * cropped inside any paper edge (the Critic's deduction 11: round one's still
- * kept the plate's torn white border). Regenerate it whenever the hall changes.
+ * A real screenshot of this scene, taken with the HUD hidden and with no paper
+ * edge in it (the Critic's deduction 11: round one's still kept the plate's torn
+ * white border). Regenerate it whenever the hall changes.
+ *
+ * It is served THROUGH THE GATE, not from `public/`. pg-os is a public repo and
+ * `public/` is served with no cookie check; the quiet practice is private
+ * forever, and a picture of it is still a picture of it. So the file lives in
+ * the vault beside the world it shows, and this URL is the same extensionless
+ * asset route every plate uses.
  */
-const STILL = "/cosmos/still-hall.jpg";
+const STILL = "/api/cosmos/asset/vault/worlds/quiet-practice/plates/still-hall";
 
 export function CosmosStage({
   manifest,
