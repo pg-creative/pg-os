@@ -21,20 +21,22 @@ const COOKIE_NAME = "pgos-auth";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 90; // 90 days
 
 /**
- * Cosmos gate. EXTENDS the `?key=` cookie pattern above rather than adding a
- * login page: same one-visit-per-device shape, same 90-day TTL, second secret.
+ * Cosmos gate. ONE SECRET (plan 7i, D16: "two secrets double what can be lost").
+ * `COSMOS_KEY` is deleted; the cosmos rides on `PGOS_SHARED_SECRET` and on the
+ * same `pgos-auth` cookie the rest of the OS already sets, so a device that can
+ * open PG OS can open the worlds, and there is one string to rotate.
  *
- * Two differences, both deliberate (plan 7g-1):
+ * What stays different, and it is the whole point (plan 7g-1):
  *   - FAIL-CLOSED. The PG OS gate passes everything through when no secret is
- *     set, which is why the OS is ungated today. The practice world is private
- *     forever, so no COSMOS_KEY means 404, not open.
+ *     set, which is why the OS is ungated in dev. The practice world and the
+ *     depths are private forever, so an unset or wrong secret means 404 on
+ *     these paths, never open, in dev as much as in production.
  *   - 404, never a redirect to /unlock. A redirect confirms the route exists.
  *
  * The asset route's URLs carry no file extension on purpose: the matcher below
  * excludes every image extension, so a plate served as `.jpg` could not be gated
  * by any cookie. Extensionless URLs are what make the gate reach the paintings.
  */
-const COSMOS_COOKIE = "cosmos-auth";
 const COSMOS_PREFIXES = ["/cosmos", "/api/cosmos"];
 
 function isCosmosPath(pathname: string): boolean {
@@ -47,15 +49,17 @@ function cosmosGate(req: NextRequest): NextResponse | null {
   const { pathname, searchParams } = req.nextUrl;
   if (!isCosmosPath(pathname)) return null;
 
-  const key = process.env.COSMOS_KEY;
-  if (!key) return new NextResponse(null, { status: 404 });
+  const secret = process.env.PGOS_SHARED_SECRET;
+  if (!secret) return new NextResponse(null, { status: 404 });
 
-  const param = searchParams.get("cosmos");
-  if (param && param === key) {
+  // `?key=` is the OS's own one-visit-per-device handshake; honouring it here
+  // means the cosmos needs no second ceremony and no second cookie.
+  const param = searchParams.get("key");
+  if (param && param === secret) {
     const cleanUrl = req.nextUrl.clone();
-    cleanUrl.searchParams.delete("cosmos");
+    cleanUrl.searchParams.delete("key");
     const res = NextResponse.redirect(cleanUrl);
-    res.cookies.set(COSMOS_COOKIE, key, {
+    res.cookies.set(COOKIE_NAME, secret, {
       httpOnly: true,
       sameSite: "lax",
       secure: req.nextUrl.protocol === "https:",
@@ -65,7 +69,7 @@ function cosmosGate(req: NextRequest): NextResponse | null {
     return res;
   }
 
-  if (req.cookies.get(COSMOS_COOKIE)?.value === key) return NextResponse.next();
+  if (req.cookies.get(COOKIE_NAME)?.value === secret) return NextResponse.next();
 
   return new NextResponse(null, { status: 404 });
 }

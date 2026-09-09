@@ -38,13 +38,18 @@ const config: NextConfig = {
       // Cosmos plates, so a world's 96-frame sequence can never be swept into a
       // function bundle the way public/art once ballooned api/briefing to ~745MB.
       //
-      // Only in-project globs are listed: Turbopack rejects any pattern that
-      // navigates out of the project root ("glob '../cosmos/**' is invalid"), so
-      // ../cosmos and ../self/wall/plates cannot be named here. They do not need
-      // to be. The tracer follows static imports, and /api/cosmos/asset reads its
-      // files through a path computed at request time from COSMOS_ROOT, so there
-      // is no static edge into those trees for it to follow. public/cosmos is
-      // listed to keep it that way if a plate is ever staged inside the repo.
+      // Retried 2026-09-09 with ABSOLUTE paths, after relative `../cosmos/**` was
+      // rejected as an out-of-root glob. Absolute paths are accepted: the tracer
+      // resolves excludes against outputFileTracingRoot (the project root here),
+      // and an absolute pattern sidesteps the `..` check that rejects the
+      // relative form. Verified by a clean `pnpm build`; if a future Next drops
+      // that, the fallback is unchanged behaviour, because there is no static
+      // edge into these trees anyway: the tracer follows imports, and
+      // /api/cosmos/asset computes its paths at request time from COSMOS_ROOT.
+      "/Users/pg/cortex/cosmos/**",
+      "/Users/pg/cortex/self/wall/plates/**",
+      // And the in-repo staging path, to keep it that way if a plate ever lands
+      // inside the project by hand.
       "public/cosmos/**",
     ],
   },

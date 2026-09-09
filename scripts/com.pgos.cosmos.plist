@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PG OS + the cosmos under launchd, on the mini.
+
+  Plan 7i, D16: "One secret. `next start` under launchd with KeepAlive, never
+  `pnpm dev` in tmux." A dev server in a terminal does not survive a month, a
+  reboot, or a closed lid; this does.
+
+  DRAFTED, NOT INSTALLED. A LaunchAgent is a standing change to PG's machine and
+  needs his yes. Nothing here has been loaded.
+
+  WorkingDirectory is the round-two WORKTREE while the branch is in flight. AT
+  MERGE it becomes /Users/pg/cortex/personal-os and the worktree is deleted; that
+  is the only line that changes.
+
+  It runs scripts/cosmos-start.sh rather than `next` directly, because the one
+  secret belongs in .env.local (gitignored, 0600) and not in a plist that sits
+  world-readable in ~/Library/LaunchAgents.
+
+  Install:   bash scripts/install-cosmos-service.sh
+  Uninstall: launchctl bootout gui/$(id -u)/com.pgos.cosmos && rm ~/Library/LaunchAgents/com.pgos.cosmos.plist
+  Logs:      ~/Library/Logs/pgos/cosmos.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pgos.cosmos</string>
+
+  <!-- AT MERGE: /Users/pg/cortex/personal-os -->
+  <key>WorkingDirectory</key>
+  <string>/Users/pg/cortex/personal-os-r2</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <!-- AT MERGE: /Users/pg/cortex/personal-os/scripts/cosmos-start.sh -->
+    <string>/Users/pg/cortex/personal-os-r2/scripts/cosmos-start.sh</string>
+  </array>
+
+  <!--
+    No secrets here. PATH so pnpm and node resolve under launchd (which starts
+    with a bare PATH), PORT because the plist is where the port belongs, and
+    NODE_ENV because `next start` expects production. Everything else, including
+    PGOS_SHARED_SECRET, PG_ROOT and COSMOS_ROOT, comes from .env.local.
+  -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <key>PORT</key>
+    <string>3030</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- The whole point of D16: it comes back on its own. -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- A crash loop backs off instead of spinning the fans. -->
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/pg/Library/Logs/pgos/cosmos.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/pg/Library/Logs/pgos/cosmos.log</string>
+</dict>
+</plist>
