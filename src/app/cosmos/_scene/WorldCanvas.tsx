@@ -36,7 +36,8 @@ import type { CosmosManifest, WorldManifest } from "./contract";
 import { nearestWorld, worldAt } from "./contract";
 import { neighbourPalette, paletteFor, type Palette } from "./registers";
 import { lightsFor, placeWorld, roomAt } from "./place";
-import { createRuntime, stepWalker, STRIDE, type Runtime } from "./runtime";
+import { createRuntime, HERO_RADIUS, stepWalker, STEER_MARGIN, STRIDE, type Runtime } from "./runtime";
+import { PROPS } from "./props";
 import { CAM_YAW, IsoCamera } from "./IsoCamera";
 import { Ground } from "./Ground";
 import { GrassField, type Clearing } from "./Grass";
@@ -50,13 +51,25 @@ import { WIND_CLOCK } from "./wind";
 /**
  * Stand this close for this long and the page unfolds. Or press E.
  *
- * The Critic's deduction 6: the hint printed inside 3.6 m, the page opened
- * inside 1.2 m, and the steering that keeps him from walking through a card
- * parks him at 1.31 m (0.34 blocker plus 0.42 of him plus 0.55 of margin), so
- * "stand still" was a lie at exactly the distance the world puts him. Reach is
- * now larger than the steering radius, and the hint never prints outside it.
+ * DERIVED, not chosen. The Critic's deduction 6 was that the hint printed inside
+ * 3.6 m, the page opened inside 1.2 m, and the steering parks him at
+ * `blocker + 0.42 of him + 0.55 of margin`, so "stand still" was a lie at
+ * exactly the distance the world puts him. Round 2.1's first answer was 1.75,
+ * chosen by hand against a page card's 0.34 blocker, and a standing stone's 0.75
+ * blocker parks him at 1.72 to 1.77: two centimetres outside it, so a monument
+ * still opened nothing. A number chosen by hand is a bug waiting for a bigger
+ * prop. This one is the largest interactable blocker in the registry plus the
+ * steering it implies plus a step, so it cannot fall behind again.
  */
-export const REACH = 1.75;
+export const REACH =
+  Math.max(
+    PROPS["standing-stone"].blockers[0].r,
+    PROPS["stone-lantern"].blockers[0].r,
+    0.34,
+  ) +
+  HERO_RADIUS +
+  STEER_MARGIN +
+  0.3;
 export const DWELL_S = 1.2;
 
 export interface HudState {

@@ -521,6 +521,15 @@
   color: var(--gold);
 }
 
+.cosmos-page-draft {
+  margin-left: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--gold-bright) 22%, transparent);
+  color: var(--gold);
+  letter-spacing: 0.16em;
+}
+
 .cosmos-page-title {
   margin: 6px 0 14px;
   font-family: var(--display);
@@ -734,11 +743,17 @@
   .cosmos-weather-line {
     font-size: 11px;
   }
+  /* The invitation is the second thing the eye reads on a desktop and the
+     fourth on a phone, where it lands under the hint and over the world. The
+     thread panel still carries it, one key away. */
   .cosmos-invite {
-    margin-top: 12px;
+    display: none;
   }
-  .cosmos-invite-line {
-    font-size: 15px;
+  .cosmos-chip span:not([aria-hidden]) {
+    display: none;
+  }
+  .cosmos-chip kbd {
+    display: none;
   }
   .cosmos-here {
     left: 14px;
@@ -766,9 +781,10 @@
   }
   /* The hint sat across the open panel in round one. It goes up out of the
      way instead, and the panel owns the bottom of the screen. */
+  /* Clear of the weather line above it, and clear of the panel below. */
   .cosmos-hint {
     bottom: auto;
-    top: 78px;
+    top: 112px;
     font-size: 10px;
     max-width: 84vw;
     white-space: normal;

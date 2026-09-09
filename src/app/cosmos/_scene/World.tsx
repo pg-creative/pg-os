@@ -501,7 +501,11 @@ export function worldBlockers(worlds: WorldManifest[]) {
   const out = worlds.flatMap((w) => blockersFor(placeWorld(w)));
   for (const w of worlds) {
     for (const o of w.objects) out.push({ x: o.at.x, z: o.at.z, r: 0.34 });
-    for (const m of w.monuments) out.push({ x: m.at.x, z: m.at.z, r: 0.8 });
+    // The same radius the standing-stone prop declares, so the distance the
+    // steering parks him at is one number and not two.
+    for (const m of w.monuments) {
+      out.push({ x: m.at.x, z: m.at.z, r: PROPS["standing-stone"].blockers[0].r });
+    }
   }
   return out;
 }

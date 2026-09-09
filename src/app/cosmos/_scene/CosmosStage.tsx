@@ -151,6 +151,24 @@ export function CosmosStage({
     return map;
   }, [manifest.worlds]);
 
+  /**
+   * Which ids the VAULT gave as objects, as opposed to the stand-ins this file
+   * makes for standing stones.
+   *
+   * The touch route knows the ids in `objects` and rightly 404s anything else.
+   * Round 2.1 made a monument unfoldable, and the first thing that did was post
+   * attention for a LEDGER line id: five 404s in the console and a page that
+   * looked like it had failed. A stone is a thing he looked at and the vault
+   * should remember it, but the vault decides that, not the scene. The moment
+   * the keeper lists monuments in `objects` (which the round's contract says it
+   * will) this set contains them and the write starts happening on its own.
+   */
+  const vaultIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const w of manifest.worlds) for (const o of w.objects) ids.add(o.id);
+    return ids;
+  }, [manifest.worlds]);
+
   /** A monument with no body of its own reads its own line. */
   const lines = useMemo(() => {
     const map = new Map<string, string>();
@@ -173,6 +191,7 @@ export function CosmosStage({
       // for an id that exists only in the harness would grow `attention.json`
       // with pages the vault has never heard of.
       if (manifest.fixture) return;
+      if (!vaultIds.has(id)) return;
       const r = rt.current;
       void fetch("/api/cosmos/touch", {
         method: "POST",
@@ -186,7 +205,7 @@ export function CosmosStage({
         keepalive: true,
       }).catch(() => {});
     },
-    [objects, manifest.hero.world, manifest.fixture],
+    [objects, vaultIds, manifest.hero.world, manifest.fixture],
   );
 
   const closePage = useCallback(() => setOpen(null), []);

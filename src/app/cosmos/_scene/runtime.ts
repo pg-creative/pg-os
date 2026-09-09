@@ -83,6 +83,12 @@ export function createRuntime(x: number, z: number): Runtime {
 }
 
 export const HERO_RADIUS = 0.42;
+/**
+ * How far outside a blocker the steering parks him. Everything that wants to be
+ * "in reach" has to know this number, so it is exported rather than written
+ * twice: REACH is derived from it in `WorldCanvas`.
+ */
+export const STEER_MARGIN = 0.55;
 export const WALK_SPEED = 4.1;
 /** Metres between footsteps. A short stride: he is small and the world is a toy. */
 export const STRIDE = 0.72;
@@ -125,7 +131,7 @@ export function stepWalker(rt: Runtime, dt: number, camYaw: number): void {
   for (const b of rt.blockers) {
     const dx = rt.pos.x - b.x;
     const dz = rt.pos.z - b.z;
-    const rr = b.r + HERO_RADIUS + 0.55;
+    const rr = b.r + HERO_RADIUS + STEER_MARGIN;
     const d2 = dx * dx + dz * dz;
     if (d2 > rr * rr || d2 < 1e-6) continue;
     const d = Math.sqrt(d2);
