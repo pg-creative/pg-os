@@ -27,7 +27,6 @@ import { PHASES, Phase, phaseForHour } from "../../../_components/emaki/theme";
 import {
   EMAKI_CSS,
   useEmakiVars,
-  PaintedBackdrop,
   FoxfireLayer,
   WashiPanel,
   KintsugiSeam,
@@ -35,6 +34,7 @@ import {
   GlyphDusk,
   GlyphMoon,
 } from "../../../_components/emaki/materials";
+import { LabSky } from "../../_shared/LabSky";
 
 /* ── Mock data ── */
 
@@ -1133,7 +1133,7 @@ export default function V3Cockpit() {
         }}
       >
         {/* World painting */}
-        <PaintedBackdrop phase={phase} />
+        <LabSky phase={phase} />
         <FoxfireLayer phase={phase} />
 
         {/* Radial seam lines from center to each satellite */}

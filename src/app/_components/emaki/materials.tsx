@@ -6,7 +6,6 @@
  *
  * Exports:
  *   useEmakiVars(phase, ref?)  - sets --panel-blur + --hero-halo CSS vars
- *   PaintedBackdrop({ phase }) - full-bleed sky + parallax + overlay/vignette
  *   WashiPanel                 - frosted/solid surface with kintsugi + ink-rule
  *   KintsugiSeam               - the gold jagged divider line
  *   FoxfireLayer({ phase })    - drifting orbs + per-phase ambient animation
@@ -828,95 +827,6 @@ export function GlyphMoon({ color }: { color: string }) {
         strokeLinejoin="round"
       />
     </svg>
-  );
-}
-
-/* ── PaintedBackdrop ── */
-
-interface PaintedBackdropProps {
-  phase: Phase;
-}
-
-/**
- * Full-bleed backdrop: multi-layer parallax + solid base + sky image
- * + overlay gradient + ambient wash. Sits at z-index 0 behind everything.
- *
- * Pointer parallax: three depth layers respond to mousemove at different
- * rates (far=2px, mid=5px, near=9px), throttled via requestAnimationFrame.
- * Disabled automatically by prefers-reduced-motion via CSS class.
- */
-export function PaintedBackdrop({ phase }: PaintedBackdropProps) {
-  const tk: PhaseTokens = PHASES[phase];
-
-  const farRef = useRef<HTMLDivElement>(null);
-  const midRef = useRef<HTMLDivElement>(null);
-  const nearRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number>(0);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        const cx = window.innerWidth / 2;
-        const cy = window.innerHeight / 2;
-        const dx = (e.clientX - cx) / cx; // -1..1
-        const dy = (e.clientY - cy) / cy;
-        if (farRef.current)
-          farRef.current.style.transform = `scale(1.04) translate(${dx * 2}px, ${dy * 2}px)`;
-        if (midRef.current)
-          midRef.current.style.transform = `translate(${dx * 5}px, ${dy * 5}px)`;
-        if (nearRef.current)
-          nearRef.current.style.transform = `translate(${dx * 9}px, ${dy * 9}px)`;
-      });
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
-
-  return (
-    <>
-      {/* Far layer: blurred, dark, slow parallax */}
-      <div
-        ref={farRef}
-        className="el-parallax-far"
-        style={{
-          backgroundImage: `url('${tk.backdropImg}')`,
-          opacity: phase === "day" ? 0.07 : 0.11,
-        }}
-      />
-      {/* Solid color base */}
-      <div className="el-backdrop" style={{ background: tk.bg }} />
-      {/* Primary sky image */}
-      <div
-        className="el-backdrop-img"
-        style={{ backgroundImage: `url('${tk.backdropImg}')` }}
-      />
-      {/* Mid parallax: same image, tinted, medium depth */}
-      <div
-        ref={midRef}
-        className="el-parallax-mid"
-        style={{
-          backgroundImage: `url('${tk.backdropImg}')`,
-          opacity: phase === "day" ? 0.12 : 0.2,
-          mixBlendMode: phase === "day" ? "multiply" : "screen",
-        }}
-      />
-      {/* Near parallax: same image, fastest layer, subtle */}
-      <div
-        ref={nearRef}
-        className="el-parallax-near"
-        style={{
-          backgroundImage: `url('${tk.backdropImg}')`,
-          opacity: phase === "day" ? 0.06 : 0.1,
-          mixBlendMode: phase === "day" ? "multiply" : "screen",
-        }}
-      />
-      <div className="el-overlay" style={{ background: tk.overlayGradient }} />
-      <div className="el-ambient" style={{ background: tk.ambientWash }} />
-    </>
   );
 }
 

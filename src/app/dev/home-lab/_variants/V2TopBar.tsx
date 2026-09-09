@@ -13,7 +13,6 @@ import { PHASES, Phase, phaseForHour } from "../../../_components/emaki/theme";
 import {
   EMAKI_CSS,
   useEmakiVars,
-  PaintedBackdrop,
   FoxfireLayer,
   KintsugiSeam,
   WashiPanel,
@@ -21,6 +20,7 @@ import {
   GlyphDusk,
   GlyphMoon,
 } from "../../../_components/emaki/materials";
+import { LabSky } from "../../_shared/LabSky";
 
 /* ── Mock data ── */
 
@@ -831,7 +831,7 @@ export default function V2TopBar() {
         }}
       >
         {/* World painting layers */}
-        <PaintedBackdrop phase={phase} />
+        <LabSky phase={phase} />
         <FoxfireLayer phase={phase} />
 
         {/* ── TOP NAV BAR ── */}

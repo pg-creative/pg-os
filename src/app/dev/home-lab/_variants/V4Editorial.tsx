@@ -31,7 +31,6 @@ import { PHASES, Phase, phaseForHour } from "../../../_components/emaki/theme";
 import {
   EMAKI_CSS,
   useEmakiVars,
-  PaintedBackdrop,
   FoxfireLayer,
   KintsugiSeam,
   WashiPanel,
@@ -39,6 +38,7 @@ import {
   GlyphDusk,
   GlyphMoon,
 } from "../../../_components/emaki/materials";
+import { LabSky } from "../../_shared/LabSky";
 import { MarvisCorner } from "../../../_components/views/cockpit/MarvisCorner";
 
 /* ── Mock data (same as reference page) ── */
@@ -774,7 +774,7 @@ export default function V4Editorial() {
         }}
       >
         {/* World painting — full page backdrop */}
-        <PaintedBackdrop phase={phase} />
+        <LabSky phase={phase} />
         <FoxfireLayer phase={phase} />
 
         {/* Ultra-slim fixed rail */}

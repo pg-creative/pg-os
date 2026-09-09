@@ -20,7 +20,7 @@
  *   so MarvisCorner can sit there without covering any live content.
  *
  * Kintsugi seams radiate from center to each satellite exactly as in V3.
- * PaintedBackdrop + FoxfireLayer + locked emaki module throughout.
+ * LabSky + FoxfireLayer + locked emaki module throughout.
  * No scroll. No new npm deps.
  */
 
@@ -30,7 +30,6 @@ import { PHASES, Phase, phaseForHour } from "../../../_components/emaki/theme";
 import {
   EMAKI_CSS,
   useEmakiVars,
-  PaintedBackdrop,
   FoxfireLayer,
   WashiPanel,
   KintsugiSeam,
@@ -38,6 +37,7 @@ import {
   GlyphDusk,
   GlyphMoon,
 } from "../../../_components/emaki/materials";
+import { LabSky } from "../../_shared/LabSky";
 
 /* ── Type alias ── */
 type TK = (typeof PHASES)["night"];
@@ -1127,7 +1127,7 @@ export default function V5Hybrid() {
         }}
       >
         {/* World painting layers */}
-        <PaintedBackdrop phase={phase} />
+        <LabSky phase={phase} />
         <FoxfireLayer phase={phase} />
 
         {/* Radial kintsugi seam lines from center to each satellite */}

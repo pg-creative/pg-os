@@ -5,11 +5,11 @@ import { PHASES } from "../../../_components/emaki/theme";
 import {
   useEmakiVars,
   EMAKI_CSS,
-  PaintedBackdrop,
   FoxfireLayer,
   WashiPanel,
   KintsugiSeam,
 } from "../../../_components/emaki/materials";
+import { LabSky } from "../../_shared/LabSky";
 import {
   useCockpitData,
   demoCards,
@@ -568,7 +568,7 @@ export default function V3Den({ phase }: { phase: Phase }) {
       }}
     >
       <style>{EMAKI_CSS}</style>
-      <PaintedBackdrop phase={phase} />
+      <LabSky phase={phase} />
       <FoxfireLayer phase={phase} />
 
       {/* Layout: two-column on wide, stack on narrow */}
