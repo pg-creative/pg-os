@@ -3,38 +3,69 @@
 /**
  * One biome, standing on the shared plane.
  *
- * Everything here comes from the manifest: rooms become props through
- * `dressing.ts`, `room.lights` become a lit emitter AND the light it throws (one
- * row, both objects, so an unexplained floating light is not a thing that can
- * happen), pages become objects you can unfold, and LEDGER lines become standing
- * stones.
+ * Everything here comes from the manifest: a room's `props:` become props
+ * through `place.ts`, `room.lights` become a lit emitter AND the light it throws
+ * (one row, both objects, so an unexplained floating light is not a thing that
+ * can happen), pages become ema tags you can unfold, and LEDGER lines become
+ * standing stones.
  *
- * NO TEXT IN THE WORLD. Titles live in the HUD, on hover and on approach. A world
- * with a label floating over every object is a diagram; the reference we are
- * repurposing puts one name on the character card and one on the thread panel and
- * that is all, and PG's own rule is that visible text at rest stays at the card,
- * the compass and one hint.
+ * TWO CHANGES THIS ROUND, both the Critic's.
+ *
+ * THE PAINT. A prop is a painted cutout when the vault has one for that word in
+ * that world, and the procedural factory when it does not. The probe is per URL
+ * per session, cached across every prop of the same kind, and the factory draws
+ * while it is in flight, so the world is whole at first paint and gets better
+ * the moment the painter lands a file. Nothing here waits on art.
+ *
+ * THE WEIGHT. An ema tag is an 0.82 metre card, and round two textured it with
+ * the page's full plate: 1456 by 816 each, Maygan's the whole 2912 by 1632 grid
+ * at ten megabytes, 7.6 MB and 75 MB of GPU per cold load, for postage stamps.
+ * The card now takes `card:`, the 256 px thumbnail, and the full plate is loaded
+ * once, inside the panel, when he opens it.
+ *
+ * NO TEXT IN THE WORLD. Titles live in the HUD, on approach. A world with a
+ * label floating over every object is a diagram.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Monument, Room, SceneObject, WorldManifest } from "./contract";
 import { untouchedFor } from "./contract";
-import type { Palette } from "./palette";
-import { blockersFor, dressWorld, lightsFor, type Placement } from "./dressing";
-import { Flame, PROPS } from "./props";
+import type { Palette } from "./registers";
+import { blockersFor, lightsFor, placeWorld, type Placement } from "./place";
+import { Cutout, cutoutUrl, useCutout } from "./Cutout";
+import { EMITTER_SOCKET, Flame, PROPS } from "./props";
 import { GEO, toon } from "./toon";
 import type { Runtime } from "./runtime";
-import { Lake } from "./Lake";
+import { Backdrop } from "./Backdrop";
+
+/**
+ * The painted interior a room's back wall wears.
+ *
+ * A scene-side art assignment, not vault data, and the one place in this file
+ * that names a specific painting. It belongs in `world.yml` as `interior_plate:`
+ * and is written down in NOTES.md as the thing to move there; it is here tonight
+ * because the hall interior was painted this round, is referenced by no page, and
+ * the Critic counted it as the best pixels in the build reaching nothing.
+ *
+ * `u` is where the painted hearth sits across the image, 0 to 1, so the fire in
+ * the picture lands over the fire in the room.
+ */
+const INTERIOR: Record<string, { url: string; u: number }> = {
+  "quiet-practice": {
+    url: "/api/cosmos/asset/wall/mj-2026-09-09b/quadrants/01-hall-interior-q2",
+    u: 0.355,
+  },
+};
 
 // ── A page, standing in a room ───────────────────────────────────────────────
 
 /**
  * An ema tag: a paper card hung on a wooden stake, the shape the shrine already
- * uses for a written thing left in a place. Its own plate is the face of the card
- * when the vault names one, so "no page without a plate" is visible on the object
- * and not only inside the panel (the Critic's deduction 6).
+ * uses for a written thing left in a place. Its own thumbnail is the face of the
+ * card when the vault has cut one, so "no page without a plate" is visible on the
+ * object and not only inside the panel.
  */
 function PageObject({
   o,
@@ -52,20 +83,16 @@ function PageObject({
   const ring = useRef<THREE.Mesh>(null);
   const card = useRef<THREE.Group>(null);
   const untouched = untouchedFor(o.touched);
+  const thumb = (o as SceneObject & { card?: { url: string } | null }).card?.url ?? null;
+  const draft = (o as SceneObject & { draft?: boolean }).draft === true;
 
-  const plateTex = useMemo(() => {
-    if (!o.plate?.url) return null;
-    const t = new THREE.TextureLoader().load(o.plate.url);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  }, [o.plate?.url]);
-
+  const faceTex = useCutout(thumb);
   const faceMat = useMemo(() => {
-    if (plateTex) {
-      return new THREE.MeshBasicMaterial({ map: plateTex, toneMapped: false });
+    if (faceTex.status === "ok" && faceTex.tex) {
+      return new THREE.MeshBasicMaterial({ map: faceTex.tex, toneMapped: false, fog: true });
     }
     return toon(p.paper, { untouched });
-  }, [plateTex, p.paper, untouched]);
+  }, [faceTex.status, faceTex.tex, p.paper, untouched]);
 
   const ringMat = useMemo(
     () =>
@@ -112,24 +139,19 @@ function PageObject({
         onPointerOut={() => {
           if (rt.current && rt.current.hovered === o.id) rt.current.hovered = null;
         }}
-        // The Critic's deduction 4: a stationary finger opened nothing, because
-        // only pointermove was bound. Down starts the hold, up cancels it, and
-        // that is the whole phone story.
+        // A stationary finger opens it: down starts the hold, up cancels it.
         onPointerDown={(e) => {
           e.stopPropagation();
           onPress(o.id);
         }}
         onPointerUp={() => onRelease()}
       >
-        {/* Stake. */}
         <mesh geometry={GEO.cyl} material={toon(p.woodDark)} position={[0, 0.42, 0]} scale={[0.07, 0.84, 0.07]} castShadow />
-        {/* Card, with its own painting when it has one. */}
         <mesh material={faceMat} position={[0, 1.0, 0.02]} castShadow>
           <planeGeometry args={[0.82, 0.62]} />
         </mesh>
         <mesh geometry={GEO.box} material={toon(p.woodDark, { untouched })} position={[0, 1.0, -0.01]} scale={[0.9, 0.7, 0.03]} castShadow />
-        {/* A small cap so the tag reads as hung, not planted. */}
-        <mesh geometry={GEO.box} material={toon(p.wood, { untouched })} position={[0, 1.38, 0]} scale={[0.98, 0.08, 0.1]} castShadow />
+        <mesh geometry={GEO.box} material={toon(draft ? p.flame : p.wood, { untouched })} position={[0, 1.38, 0]} scale={[0.98, 0.08, 0.1]} castShadow />
       </group>
     </group>
   );
@@ -151,7 +173,7 @@ function MonumentStone({
   onRelease: () => void;
 }) {
   const v = useMemo(() => (Math.abs(hashCode(m.id)) % 1000) / 1000, [m.id]);
-  const Def = PROPS.stone;
+  const Def = PROPS["standing-stone"];
   const ringMat = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
@@ -201,6 +223,60 @@ function hashCode(s: string): number {
   return h;
 }
 
+// ── One prop: painted if the vault has it, procedural if not ─────────────────
+
+function Prop({
+  pl,
+  worldId,
+  p,
+  rt,
+  interior,
+}: {
+  pl: Placement;
+  worldId: string;
+  p: Palette;
+  rt: React.RefObject<Runtime>;
+  interior: { url: string; u: number } | null;
+}) {
+  const def = PROPS[pl.kind];
+  // A room, a path and a sheet of water are shaped by their room; a painting of
+  // one would be a painting of somewhere else. Those stay procedural.
+  const paintable = def && def.height > 0 && pl.kind !== "hall" && pl.kind !== "smithy";
+  const { status, tex } = useCutout(paintable ? cutoutUrl(worldId, pl.kind) : null);
+
+  if (!def) return null;
+
+  if (status === "ok" && tex) {
+    return (
+      <Cutout
+        tex={tex}
+        height={def.height * pl.scale}
+        at={[pl.x, 0, pl.z]}
+        face={false}
+        yaw={pl.rot}
+        wind={def.wind ?? 0}
+        flip={pl.v > 0.5}
+      />
+    );
+  }
+
+  return (
+    <group position={[pl.x, 0, pl.z]} rotation={[0, pl.rot, 0]} scale={pl.scale}>
+      <def.Component
+        p={p}
+        v={pl.v}
+        rt={rt}
+        w={pl.w}
+        d={pl.d}
+        gap={pl.gap ?? null}
+        interior={pl.kind === "hall" ? (interior?.url ?? null) : null}
+        interiorU={interior?.u ?? 0.5}
+        interiorAt={pl.interiorAt ?? 0}
+      />
+    </group>
+  );
+}
+
 // ── The biome ────────────────────────────────────────────────────────────────
 
 /**
@@ -208,34 +284,31 @@ function hashCode(s: string): number {
  * it.
  *
  * This is the single biggest performance decision in the scene, and it was made
- * with a measurement (`optimize-threejs-games`: measure first). Four biomes of
- * procedural dressing is about two thousand small meshes; three walks every one
- * of them twice a frame, once for the shadow map and once for the colour pass,
- * and the first probe came back at four frames a second with a 570 ms worst
- * frame. Culling by room takes the traversal to the handful of rooms he can
- * actually see.
- *
- * Two mechanisms, both cheap. `visible = false` on a group makes three skip the
- * whole subtree in one test rather than per mesh. `matrixAutoUpdate = false`
- * stops it recomputing world matrices for scenery that has not moved since it
- * was placed and never will.
+ * with a measurement (`optimize-threejs-games`: measure first). Culling by room
+ * takes the traversal to the handful of rooms he can actually see. `visible =
+ * false` on a group makes three skip the whole subtree in one test rather than
+ * per mesh; `matrixAutoUpdate = false` stops it recomputing world matrices for
+ * scenery that has not moved since it was placed and never will.
  */
 function RoomProps({
   room,
   placements,
+  worldId,
   p,
   rt,
+  interior,
 }: {
   room: Room;
   placements: Placement[];
+  worldId: string;
   p: Palette;
   rt: React.RefObject<Runtime>;
+  interior: { url: string; u: number } | null;
 }) {
   const group = useRef<THREE.Group>(null);
   const acc = useRef(0);
-  // The room's own reach: its half diagonal plus the distance he can see past it.
   const radius = useMemo(
-    () => Math.hypot(room.size.w, room.size.d) / 2 + 34,
+    () => Math.hypot(room.size.w, room.size.d) / 2 + 42,
     [room.size.w, room.size.d],
   );
 
@@ -259,20 +332,9 @@ function RoomProps({
 
   return (
     <group ref={group}>
-      {placements.map((pl) => {
-        const def = PROPS[pl.kind];
-        if (!def) return null;
-        return (
-          <group
-            key={pl.key}
-            position={[pl.x, 0, pl.z]}
-            rotation={[0, pl.rot, 0]}
-            scale={pl.scale}
-          >
-            <def.Component p={p} v={pl.v} rt={rt} />
-          </group>
-        );
-      })}
+      {placements.map((pl) => (
+        <Prop key={pl.key} pl={pl} worldId={worldId} p={p} rt={rt} interior={interior} />
+      ))}
     </group>
   );
 }
@@ -284,6 +346,7 @@ export function World({
   onPress,
   onRelease,
   lightBudget,
+  current,
 }: {
   world: WorldManifest;
   p: Palette;
@@ -292,9 +355,11 @@ export function World({
   onRelease: () => void;
   /** How many local lights this biome may mount right now. Distance decides. */
   lightBudget: number;
+  /** True while the Wayfarer is standing in this biome. */
+  current: boolean;
 }) {
   const byRoom = useMemo(() => {
-    const all = dressWorld(world);
+    const all = placeWorld(world);
     const map = new Map<string, Placement[]>();
     for (const pl of all) {
       const roomId = pl.key.split(":")[0];
@@ -304,67 +369,84 @@ export function World({
     }
     return map;
   }, [world]);
-  const lights = useMemo(() => lightsFor(world), [world]);
 
-  // Water rooms carry a lake. The room is the authority on where the shore is.
-  const lakes = useMemo(
-    () =>
-      world.layout.rooms.filter((r) =>
-        /water|lake|pond/i.test(r.id),
-      ),
-    [world],
-  );
+  const lights = useMemo(() => lightsFor(world), [world]);
+  const interior = INTERIOR[world.id] ?? null;
+
+  /**
+   * The light budget, BY DISTANCE, not by room order.
+   *
+   * The Critic's deduction 8: round two took the first five lights in room
+   * order, so the lake lantern and the threshold gate's lantern, which is the
+   * mist door's own beacon, never got a flame however close he stood to them.
+   * Sorting by distance to the walker costs one pass over a list of at most a
+   * dozen, on the same quarter-second tick everything else uses.
+   */
+  const [order, setOrder] = useState<string[]>(() => lights.map((l) => l.id));
+  const acc = useRef(0);
+  useFrame((_, dt) => {
+    const r = rt.current;
+    if (!r || lights.length <= lightBudget) return;
+    acc.current += dt;
+    if (acc.current < 0.5) return;
+    acc.current = 0;
+    const ranked = [...lights]
+      .sort(
+        (a, b) =>
+          Math.hypot(a.at.x - r.pos.x, a.at.z - r.pos.z) -
+          Math.hypot(b.at.x - r.pos.x, b.at.z - r.pos.z),
+      )
+      .map((l) => l.id);
+    setOrder((prev) =>
+      prev.length === ranked.length && prev.every((id, i) => id === ranked[i]) ? prev : ranked,
+    );
+  });
+
+  const lit = useMemo(() => {
+    const rank = new Map(order.map((id, i) => [id, i]));
+    return [...lights]
+      .sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99))
+      .slice(0, lightBudget);
+  }, [lights, order, lightBudget]);
 
   return (
     <group>
+      <Backdrop world={world} p={p} rt={rt} />
+
       {world.layout.rooms.map((room) => {
         const pls = byRoom.get(room.id);
         if (!pls) return null;
         return (
-          <RoomProps key={room.id} room={room} placements={pls} p={p} rt={rt} />
+          <RoomProps
+            key={room.id}
+            room={room}
+            placements={pls}
+            worldId={world.id}
+            p={p}
+            rt={rt}
+            interior={interior}
+          />
         );
       })}
 
-      {lakes.map((r) => (
-        <Lake
-          key={r.id}
-          x={r.anchor.x}
-          z={r.anchor.z}
-          w={r.size.w}
-          d={r.size.d}
-          p={p}
-        />
-      ))}
-
       {/* The flames, and the lights they throw. One row of the manifest, two
-          objects, always at the same coordinates. */}
-      {lights.slice(0, lightBudget).map((l) => {
-        const kind = l.emitter;
-        const socket =
-          kind === "lantern"
-            ? 1.18
-            : kind === "torch"
-              ? 1.88
-              : kind === "brazier"
-                ? 0.86
-                : kind === "altar"
-                  ? 1.16
-                  : kind === "fire"
-                    ? 0.2
-                    : 2.2;
+          objects, always at the same coordinates. A window's lamp is its own
+          lit panel, so it gets the light and not a second flame. */}
+      {lit.map((l) => {
+        const socket = EMITTER_SOCKET[l.emitter] ?? 1.2;
         return (
           <group key={l.id} position={[l.at.x, socket, l.at.z]}>
-            {kind !== "window" && (
+            {l.emitter !== "window" && (
               <Flame
                 color={p.flame}
                 core={p.flameCore}
-                size={kind === "fire" ? 1.5 : kind === "altar" ? 1.2 : 0.85}
+                size={l.emitter === "fire" ? 1.5 : l.emitter === "altar" ? 1.2 : 0.85}
                 seed={l.at.x * 0.13 + l.at.z * 0.29}
               />
             )}
             <pointLight
               color={l.color}
-              intensity={l.intensity}
+              intensity={l.intensity * (current ? 1 : 0.7)}
               distance={l.range}
               decay={1.7}
             />
@@ -372,9 +454,14 @@ export function World({
         );
       })}
 
-      {world.objects.map((o) => (
-        <PageObject key={o.id} o={o} p={p} rt={rt} onPress={onPress} onRelease={onRelease} />
-      ))}
+      {/* A monument that the keeper also lists in `objects` (so it carries a
+          body to unfold) must not ALSO stand as an ema card: it is already a
+          stone, three lines down. */}
+      {world.objects
+        .filter((o) => o.type !== "monument")
+        .map((o) => (
+          <PageObject key={o.id} o={o} p={p} rt={rt} onPress={onPress} onRelease={onRelease} />
+        ))}
 
       {world.monuments.map((m) => (
         <MonumentStone key={m.id} m={m} p={p} rt={rt} onPress={onPress} onRelease={onRelease} />
@@ -385,21 +472,10 @@ export function World({
 
 /** Every collision circle in a set of worlds, in world coordinates. */
 export function worldBlockers(worlds: WorldManifest[]) {
-  const out = worlds.flatMap((w) => blockersFor(dressWorld(w)));
+  const out = worlds.flatMap((w) => blockersFor(placeWorld(w)));
   for (const w of worlds) {
     for (const o of w.objects) out.push({ x: o.at.x, z: o.at.z, r: 0.34 });
     for (const m of w.monuments) out.push({ x: m.at.x, z: m.at.z, r: 0.8 });
-    // A lake is not walkable. One circle per water room keeps him on the shore
-    // without a navmesh, and the dock is walkable because it declares no blocker.
-    for (const r of w.layout.rooms) {
-      if (/water|lake|pond/i.test(r.id)) {
-        out.push({
-          x: r.anchor.x,
-          z: r.anchor.z - r.size.d * 0.1,
-          r: Math.min(r.size.w, r.size.d) * 0.44,
-        });
-      }
-    }
   }
   return out;
 }

@@ -3,15 +3,28 @@
 /**
  * The stage: canvas, HUD, and the one page that is open.
  *
- * EXTENDS round one's `WorldStage`, with the scroll track and the plate switcher
- * deleted and everything else kept: prose arrives as server-rendered nodes and
- * never as data, the panel is DOM at the top layer, Escape closes, and a dwell
- * posts to the touch route.
+ * Prose arrives as server-rendered nodes and never as data, the panel is DOM at
+ * the top layer, Escape closes, and a dwell posts to the touch route.
  *
- * What is new is that the scene persists. There is one canvas for the whole
- * cosmos, five biomes on one plane inside it, and a deep link to a biome moves
- * the Wayfarer rather than mounting a second world. That is the difference
- * between "a page per world" and "one world you walk".
+ * The scene persists: one canvas for the whole cosmos, five biomes on one plane
+ * inside it, and a deep link to a biome moves the Wayfarer rather than mounting
+ * a second world. That is the difference between "a page per world" and "one
+ * world you walk".
+ *
+ * THREE OF THE CRITIC'S, HERE.
+ *
+ * A MONUMENT NEVER OPENED. `objects` held pages only, so on a standing stone
+ * both the dwell and E returned early while the hint printed the LEDGER line and
+ * told him to press E. Monuments join the map now, and a stone unfolds its line.
+ *
+ * SITTING AT THE FIRE UNFOLDED THE CARD BESIDE IT. The mat is 1.1 m from a page
+ * in the hall, so arriving at the hearth opened a chapter over the thread he had
+ * just sat down to read. Sitting suspends the dwell: the thread is what opens at
+ * the fire.
+ *
+ * "CLICK THE GROUND TO WALK" NEVER SHOWED. `moved` was set from position rather
+ * than motion, and the first tick reports a position. It is set from the walker
+ * actually moving now, and from the keys.
  */
 
 import {
@@ -27,12 +40,16 @@ import type { CosmosManifest, SceneObject } from "./contract";
 import { createRuntime, type Runtime } from "./runtime";
 import { WorldCanvas, type HudState } from "./WorldCanvas";
 import {
-  CharacterCard,
   Compass,
   Hint,
+  KeyHints,
   ThemeToggle,
   ThreadPanel,
+  Title,
+  WeatherLine,
+  YouAreHere,
   useCosmosTheme,
+  useKeyboard,
 } from "../_hud/Hud";
 import { Satchel, SatchelButton } from "../_hud/Satchel";
 import { Unfolded } from "../_hud/Unfolded";
@@ -42,15 +59,10 @@ const PORTRAIT = "/agent-office/characters/wayfarer-0.png";
 /** A working name, and a draft until PG says "that one". */
 const HERO_NAME = "the Wayfarer";
 /**
- * A real screenshot of this scene, taken with the HUD hidden and with no paper
- * edge in it (the Critic's deduction 11: round one's still kept the plate's torn
- * white border). Regenerate it whenever the hall changes.
- *
- * It is served THROUGH THE GATE, not from `public/`. pg-os is a public repo and
- * `public/` is served with no cookie check; the quiet practice is private
- * forever, and a picture of it is still a picture of it. So the file lives in
- * the vault beside the world it shows, and this URL is the same extensionless
- * asset route every plate uses.
+ * A real screenshot of this scene, with the HUD hidden and no paper edge in it.
+ * It is served THROUGH THE GATE, not from `public/`: pg-os is a public repo and
+ * `public/` is served with no cookie check, the quiet practice is private
+ * forever, and a picture of it is still a picture of it.
  */
 const STILL = "/api/cosmos/asset/vault/worlds/quiet-practice/plates/still-hall";
 
@@ -70,6 +82,7 @@ export function CosmosStage({
 }) {
   const rt = useRef<Runtime>(createRuntime(manifest.hero.x, manifest.hero.z));
   const [theme, setTheme] = useCosmosTheme();
+  const keyboard = useKeyboard();
   const [reduced, setReduced] = useState(false);
   const [hud, setHud] = useState<HudState>({
     world: manifest.hero.world,
@@ -82,12 +95,15 @@ export function CosmosStage({
     depth: false,
     x: manifest.hero.x,
     z: manifest.hero.z,
+    room: null,
   });
   const [open, setOpen] = useState<string | null>(
     manifest.satchel.length && manifest.fixture === "unfold" ? manifest.satchel[0] : null,
   );
   const [satchel, setSatchel] = useState<string[]>(manifest.satchel);
   const [satchelOpen, setSatchelOpen] = useState(false);
+  const [threadOpen, setThreadOpen] = useState(false);
+  const [chrome, setChrome] = useState(true);
   const [moved, setMoved] = useState(false);
   const savedAt = useRef({ x: manifest.hero.x, z: manifest.hero.z });
   const restTimer = useRef<number | null>(null);
@@ -108,9 +124,37 @@ export function CosmosStage({
     return () => mq.removeEventListener("change", apply);
   }, []);
 
+  /**
+   * Everything that can be unfolded, in one map: the pages, and the LEDGER lines
+   * standing in the forge. A monument that is already in `objects` (the keeper
+   * puts them there so they carry a body) wins; one that is only in `monuments`
+   * gets a stand-in whose body is its own line.
+   */
   const objects = useMemo(() => {
     const map = new Map<string, SceneObject>();
-    for (const w of manifest.worlds) for (const o of w.objects) map.set(o.id, o);
+    for (const w of manifest.worlds) {
+      for (const o of w.objects) map.set(o.id, o);
+      for (const m of w.monuments) {
+        if (map.has(m.id)) continue;
+        map.set(m.id, {
+          id: m.id,
+          type: "monument",
+          title: m.line,
+          room: "",
+          at: m.at,
+          plate: null,
+          touched: null,
+          weight: 0,
+        });
+      }
+    }
+    return map;
+  }, [manifest.worlds]);
+
+  /** A monument with no body of its own reads its own line. */
+  const lines = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const w of manifest.worlds) for (const m of w.monuments) map.set(m.id, m.line);
     return map;
   }, [manifest.worlds]);
 
@@ -127,8 +171,7 @@ export function CosmosStage({
       setSatchel((s) => (s.includes(id) ? s : [...s, id]));
       // A fixture is a review state, not a place he has been. Writing attention
       // for an id that exists only in the harness would grow `attention.json`
-      // with pages the vault has never heard of, and the touch route rightly
-      // 404s them; that 404 was the last console error in the run.
+      // with pages the vault has never heard of.
       if (manifest.fixture) return;
       const r = rt.current;
       void fetch("/api/cosmos/touch", {
@@ -159,17 +202,17 @@ export function CosmosStage({
         .flatMap((room) => room.doors)
         .find((d) => d.kind === "stairs");
       const at = back ?? { at: target.layout.origin };
-      r.pos.set(at.at.x, 0, at.at.z + 2.2);
+      r.pos.set(at.at.x, 0, at.at.z + 2.6);
       r.dest = null;
       r.vel.set(0, 0, 0);
       r.dwell = 0;
-      r.target.set(r.pos.x, 0.9, r.pos.z);
+      r.target.set(r.pos.x, 1.5, r.pos.z);
       setMoved(true);
     },
     [manifest.worlds],
   );
 
-  // ── Keys. E opens, Escape closes, I is the satchel. ──
+  // ── Keys. E opens, Escape closes, I is the satchel, J the thread, U the UI. ──
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const r = rt.current;
@@ -180,10 +223,9 @@ export function CosmosStage({
         else setOpen(null);
         return;
       }
-      if (k === "i") {
-        setSatchelOpen((s) => !s);
-        return;
-      }
+      if (k === "i") return setSatchelOpen((s) => !s);
+      if (k === "j") return setThreadOpen((s) => !s);
+      if (k === "u") return setChrome((s) => !s);
       if (k === "e") {
         if (r.near?.id.startsWith("door:")) takeDoor(r.near.id.slice(5));
         else if (r.near) openPage(r.near.id);
@@ -212,12 +254,14 @@ export function CosmosStage({
   useEffect(() => {
     sound.setFire(hud.sitting);
   }, [hud.sitting, sound]);
+  useEffect(() => {
+    sound.setBed(current?.bed ?? null);
+  }, [current?.bed, sound]);
 
   // ── Where he stood. The never-restart proof: reload and he is still there. ──
   const saveHero = useCallback(() => {
     const r = rt.current;
     if (!r || !r.world) return;
-    // Same rule: a fixture never moves the real Wayfarer.
     if (manifest.fixture) return;
     savedAt.current = { x: r.pos.x, z: r.pos.z };
     void fetch("/api/cosmos/touch", {
@@ -242,19 +286,14 @@ export function CosmosStage({
     };
   }, [saveHero]);
 
-  /**
-   * And once he stops. A fifteen second interval plus `pagehide` looks like it
-   * covers everything until a reload lands inside the window: he walks, he
-   * reloads, and the world puts him back where he was fourteen seconds ago. A
-   * save a second after he comes to rest is what makes the never-restart proof
-   * true of a real session rather than of a patient one.
-   */
   const onTick = useCallback(
     (s: HudState) => {
       setHud(s);
-      if (!s.nearId && (Math.abs(s.x) > 0.4 || Math.abs(s.z) > 0.4)) setMoved(true);
       const r = rt.current;
-      if (!r || r.moving) return;
+      if (!r) return;
+      // Motion, not position: the first tick reports a position and always did.
+      if (r.moving) setMoved(true);
+      if (r.moving) return;
       const last = savedAt.current;
       if (Math.hypot(s.x - last.x, s.z - last.z) < 1) return;
       if (restTimer.current !== null) window.clearTimeout(restTimer.current);
@@ -269,14 +308,18 @@ export function CosmosStage({
     [satchel, objects],
   );
 
-  // ── Reduced motion: a still of the hall, and the card. Nothing that moves,
+  // The thread is open when he sits at the fire, or when he asks for it.
+  const thread = threadOpen || hud.sitting;
+  const invitation = manifest.thread.chapter?.line ?? null;
+
+  // ── Reduced motion: a still of the hall, and the title. Nothing that moves,
   //    and no hint that names a verb this page does not have. ──
   if (reduced) {
     return (
       <div className="cosmos-still">
         <img src={STILL} alt="The shrine hall at twilight, from the road below." />
         <div className="cosmos-hud cosmos-hud-still">
-          <CharacterCard name={HERO_NAME} title={season} portrait={PORTRAIT} />
+          <Title world={current?.title ?? HERO_NAME} season={season} />
         </div>
       </div>
     );
@@ -288,6 +331,7 @@ export function CosmosStage({
       data-theme={theme}
       data-depth={hud.depth ? "true" : "false"}
       data-near={hud.nearId ?? ""}
+      data-chrome={chrome ? "true" : "false"}
       /* Where the SERVER put him on this load. The never-restart proof reads
          this before and after a reload: walk, reload, and it has moved. */
       data-hero={`${manifest.hero.world}:${manifest.hero.x.toFixed(1)},${manifest.hero.z.toFixed(1)}`}
@@ -303,25 +347,48 @@ export function CosmosStage({
         reduced={reduced}
       />
 
-      <div className="cosmos-hud">
-        <CharacterCard name={HERO_NAME} title={season} portrait={PORTRAIT} />
-
-        <div className="cosmos-hud-right">
-          <Compass rt={rt} worlds={manifest.worlds} />
-          <ThreadPanel
-            season={manifest.thread.season || season}
-            chapter={manifest.thread.chapter}
-            open={hud.sitting}
-          />
+      <div className="cosmos-hud" hidden={!chrome}>
+        <div className="cosmos-tl">
+          <img className="cosmos-portrait" src={PORTRAIT} alt="" aria-hidden />
+          <Title world={current?.title ?? ""} season={manifest.thread.season || season} />
         </div>
 
-        <div className="cosmos-chrome">
-          <ThemeToggle theme={theme} setTheme={setTheme} />
-          <SoundToggle />
+        <WeatherLine
+          weather={current?.weather}
+          hour={new Date().getHours()}
+          invitation={invitation}
+        />
+
+        <YouAreHere room={hud.room} />
+
+        <div className="cosmos-dock">
+          <button
+            type="button"
+            className="cosmos-chip cosmos-chip-wide"
+            aria-pressed={thread}
+            onClick={() => setThreadOpen((s) => !s)}
+          >
+            <span aria-hidden>❧</span>
+            <span>the thread</span>
+            {keyboard && <kbd>J</kbd>}
+          </button>
           <SatchelButton count={satchel.length} onClick={() => setSatchelOpen((s) => !s)} />
+          <SoundToggle />
+          <ThemeToggle theme={theme} setTheme={setTheme} />
         </div>
 
-        <Hint near={hud.nearTitle} moved={moved} reduced={reduced} />
+        <div className="cosmos-br">
+          <Compass rt={rt} worlds={manifest.worlds} />
+          <KeyHints keyboard={keyboard} />
+        </div>
+
+        <ThreadPanel
+          season={manifest.thread.season || season}
+          chapter={manifest.thread.chapter}
+          open={thread}
+        />
+
+        <Hint near={hud.nearTitle} moved={moved} reduced={reduced} keyboard={keyboard} />
       </div>
 
       <Satchel
@@ -336,7 +403,7 @@ export function CosmosStage({
 
       <Unfolded
         object={openObject}
-        body={open ? bodies[open] : null}
+        body={open ? (bodies[open] ?? lines.get(open) ?? null) : null}
         source={open ? (sources[open] ?? null) : null}
         register={current?.register ?? "painted"}
         onClose={closePage}

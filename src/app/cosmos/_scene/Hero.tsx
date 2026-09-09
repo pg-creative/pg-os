@@ -26,21 +26,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import type { Palette } from "./palette";
+import type { Palette } from "./registers";
 import { GEO, toon } from "./toon";
 import type { Runtime } from "./runtime";
 import { STRIDE } from "./runtime";
 
 const BASE = "/agent-office/characters";
+/**
+ * About an eighth of the frame's height at the camera's own distance, which is
+ * the size the reference makes its walker and the size the brief asks for.
+ */
 const HEIGHT = 1.72;
 
-type Sprites = {
-  cutout?: THREE.Texture;
-  s?: THREE.Texture;
-  n?: THREE.Texture;
-  e?: THREE.Texture;
-  w?: THREE.Texture;
-};
+type Sprites = { cutout?: THREE.Texture };
 
 /** Loads what is there and reports what it found. A 404 is a fact, not an error. */
 function useSprites(): { sprites: Sprites; ready: boolean } {
@@ -50,12 +48,11 @@ function useSprites(): { sprites: Sprites; ready: boolean } {
   useEffect(() => {
     let alive = true;
     const loader = new THREE.TextureLoader();
+    // ONE sprite. Round two loaded four painted headings and drew none of them
+    // (the Critic's deduction 9); a billboard that mirrors by heading needs one
+    // side view, and the other three were 1.4 MB of nothing.
     const want: [keyof Sprites, string][] = [
       ["cutout", `${BASE}/pixel-wayfarer-cutout.png`],
-      ["s", `${BASE}/pixel-wayfarer-s.png`],
-      ["n", `${BASE}/pixel-wayfarer-n.png`],
-      ["e", `${BASE}/pixel-wayfarer-e.png`],
-      ["w", `${BASE}/pixel-wayfarer-w.png`],
     ];
 
     Promise.all(
@@ -203,7 +200,7 @@ export function Hero({
   const { sprites, ready } = useSprites();
   const camera = useThree((s) => s.camera);
 
-  const sprite = sprites.cutout ?? sprites.s ?? null;
+  const sprite = sprites.cutout ?? null;
   const spriteMat = useMemo(() => {
     if (!sprite) return null;
     return new THREE.MeshBasicMaterial({

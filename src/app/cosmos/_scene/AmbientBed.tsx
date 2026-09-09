@@ -56,6 +56,8 @@ interface Rig {
   fireGain: GainNode;
   fireStop: () => void;
   stepGain: GainNode;
+  /** A recorded loop, when the world names one that is not a marker. */
+  file: { src: AudioBufferSourceNode; gain: GainNode; url: string } | null;
 }
 
 /** Per-register bed character. Four numbers, and each biome sounds like itself. */
@@ -177,6 +179,12 @@ export interface WorldSound {
   setBiome: (kind: BiomeVoice) => void;
   /** Fade the hearth up or down. */
   setFire: (on: boolean) => void;
+  /**
+   * The world's own `bed:`. A real audio file plays and the synthesized voice
+   * ducks under it; a marker (`bed.procedural`) leaves the procedural floor
+   * alone, which is what the marker exists to say.
+   */
+  setBed: (bed: string | null) => void;
 }
 
 export function useWorldSound(enabled: boolean): WorldSound {
@@ -228,6 +236,7 @@ export function useWorldSound(enabled: boolean): WorldSound {
       fireGain,
       fireStop: () => {},
       stepGain,
+      file: null,
     };
     rig.fireStop = buildFire(rig);
     rigRef.current = rig;
@@ -276,6 +285,69 @@ export function useWorldSound(enabled: boolean): WorldSound {
     rig.fireGain.gain.linearRampToValueAtTime(on ? 0.34 : 0, t + 1.1);
   }, []);
 
+  /**
+   * The world's `bed:`, read again.
+   *
+   * The Critic's deduction 14: PROMPT.md says "every world gets an ambient loop
+   * before it gets a paragraph", the manifest has carried `bed` since round two,
+   * and no world had a loop any more because nothing read the field. It is read
+   * here. Every world currently names `audio/bed.procedural`, a MARKER rather
+   * than a file (the Worldsmith constitution's floor: synthesized noise is the
+   * zero-cost, zero-licence option and it ships until a recording lands), so
+   * today this resolves to the procedural voice for all five, on purpose and out
+   * loud. Drop a real file in beside it and this plays it with no code change.
+   */
+  const setBed = useCallback((bed: string | null) => {
+    const rig = rigRef.current;
+    if (!rig) return;
+    const marker = !bed || /\.procedural$/.test(bed);
+    const url = marker
+      ? null
+      : `/api/cosmos/asset/vault/${bed.replace(/^\/+/, "").replace(/\.[a-z0-9]+$/i, "")}`;
+
+    if (rig.file && rig.file.url === (url ?? "")) return;
+
+    // Whatever was playing goes first, so a swap can never stack two loops.
+    if (rig.file) {
+      const old = rig.file;
+      rig.file = null;
+      const t0 = rig.ctx.currentTime;
+      old.gain.gain.cancelScheduledValues(t0);
+      old.gain.gain.setValueAtTime(old.gain.gain.value, t0);
+      old.gain.gain.linearRampToValueAtTime(0, t0 + CROSSFADE_S);
+      window.setTimeout(() => {
+        try {
+          old.src.stop();
+        } catch {
+          /* already stopped */
+        }
+        old.src.disconnect();
+        old.gain.disconnect();
+      }, (CROSSFADE_S + 0.3) * 1000);
+    }
+    if (!url) return;
+
+    void fetch(url)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("no bed"))))
+      .then((buf) => rig.ctx.decodeAudioData(buf))
+      .then((audio) => {
+        if (rigRef.current !== rig) return;
+        const src = rig.ctx.createBufferSource();
+        src.buffer = audio;
+        src.loop = true;
+        const gain = rig.ctx.createGain();
+        gain.gain.value = 0;
+        src.connect(gain).connect(rig.master);
+        src.start();
+        const t = rig.ctx.currentTime;
+        gain.gain.linearRampToValueAtTime(1, t + CROSSFADE_S);
+        rig.file = { src, gain, url };
+      })
+      .catch(() => {
+        /* A named bed that will not load is the procedural floor, silently. */
+      });
+  }, []);
+
   const step = useCallback(() => {
     const rig = rigRef.current;
     if (!rig) return;
@@ -307,7 +379,7 @@ export function useWorldSound(enabled: boolean): WorldSound {
     };
   }, []);
 
-  return { step, setBiome, setFire };
+  return { step, setBiome, setFire, setBed };
 }
 
 /**

@@ -31,9 +31,10 @@ export interface Runtime {
   lantern: THREE.Vector3;
   /** The camera's smoothed look-at. One authoritative target, and this is it. */
   target: THREE.Vector3;
-  /** Camera distance, clamped by the wheel. */
+  /** Camera distance in units, smoothed toward `base * zoom` each frame. */
   dist: number;
-  distWanted: number;
+  /** How much world the wheel is asking for. 1 is the framing the viewport wants. */
+  zoom: number;
   blockers: Blocker[];
   keys: Set<string>;
   /** Which world he is standing in right now. */
@@ -64,8 +65,8 @@ export function createRuntime(x: number, z: number): Runtime {
     moving: false,
     lantern: new THREE.Vector3(x + 0.5, 1.35, z),
     target: new THREE.Vector3(x, 0.9, z),
-    dist: 48,
-    distWanted: 48,
+    dist: 19,
+    zoom: 1,
     blockers: [],
     keys: new Set(),
     world: "",

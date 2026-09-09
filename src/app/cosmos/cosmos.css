@@ -68,76 +68,235 @@
   pointer-events: auto;
 }
 
-/* ── Character card, top left ──────────────────────────────────────────── */
+/* ── The reference's shape ─────────────────────────────────────────────────
+ *
+ * From the painted meadow world PG sent mid-round: overline and title top left,
+ * the weather as a sentence top right, one invitation under it, YOU ARE HERE
+ * over the place name bottom left, the journal and the controls bottom centre,
+ * key hints bottom right. Light chrome ON the painting, not panels over it: the
+ * type is cream with a soft shadow and two corner scrims carry the contrast, so
+ * the world is never boxed in by its own interface.
+ *
+ * The panels that hold WORDS (the thread, an unfolded page, the satchel) are
+ * paper and follow the light/dark toggle, because reading is not chrome.
+ */
 
-.cosmos-card {
+.cosmos-hud::before,
+.cosmos-hud::after {
+  content: "";
   position: absolute;
-  top: 18px;
-  left: 18px;
+  left: 0;
+  right: 0;
+  height: 168px;
+  pointer-events: none;
+}
+.cosmos-hud::before {
+  top: 0;
+  background: linear-gradient(rgba(20, 14, 26, 0.34), rgba(20, 14, 26, 0));
+}
+.cosmos-hud::after {
+  bottom: 0;
+  background: linear-gradient(rgba(20, 14, 26, 0), rgba(20, 14, 26, 0.38));
+}
+
+.cosmos-hud {
+  --chrome: #f7f1e4;
+  --chrome-soft: rgba(247, 241, 228, 0.76);
+  --chrome-shadow: 0 1px 3px rgba(18, 12, 22, 0.72), 0 0 18px rgba(18, 12, 22, 0.35);
+}
+
+/* ── Top left: the overline, the world, the season ─────────────────────── */
+
+.cosmos-tl {
+  position: absolute;
+  top: 22px;
+  left: 26px;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px 10px 10px;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  box-shadow: var(--shadow);
-  max-width: min(62vw, 340px);
 }
 
-.cosmos-card-frame {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 52px;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  overflow: hidden;
-  background: var(--paper-deep);
-  display: grid;
-  place-items: center;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5);
-}
-
-.cosmos-card-portrait {
-  width: 100%;
-  height: 100%;
+.cosmos-portrait {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   object-fit: cover;
-  /* The painted portrait has a printed paper border. Crop inside it, so the
-     card never shows a torn white edge (the Critic's deduction 11). */
-  object-position: 50% 34%;
-  transform: scale(1.16);
+  object-position: 50% 22%;
+  border: 1px solid rgba(247, 241, 228, 0.5);
+  box-shadow: var(--chrome-shadow);
+  flex: 0 0 40px;
 }
 
-.cosmos-card-glyph {
-  font-family: var(--display);
-  font-size: 20px;
-  color: var(--gold);
-}
-
-.cosmos-card-name {
+.cosmos-overline {
   margin: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--chrome-soft);
+  text-shadow: var(--chrome-shadow);
+}
+
+.cosmos-worldname {
+  margin: 2px 0 0;
+  font-family: var(--display);
+  font-size: 30px;
+  line-height: 1.02;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+  color: var(--chrome);
+  text-shadow: var(--chrome-shadow);
+}
+
+/* The season is a LABEL until PG names it. Set small, never as a heading. */
+.cosmos-season {
+  margin: 4px 0 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--chrome-soft);
+  text-shadow: var(--chrome-shadow);
+}
+
+/* ── Top right: the weather, and one invitation ────────────────────────── */
+
+.cosmos-weather {
+  position: absolute;
+  top: 24px;
+  right: 26px;
+  max-width: min(360px, 42vw);
+  text-align: right;
+}
+
+.cosmos-weather-line {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--chrome);
+  text-shadow: var(--chrome-shadow);
+}
+
+.cosmos-weather-glyph {
+  margin-right: 7px;
+  opacity: 0.9;
+}
+
+.cosmos-invite {
+  margin-top: 20px;
+}
+
+.cosmos-invite-line {
+  margin: 3px 0 0;
   font-family: var(--display);
   font-size: 19px;
-  line-height: 1.15;
-  letter-spacing: 0.01em;
-  color: var(--ink);
+  line-height: 1.24;
+  color: var(--chrome);
+  text-shadow: var(--chrome-shadow);
 }
 
-.cosmos-card-title {
-  margin: 3px 0 0;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: lowercase;
-  color: var(--ink-soft);
-}
+/* ── Bottom left: you are here ─────────────────────────────────────────── */
 
-/* ── Compass and thread, top right ─────────────────────────────────────── */
-
-.cosmos-hud-right {
+.cosmos-here {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  left: 26px;
+  bottom: 26px;
+  transition: opacity 320ms ease;
+}
+
+.cosmos-here[data-empty="true"] {
+  opacity: 0;
+}
+
+.cosmos-here-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--chrome-soft);
+  text-shadow: var(--chrome-shadow);
+}
+
+.cosmos-here-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold-bright);
+  box-shadow: 0 0 8px var(--gold-bright);
+}
+
+.cosmos-here-name {
+  margin: 3px 0 0;
+  font-family: var(--display);
+  font-size: 21px;
+  color: var(--chrome);
+  text-shadow: var(--chrome-shadow);
+}
+
+/* ── Bottom centre: the dock ───────────────────────────────────────────── */
+
+.cosmos-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(24, 17, 28, 0.5);
+  backdrop-filter: blur(14px) saturate(1.1);
+  border: 1px solid rgba(247, 241, 228, 0.16);
+}
+
+.cosmos-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--chrome);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+
+.cosmos-chip kbd {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(247, 241, 228, 0.28);
+  color: var(--chrome-soft);
+}
+
+.cosmos-chip:hover,
+.cosmos-chip:focus-visible {
+  background: rgba(247, 241, 228, 0.14);
+}
+
+.cosmos-chip[aria-pressed="true"] {
+  background: rgba(234, 160, 80, 0.24);
+}
+
+/* ── Bottom right: the compass and the keys ────────────────────────────── */
+
+.cosmos-br {
+  position: absolute;
+  right: 26px;
+  bottom: 24px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -145,103 +304,100 @@
 }
 
 .cosmos-compass {
-  width: 116px;
-  height: 116px;
+  width: 92px;
+  height: 92px;
   border-radius: 50%;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  box-shadow: var(--shadow);
-  display: grid;
-  place-items: center;
+  overflow: hidden;
+  background: rgba(24, 17, 28, 0.34);
+  backdrop-filter: blur(8px);
 }
 
+.cosmos-keys {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.cosmos-keys p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: var(--chrome-soft);
+  text-shadow: var(--chrome-shadow);
+}
+
+.cosmos-keys kbd {
+  min-width: 17px;
+  padding: 2px 4px;
+  text-align: center;
+  border-radius: 4px;
+  border: 1px solid rgba(247, 241, 228, 0.34);
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--chrome);
+}
+
+/* ── The thread, over the dock ─────────────────────────────────────────── */
+
 .cosmos-thread {
-  width: min(64vw, 268px);
-  padding: 12px 14px;
-  background: var(--paper);
+  position: absolute;
+  left: 50%;
+  bottom: 78px;
+  transform: translate(-50%, 10px);
+  width: min(420px, 84vw);
+  padding: 16px 20px 18px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
   border: 1px solid var(--rule);
-  border-radius: 3px;
   box-shadow: var(--shadow);
   opacity: 0;
-  transform: translateY(-6px);
-  transition: opacity 320ms ease-out, transform 320ms ease-out;
-  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 320ms ease, transform 320ms ease, visibility 320ms;
 }
 
 .cosmos-thread[data-open="true"] {
   opacity: 1;
-  transform: none;
-  pointer-events: auto;
+  visibility: visible;
+  transform: translate(-50%, 0);
 }
 
 .cosmos-thread-eyebrow {
-  margin: 0 0 6px;
+  margin: 0;
   font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.18em;
+  font-size: 9px;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--gold);
 }
 
 .cosmos-thread-season {
-  margin: 0;
-  font-family: var(--display);
-  font-size: 15px;
-  color: var(--ink);
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
 .cosmos-thread-chapter {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-family: var(--display);
-  font-size: 14px;
-  font-style: italic;
+  font-size: 19px;
   color: var(--ink);
 }
 
 .cosmos-thread-line {
-  margin: 4px 0 0;
-  font-size: 12.5px;
+  margin: 5px 0 0;
+  font-family: var(--body);
+  font-size: 13px;
   line-height: 1.5;
   color: var(--ink-soft);
-}
-
-/* ── Chrome: the persistent controls ───────────────────────────────────── */
-
-.cosmos-chrome {
-  position: absolute;
-  left: 18px;
-  bottom: 18px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.cosmos-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 6px 11px;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  box-shadow: var(--shadow);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: color 160ms ease-out, border-color 160ms ease-out;
-}
-
-.cosmos-chip:hover,
-.cosmos-chip:focus-visible {
-  color: var(--ink);
-  border-color: var(--gold);
-}
-
-.cosmos-chip[data-full="true"] {
-  color: var(--gold);
 }
 
 /* ── The one hint ──────────────────────────────────────────────────────── */
@@ -249,30 +405,25 @@
 .cosmos-hint {
   position: absolute;
   left: 50%;
-  bottom: 22px;
+  bottom: 78px;
   transform: translateX(-50%);
   margin: 0;
-  padding: 6px 14px;
-  max-width: min(84vw, 460px);
-  text-align: center;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.05em;
-  color: var(--ink-soft);
-  background: var(--paper);
-  border: 1px solid var(--rule);
+  padding: 7px 15px;
   border-radius: 999px;
-  box-shadow: var(--shadow);
-  opacity: 1;
-  transition: opacity 400ms ease-out;
-  pointer-events: none;
+  background: rgba(24, 17, 28, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(247, 241, 228, 0.16);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--chrome);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  animation: cosmos-fade 260ms ease both;
 }
 
-.cosmos-hint[data-hidden="true"] {
-  opacity: 0;
+/* The thread owns that spot when it is open. */
+.cosmos-thread[data-open="true"] ~ .cosmos-hint {
+  display: none;
 }
 
 /* ── The unfolded page ─────────────────────────────────────────────────── */
@@ -562,42 +713,66 @@
 /* ── Phone ─────────────────────────────────────────────────────────────── */
 
 @media (max-width: 560px) {
-  .cosmos-card {
-    top: 10px;
-    left: 10px;
-    padding: 8px 12px 8px 8px;
-    gap: 10px;
+  .cosmos-tl {
+    top: 12px;
+    left: 14px;
+    gap: 9px;
   }
-  .cosmos-card-frame {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
+  .cosmos-portrait {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
   }
-  .cosmos-card-name {
-    font-size: 16px;
+  .cosmos-worldname {
+    font-size: 21px;
   }
-  .cosmos-hud-right {
-    top: 10px;
-    right: 10px;
+  .cosmos-weather {
+    top: 14px;
+    right: 14px;
+    max-width: 52vw;
   }
-  .cosmos-compass {
-    width: 84px;
-    height: 84px;
+  .cosmos-weather-line {
+    font-size: 11px;
   }
-  .cosmos-compass canvas {
-    width: 84px !important;
-    height: 84px !important;
+  .cosmos-invite {
+    margin-top: 12px;
   }
-  .cosmos-chrome {
-    left: 10px;
-    bottom: 10px;
+  .cosmos-invite-line {
+    font-size: 15px;
   }
-  /* The hint sat across the open panel on the phone in round one. It goes up
-     out of the way instead, and the panel owns the bottom of the screen. */
+  .cosmos-here {
+    left: 14px;
+    bottom: 78px;
+  }
+  .cosmos-here-name {
+    font-size: 17px;
+  }
+  .cosmos-dock {
+    bottom: 14px;
+    gap: 2px;
+    padding: 4px;
+  }
+  .cosmos-chip {
+    min-height: 40px;
+    padding: 0 9px;
+  }
+  /* No compass and no key hints on a thumb: one is a luxury and the other
+     names keys the device does not have. */
+  .cosmos-br {
+    display: none;
+  }
+  .cosmos-thread {
+    bottom: 68px;
+  }
+  /* The hint sat across the open panel in round one. It goes up out of the
+     way instead, and the panel owns the bottom of the screen. */
   .cosmos-hint {
     bottom: auto;
-    top: 62px;
+    top: 78px;
     font-size: 10px;
+    max-width: 84vw;
+    white-space: normal;
+    text-align: center;
   }
   .cosmos-page {
     top: auto;
@@ -613,7 +788,7 @@
     transform: none;
   }
   .cosmos-satchel {
-    bottom: 52px;
+    bottom: 62px;
     max-height: 52vh;
   }
 }

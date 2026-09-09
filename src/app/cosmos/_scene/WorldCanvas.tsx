@@ -3,12 +3,6 @@
 /**
  * The one persistent scene. Everything that moves, moves in here.
  *
- * EXTENDS: round one's `WorldCanvas`, with its scroll conductor removed. Lenis,
- * GSAP and ScrollTrigger are gone from the repo: nothing scrolls, because the
- * verb is now walking. What is kept and reused: the fbm mist chunk, the sky
- * shader's screen quad, the lazy-armed ambient bed, the idle detector driving
- * `frameloop`, and the touch route.
- *
  * FOLLOWS `build-isometric-arpg`: one authoritative simulation step per frame,
  * deterministic and serializable (position and heading are all the save needs),
  * and no second system layered on before the first has gameplay proof.
@@ -16,8 +10,22 @@
  * The React tree here re-renders about five times a minute. Walking, the camera,
  * the mist, the lantern and the flames are all mutations on `rt`, the runtime
  * object, inside `useFrame`. What React is told about, on a 250 ms tick, is only
- * what a person could see change in the HUD: the biome he is in, the thing he is
- * near, and how long he has been standing there.
+ * what a person could see change in the HUD.
+ *
+ * THREE THINGS THE CRITIC FOUND, all fixed here.
+ *
+ * THE HOUR. `new Date().getHours()` sat inside a memo, so a session crossed
+ * 18:00 unchanged. It comes from `useHour` now and turns over on the minute.
+ *
+ * THE WEATHER. `state/weather.json` reached the manifest and was read by nobody.
+ * It now sets the mist density and the key light's warmth, which is what
+ * COSMOLOGY.md said it was for: a bad night is weather, never a report card.
+ *
+ * THE BORDER. Crossing one compiled between 137 and 267 shader programs, because
+ * a neighbour's palette was mixed toward the current one on every render and
+ * every fresh hex is a fresh material. All sixteen possible neighbour palettes
+ * are built once at module load in `registers.ts` now, so a crossing looks one
+ * up and compiles nothing.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,19 +34,29 @@ import * as THREE from "three";
 import { useIdleDetector } from "../../_components/useIdleDetector";
 import type { CosmosManifest, WorldManifest } from "./contract";
 import { nearestWorld, worldAt } from "./contract";
-import { mixPalettes, paletteFor, type Palette } from "./palette";
-import { lightsFor, roomAt } from "./dressing";
+import { neighbourPalette, paletteFor, type Palette } from "./registers";
+import { lightsFor, roomAt } from "./place";
 import { createRuntime, stepWalker, STRIDE, type Runtime } from "./runtime";
 import { CAM_YAW, IsoCamera } from "./IsoCamera";
 import { Ground } from "./Ground";
-import { Sky, skyFor, type SkyLook } from "./Sky";
+import { GrassField } from "./Grass";
+import { Sky, skyFor, useHour, type SkyLook } from "./Sky";
 import { World, worldBlockers } from "./World";
 import { Hero } from "./Hero";
 import { Postfx, type PostQuality } from "./Postfx";
 import { MIST } from "./toon";
+import { WIND_CLOCK } from "./wind";
 
-/** Stand this close for this long and the page unfolds. Or press E. */
-export const REACH = 1.2;
+/**
+ * Stand this close for this long and the page unfolds. Or press E.
+ *
+ * The Critic's deduction 6: the hint printed inside 3.6 m, the page opened
+ * inside 1.2 m, and the steering that keeps him from walking through a card
+ * parks him at 1.31 m (0.34 blocker plus 0.42 of him plus 0.55 of margin), so
+ * "stand still" was a lie at exactly the distance the world puts him. Reach is
+ * now larger than the steering radius, and the hint never prints outside it.
+ */
+export const REACH = 1.75;
 export const DWELL_S = 1.2;
 
 export interface HudState {
@@ -54,6 +72,38 @@ export interface HudState {
   /** Where he stands, for the compass's remembered ground. */
   x: number;
   z: number;
+  /** The room he is in, for "YOU ARE HERE". */
+  room: string | null;
+}
+
+/** `state/weather.json`, read for the two things weather can honestly drive. */
+export interface WeatherLook {
+  /** 0 to 1 extra air. A short night thickens the mist; nothing is scolded. */
+  mist: number;
+  /** 0 to 1 warmth on the key light. A long recovery is a brighter morning. */
+  key: number;
+}
+
+export function weatherLook(w: Record<string, number | string | null> | undefined): WeatherLook {
+  const num = (k: string): number | null => {
+    const v = w?.[k];
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  };
+  const recovery = num("recovery");
+  const pages = num("pages_days_ago");
+  const shipped = num("days_since_ship");
+
+  // Nothing written yet is not bad weather. It is no weather.
+  let mist = 0;
+  let key = 0.5;
+  if (recovery !== null) {
+    const r = Math.min(1, Math.max(0, recovery / 100));
+    mist += (1 - r) * 0.34;
+    key = 0.3 + r * 0.6;
+  }
+  if (pages !== null) mist += Math.min(0.26, pages * 0.05);
+  if (shipped !== null) mist += Math.min(0.2, Math.max(0, shipped - 3) * 0.03);
+  return { mist: Math.min(0.5, mist), key: Math.min(1, Math.max(0, key)) };
 }
 
 // ── The per-frame conductor ──────────────────────────────────────────────────
@@ -61,7 +111,6 @@ export interface HudState {
 function Conductor({
   rt,
   worlds,
-  palette,
   onTick,
   onOpen,
   onDoor,
@@ -70,7 +119,6 @@ function Conductor({
 }: {
   rt: React.RefObject<Runtime>;
   worlds: WorldManifest[];
-  palette: Palette;
   onTick: (s: HudState) => void;
   onOpen: (id: string) => void;
   onDoor: (to: string, kind: "mist" | "stairs") => void;
@@ -100,7 +148,12 @@ function Conductor({
       if (!cam) return;
       ray.setFromCamera(ndc, cam);
       if (ray.ray.intersectPlane(plane, hit)) {
-        r.dest = hit.clone();
+        hit.y = 0;
+        // A low camera can raycast half a kilometre up the plane on one click
+        // near the horizon. Thirty metres is as far as one walk order goes.
+        const to = hit.clone().sub(r.pos);
+        if (to.length() > 30) to.setLength(30);
+        r.dest = r.pos.clone().add(to);
         r.dest.y = 0;
       }
     };
@@ -128,6 +181,9 @@ function Conductor({
     MIST.uLantern.value.copy(r.lantern);
     MIST.uFocus.value.copy(r.target);
     MIST.uFloor.value = theme === "light" ? 1 : 0;
+    // One wind for the whole world: the grass, the pines and the painted foliage
+    // are in the same gust because they read the same clock.
+    WIND_CLOCK.value += dt;
 
     // Footsteps, on the stride the dust uses, so sound and picture are one gait.
     if (r.moving && r.stepAccum - lastStep.current > STRIDE) {
@@ -178,11 +234,20 @@ function Conductor({
         }
       }
     }
-    r.near = nearId && nearD < REACH * 3 ? { id: nearId, d: nearD } : null;
+    // Inside reach, and only inside reach. A hint that names a verb he cannot
+    // perform from where he is standing is worse than no hint.
+    r.near = nearId && nearD <= REACH ? { id: nearId, d: nearD } : null;
+
+    // Sitting: the hearth mat, and only the hearth mat. Read BEFORE the dwell,
+    // because sitting suspends it.
+    const room = roomAt(here, r.pos.x, r.pos.z);
+    const fire = room?.lights.find((l) => l.emitter === "fire");
+    r.sitting = !!fire && Math.hypot(fire.at.x - r.pos.x, fire.at.z - r.pos.z) < 1.9;
 
     // Dwell: standing still, in reach, for DWELL_S. Moving resets it, which is
-    // the difference between attention and passing by.
-    if (r.near && nearD <= REACH && !r.moving) {
+    // the difference between attention and passing by. Sitting at the fire is
+    // not dwelling on the card 1.1 m away: the thread is what opens there.
+    if (r.near && !r.moving && !r.sitting) {
       r.dwell += 0.25;
       if (r.dwell >= DWELL_S) {
         r.dwell = 0;
@@ -193,14 +258,8 @@ function Conductor({
       r.dwell = 0;
     }
 
-    // Sitting: the hearth mat, and only the hearth mat.
-    const room = roomAt(here, r.pos.x, r.pos.z);
-    const fire = room?.lights.find((l) => l.emitter === "fire");
-    r.sitting = !!fire && Math.hypot(fire.at.x - r.pos.x, fire.at.z - r.pos.z) < 2.2;
-
     // How deep in the mist between two biomes he is, 0 at a heart, 1 in the gap.
-    const inside = worldAt(worlds, r.pos.x, r.pos.z);
-    r.border = inside ? 0 : 1;
+    r.border = worldAt(worlds, r.pos.x, r.pos.z) ? 0 : 1;
 
     onTick({
       world: here.id,
@@ -213,9 +272,9 @@ function Conductor({
       depth: r.depth,
       x: r.pos.x,
       z: r.pos.z,
+      room: room?.id ?? null,
     });
     void state;
-    void palette;
   });
 
   return null;
@@ -230,16 +289,19 @@ function Conductor({
  *
  * The key follows the camera target so the shadow map stays tight around what is
  * on screen; a fixed sun over a 200 unit plane would spend its whole resolution
- * on empty ground.
+ * on empty ground. One 2048 map, which at a 40 unit frustum is about 20 texels
+ * per metre: enough for a roof edge to read as an edge.
  */
 function KeyLight({
   rt,
   p,
   theme,
+  weather,
 }: {
   rt: React.RefObject<Runtime>;
   p: Palette;
   theme: "light" | "dark";
+  weather: WeatherLook;
 }) {
   const dir = useRef<THREE.DirectionalLight>(null);
 
@@ -251,26 +313,26 @@ function KeyLight({
     dir.current.target.updateMatrixWorld();
   });
 
+  // A short night is a dimmer sun. Not a warning, not a number: weather.
+  const day = theme === "light";
+  const k = 0.68 + weather.key * 0.5;
+
   return (
     <>
-      <hemisphereLight
-        color={p.key}
-        groundColor={p.ambient}
-        intensity={theme === "light" ? 1.05 : 0.6}
-      />
-      <ambientLight color={p.fill} intensity={theme === "light" ? 0.34 : 0.2} />
+      <hemisphereLight color={p.key} groundColor={p.ambient} intensity={(day ? 1.05 : 0.6) * k} />
+      <ambientLight color={p.fill} intensity={(day ? 0.34 : 0.2) * k} />
       <directionalLight
         ref={dir}
         color={p.key}
-        intensity={theme === "light" ? 2.1 : 1.5}
+        intensity={(day ? 2.1 : 1.5) * k}
         castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-24}
-        shadow-camera-right={24}
-        shadow-camera-top={24}
-        shadow-camera-bottom={-24}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-26}
+        shadow-camera-right={26}
+        shadow-camera-top={26}
+        shadow-camera-bottom={-26}
         shadow-camera-near={1}
-        shadow-camera-far={60}
+        shadow-camera-far={64}
         shadow-bias={-0.0012}
         shadow-normalBias={0.03}
       />
@@ -280,13 +342,7 @@ function KeyLight({
 
 // ── Focus for the depth-of-field pass ────────────────────────────────────────
 
-function FocusProbe({
-  rt,
-  set,
-}: {
-  rt: React.RefObject<Runtime>;
-  set: (v: number) => void;
-}) {
+function FocusProbe({ rt, set }: { rt: React.RefObject<Runtime>; set: (v: number) => void }) {
   const acc = useRef(0);
   const camera = useThree((s) => s.camera);
   useFrame((_, dt) => {
@@ -295,11 +351,20 @@ function FocusProbe({
     acc.current = 0;
     const r = rt.current;
     if (!r) return;
-    // The pass wants distance normalised into the camera's near..far range.
     const cam = camera as THREE.PerspectiveCamera;
     const d = camera.position.distanceTo(r.pos);
     set(Math.min(0.98, Math.max(0.02, (d - cam.near) / (cam.far - cam.near))));
   });
+  return null;
+}
+
+/** ACES at 1.16, the reference's own exposure, set once on the renderer. */
+function Tone() {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = 1.16;
+  }, [gl]);
   return null;
 }
 
@@ -325,10 +390,11 @@ export function WorldCanvas({
   reduced: boolean;
 }) {
   const idle = useIdleDetector({ timeoutMs: 90_000 });
-  const target = useRef(new THREE.Vector3(manifest.hero.x, 0.9, manifest.hero.z));
+  const target = useRef(new THREE.Vector3(manifest.hero.x, 1.5, manifest.hero.z));
   const [here, setHere] = useState(manifest.hero.world);
   const [focus, setFocus] = useState(0.35);
   const [quality, setQuality] = useState<PostQuality>("full");
+  const hour = useHour();
 
   const worlds = manifest.worlds;
 
@@ -337,36 +403,33 @@ export function WorldCanvas({
     [worlds, here],
   );
 
-  /**
-   * The palette on screen is the biome's, blended toward the neighbour while he
-   * is in the mist between them. Crossing a border is a fade, not a cut, which
-   * is the only way "borders are mist" can be true of the materials as well as
-   * the ground.
-   */
-  const palette = useMemo(() => {
-    const p = paletteFor(current?.register);
-    return p;
-  }, [current]);
+  const palette = useMemo(() => paletteFor(current?.register), [current]);
+
+  const weather = useMemo(
+    () => weatherLook(current?.weather),
+    [current],
+  );
 
   const sky: SkyLook = useMemo(
-    () => skyFor(palette, current?.phase ?? "clock", new Date().getHours(), theme),
-    [palette, current, theme],
+    () => skyFor(palette, current?.phase ?? "clock", hour, theme),
+    [palette, current, theme, hour],
   );
+
+  /** Register air plus what the weather adds. One number, two consumers. */
+  const air = Math.min(0.95, palette.mistDensity + weather.mist);
 
   // Which biomes are close enough to draw. Everything else is behind the mist
   // and costs nothing, which is what makes five worlds on one plane affordable.
-  const visible = useMemo(() => {
-    const hx = manifest.hero.x;
-    const hz = manifest.hero.z;
-    void hx;
-    void hz;
-    return worlds.filter((w) => {
-      if (!current) return true;
-      const dx = w.layout.origin.x - current.layout.origin.x;
-      const dz = w.layout.origin.z - current.layout.origin.z;
-      return Math.hypot(dx, dz) < 62;
-    });
-  }, [worlds, current, manifest.hero]);
+  const visible = useMemo(
+    () =>
+      worlds.filter((w) => {
+        if (!current) return true;
+        const dx = w.layout.origin.x - current.layout.origin.x;
+        const dz = w.layout.origin.z - current.layout.origin.z;
+        return Math.hypot(dx, dz) < 62;
+      }),
+    [worlds, current],
+  );
 
   // Blockers, once, for every world that can be walked into from here.
   const blockers = useMemo(() => worldBlockers(visible), [visible]);
@@ -376,9 +439,9 @@ export function WorldCanvas({
 
   useEffect(() => {
     MIST.uMistColor.value.set(palette.mist);
-    MIST.uMistDensity.value = palette.mistDensity;
+    MIST.uMistDensity.value = air;
     MIST.uLanternR.value = 6.5;
-  }, [palette]);
+  }, [palette, air]);
 
   const handleTick = useCallback(
     (s: HudState) => {
@@ -388,6 +451,7 @@ export function WorldCanvas({
     [onTick],
   );
 
+  const pressTimer = useRef<number | null>(null);
   const press = useCallback(
     (id: string) => {
       const r = rt.current;
@@ -398,7 +462,6 @@ export function WorldCanvas({
     },
     [onOpen, rt],
   );
-  const pressTimer = useRef<number | null>(null);
   const release = useCallback(() => {
     if (pressTimer.current !== null) {
       window.clearTimeout(pressTimer.current);
@@ -440,16 +503,29 @@ export function WorldCanvas({
     return () => cancelAnimationFrame(raf);
   }, [reduced]);
 
-  const dpr = useMemo<[number, number]>(() => [1, reduced ? 1 : 1.5], [reduced]);
+  /**
+   * The render size, capped.
+   *
+   * The Critic's deduction 10: p1 held 72 at DPR 1 and fell to 48 at DPR 2 and
+   * on the phone, and both are fill rate on a scene that is mostly full-screen
+   * shader. A phone gets 1 device pixel per CSS pixel and a retina desktop gets
+   * 1.5, which on a 1440 by 900 window is 2160 by 1350: enough that the grain
+   * and the tilt-shift still read, and 44 percent of the pixels DPR 2 was
+   * asking for.
+   */
+  const dpr = useMemo<[number, number]>(() => {
+    if (reduced) return [1, 1];
+    const phone = typeof window !== "undefined" && window.innerWidth < 700;
+    return phone ? [1, 1] : [1, 1.5];
+  }, [reduced]);
 
   return (
     <Canvas
       dpr={dpr}
       frameloop={idle && !reduced ? "demand" : "always"}
       /* Not `shadows` bare: r3f's default is PCFSoftShadowMap, which three 0.185
-         deprecates and warns about on every shadow-casting light, 143 times in
-         one harness run. PCF is the supported successor and looks the same at
-         this map size. */
+         deprecates and warns about on every shadow-casting light. PCF is the
+         supported successor and looks the same at this map size. */
       shadows={{ type: THREE.PCFShadowMap }}
       gl={{
         antialias: false,
@@ -457,30 +533,32 @@ export function WorldCanvas({
         powerPreference: "high-performance",
         stencil: false,
       }}
-      camera={{ fov: 26, near: 1, far: 140, position: [22, 22, 22] }}
+      camera={{ fov: 44, near: 1, far: 460, position: [18, 6, 18] }}
       style={{ position: "absolute", inset: 0, touchAction: "none" }}
     >
-      <color attach="background" args={[sky.top]} />
-      <Sky look={sky} banding={palette.banding} mistDensity={palette.mistDensity} />
-      <KeyLight rt={rt} p={palette} theme={theme} />
+      <color attach="background" args={[sky.horizon]} />
+      {/* The fog IS the horizon: one hex, so a pine dissolving into the distance
+          and the sky it dissolves into cannot disagree. */}
+      <fogExp2 attach="fog" args={[palette.fog, 0.0055 + air * 0.011]} />
+      <Tone />
+      <Sky look={sky} banding={palette.banding} mistDensity={air} />
+      <KeyLight rt={rt} p={palette} theme={theme} weather={weather} />
       <IsoCamera rt={rt} target={target} />
       <Ground worlds={worlds} target={target} horizon={sky.horizon} />
+      <GrassField target={target} root={palette.grass} tip={palette.grassTip} />
 
       {visible.map((w) => {
-        const p = w.id === current?.id ? palette : mixPalettes(paletteFor(w.register), palette, 0.18);
-        // Lights are budgeted by biome: the one he is standing in gets them all,
-        // a neighbour across the mist gets its two brightest, and nothing beyond
-        // that mounts a light at all.
-        const budget = w.id === current?.id ? Math.min(5, lightsFor(w).length) : 2;
+        const isHere = w.id === current?.id;
         return (
           <World
             key={w.id}
             world={w}
-            p={p}
+            p={isHere ? palette : neighbourPalette(w.register, current?.register)}
             rt={rt}
             onPress={press}
             onRelease={release}
-            lightBudget={budget}
+            lightBudget={isHere ? 6 : 2}
+            current={isHere}
           />
         );
       })}
@@ -490,7 +568,6 @@ export function WorldCanvas({
       <Conductor
         rt={rt}
         worlds={worlds}
-        palette={palette}
         onTick={handleTick}
         onOpen={onOpen}
         onDoor={onDoor}
@@ -508,3 +585,4 @@ export function WorldCanvas({
 
 export { createRuntime };
 export type { Runtime };
+export { lightsFor };

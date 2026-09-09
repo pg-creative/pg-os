@@ -81,7 +81,12 @@ export function Unfolded({
             </div>
           )}
 
-          <p className="cosmos-page-eyebrow">{object.type}</p>
+          <p className="cosmos-page-eyebrow">
+            {object.type}
+            {(object as SceneObject & { draft?: boolean }).draft && (
+              <span className="cosmos-page-draft">draft</span>
+            )}
+          </p>
           <h2 className="cosmos-page-title">{object.title}</h2>
           <div className="cosmos-page-body">{body}</div>
           {source && <p className="cosmos-page-source">{source}</p>}
