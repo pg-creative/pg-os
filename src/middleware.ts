@@ -20,6 +20,56 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "pgos-auth";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 90; // 90 days
 
+/**
+ * Cosmos gate. EXTENDS the `?key=` cookie pattern above rather than adding a
+ * login page: same one-visit-per-device shape, same 90-day TTL, second secret.
+ *
+ * Two differences, both deliberate (plan 7g-1):
+ *   - FAIL-CLOSED. The PG OS gate passes everything through when no secret is
+ *     set, which is why the OS is ungated today. The practice world is private
+ *     forever, so no COSMOS_KEY means 404, not open.
+ *   - 404, never a redirect to /unlock. A redirect confirms the route exists.
+ *
+ * The asset route's URLs carry no file extension on purpose: the matcher below
+ * excludes every image extension, so a plate served as `.jpg` could not be gated
+ * by any cookie. Extensionless URLs are what make the gate reach the paintings.
+ */
+const COSMOS_COOKIE = "cosmos-auth";
+const COSMOS_PREFIXES = ["/cosmos", "/api/cosmos"];
+
+function isCosmosPath(pathname: string): boolean {
+  return COSMOS_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+}
+
+function cosmosGate(req: NextRequest): NextResponse | null {
+  const { pathname, searchParams } = req.nextUrl;
+  if (!isCosmosPath(pathname)) return null;
+
+  const key = process.env.COSMOS_KEY;
+  if (!key) return new NextResponse(null, { status: 404 });
+
+  const param = searchParams.get("cosmos");
+  if (param && param === key) {
+    const cleanUrl = req.nextUrl.clone();
+    cleanUrl.searchParams.delete("cosmos");
+    const res = NextResponse.redirect(cleanUrl);
+    res.cookies.set(COSMOS_COOKIE, key, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: req.nextUrl.protocol === "https:",
+      maxAge: COOKIE_MAX_AGE,
+      path: "/",
+    });
+    return res;
+  }
+
+  if (req.cookies.get(COSMOS_COOKIE)?.value === key) return NextResponse.next();
+
+  return new NextResponse(null, { status: 404 });
+}
+
 const PASSTHROUGH_PREFIXES = [
   "/api/auth/google/callback",
   "/api/auth/spotify/callback",
@@ -94,6 +144,12 @@ function maybeEveningRedirect(req: NextRequest): NextResponse | null {
 
 export function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
+
+  // Cosmos runs first and answers on its own. It must not inherit the PG OS
+  // gate's fail-open dev behaviour, and none of the passthrough prefixes below
+  // overlap /cosmos or /api/cosmos.
+  const cosmos = cosmosGate(req);
+  if (cosmos) return cosmos;
 
   // OAuth callbacks + static assets always pass through, regardless of auth.
   if (PASSTHROUGH_PREFIXES.some((p) => pathname.startsWith(p))) {

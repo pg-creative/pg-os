@@ -35,6 +35,13 @@ const config: NextConfig = {
       ".claude/**",
       ".next/cache/**",
       "node_modules/@next/swc-*/**",
+      // Cosmos plates. They live outside the repo and are streamed by
+      // /api/cosmos/asset at request time, so the tracer must never sweep a
+      // world's frame sequence into a function bundle the way public/art once
+      // ballooned api/briefing to ~745MB.
+      "../cosmos/**",
+      "../self/wall/plates/**",
+      "public/cosmos/**",
     ],
   },
 };
