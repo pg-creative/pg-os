@@ -195,8 +195,19 @@ export function toon(color: string, opts: ToonOptions = {}): THREE.MeshToonMater
            gl_FragColor.rgb = mix(gl_FragColor.rgb, uMistColor, cm);`,
         );
     };
-    // Materials that compile differently must not share a cached program.
-    mat.customProgramCacheKey = () => `cosmos-mist-${opts.untouched ?? 0}`;
+    /**
+     * ONE PROGRAM FOR EVERY MISTED MATERIAL IN THE COSMOS.
+     *
+     * Round 2.1 put `untouched` in the cache key, which read as caution and cost
+     * a shader program per page: `untouchedFor()` returns a continuous number of
+     * days, so twenty-four ema cards were twenty-four compiles, and every world
+     * that came into view compiled its own. But `uUntouched` is a UNIFORM, set
+     * per material and uploaded per draw; the GLSL is byte-identical. Three
+     * shares the compiled program and keeps the uniform values apart, which is
+     * exactly what is wanted. One key, one program, and a border crossing that
+     * mounts a new biome compiles nothing.
+     */
+    mat.customProgramCacheKey = () => "cosmos-mist";
   }
 
   cache.set(key, mat);

@@ -43,34 +43,22 @@ export function Title({
 
 // ── Top right: the weather, as a sentence ────────────────────────────────────
 
-const WORDS = [
-  "no",
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "ten",
-  "eleven",
-  "twelve",
-];
-
-function spell(n: number): string {
-  const i = Math.round(n);
-  return i >= 0 && i < WORDS.length ? WORDS[i] : "many";
-}
-
 export type Weather = Record<string, number | string | null>;
 
 /**
- * One sentence from `state/weather.json`, and nothing when the witness has not
- * written yet. Never a count, never a bar, never a percentage: PG's rule is that
- * a bad night shows up as weather, so a short night is a heavier evening and a
- * long silence is a quieter one, and neither of them is a score.
+ * One sentence from `state/weather.json`. Weather, and only weather.
+ *
+ * THE COUNTER IS GONE. The Critic's deduction 6, and it was right: "eight days
+ * since the pages" was the first line the eye read top right on every load. A
+ * duration spelled out is still a duration, and a duration since he last did the
+ * thing is a scoreboard however softly it is set. PG's rule is that a bad night
+ * renders as weather and never as a report card, and this file had been reading
+ * "no digits" as the rule when the rule was "no counting".
+ *
+ * So the numbers become ADJECTIVES, or they say nothing. Sleep is a rested
+ * morning or a thin one. Silence is a heavier evening. The count of days lives
+ * where it belongs and where it already lived: in the mist, which thickens
+ * (`weatherLook` in `WorldCanvas`) and is a thing you feel rather than read.
  */
 export function weatherSentence(w: Weather | undefined, hour: number): string {
   const num = (k: string): number | null => {
@@ -82,40 +70,27 @@ export function weatherSentence(w: Weather | undefined, hour: number): string {
     return typeof v === "string" && v.trim() ? v.trim() : null;
   };
 
-  const part: string[] = [];
-
   // The sky. The vault's word for it when it has one, the hour when it does not.
   const sky = str("sky");
   const timeOfDay =
     hour < 5 ? "night" : hour < 11 ? "morning" : hour < 17 ? "afternoon" : hour < 21 ? "evening" : "night";
-  part.push(sky ? `${sky} ${timeOfDay}` : `a quiet ${timeOfDay}`);
+  const head = sky ? `${sky} ${timeOfDay}` : `a quiet ${timeOfDay}`;
 
+  // One clause after it, at most, and it is an adjective about the air.
+  const air: string[] = [];
   const recovery = num("recovery");
   if (recovery !== null) {
-    part.push(recovery >= 70 ? "well rested" : recovery >= 40 ? "half rested" : "running on little");
+    air.push(recovery >= 70 ? "clear and rested" : recovery >= 40 ? "soft-edged" : "thin air");
   }
-
   const pages = num("pages_days_ago");
-  if (pages !== null) {
-    part.push(
-      pages <= 0
-        ? "pages written today"
-        : pages === 1
-          ? "pages written yesterday"
-          : `${spell(pages)} days since the pages`,
-    );
-  }
-
   const ship = num("days_since_ship");
-  if (ship !== null) {
-    part.push(
-      ship <= 0 ? "something shipped today" : `${spell(ship)} days since the last ship`,
-    );
+  const quiet = Math.max(pages ?? 0, ship ?? 0);
+  if (!air.length && (pages !== null || ship !== null)) {
+    air.push(quiet >= 5 ? "the air gone heavy" : quiet >= 2 ? "a little haze on it" : "the air clear");
   }
 
-  // At most two clauses. A weather report is not a status page.
-  const head = part[0][0].toUpperCase() + part[0].slice(1);
-  return part.length > 1 ? `${head}, ${part[1]}.` : `${head}.`;
+  const cap = head[0].toUpperCase() + head.slice(1);
+  return air.length ? `${cap}, ${air[0]}.` : `${cap}.`;
 }
 
 export function WeatherLine({
@@ -169,19 +144,20 @@ export function YouAreHere({ room }: { room: string | null }) {
 
 // ── Bottom right: the compass, and the keys ──────────────────────────────────
 
-const VISITED_KEY = "pg-os-cosmos-visited";
-const CELL = 3;
-
 /**
- * The compass shows where the lantern has been, and nothing else. No room count,
- * no percentage explored, no minimap of places he has not walked. Ground he has
- * carried the light across is remembered as a soft mark; everything else is the
- * same mist that eats an untouched page.
+ * The compass shows what he has already looked at, and nothing else. No room
+ * count, no percentage explored, no minimap of places he has not walked.
  *
- * The record is per device, in localStorage, because it is a memory of walking
- * rather than a fact about the vault. The vault's own memory of attention is
- * `state/attention.json`, written by the touch route, and that is the one the
- * mist reads.
+ * THE SECOND MEMORY IS GONE. The Critic's deduction 13: this kept its own
+ * `pg-os-cosmos-visited` set of walked cells in localStorage, a per-device
+ * memory of walking standing beside the vault's own `state/attention.json`,
+ * which is committed, survives the machine, and is the memory the mist already
+ * reads. Two records of the same fact is the thing PG's rule forbids, and the
+ * one in the browser is the one that loses.
+ *
+ * So it reads attention: a mark for every object the vault remembers him
+ * unfolding, faded by how long ago, in the same "recent is bright, old is mist"
+ * grammar as the world. Nothing is written here at all.
  */
 export function Compass({
   rt,
@@ -191,20 +167,29 @@ export function Compass({
   worlds: WorldManifest[];
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const visited = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(VISITED_KEY);
-      if (raw) visited.current = new Set(JSON.parse(raw) as string[]);
-    } catch {
-      /* private mode, or a cleared store. An empty compass is a correct one. */
+  /** Attended objects, in world coordinates, with 0 for today and 1 for never. */
+  const marks = useMemo(() => {
+    const out: { x: number; z: number; age: number }[] = [];
+    for (const w of worlds) {
+      const at = new Map<string, { x: number; z: number }>();
+      for (const o of w.objects) at.set(o.id, o.at);
+      for (const m of w.monuments) at.set(m.id, m.at);
+      for (const [id, iso] of Object.entries(w.attention ?? {})) {
+        const p = at.get(id);
+        if (!p) continue;
+        const d = Date.parse(iso);
+        const age = Number.isNaN(d)
+          ? 1
+          : Math.min(1, Math.max(0, (Date.now() - d) / (21 * 86_400_000)));
+        out.push({ x: p.x, z: p.z, age });
+      }
     }
-  }, []);
+    return out;
+  }, [worlds]);
 
   useEffect(() => {
     let raf = 0;
-    let saveAt = 0;
     const size = 92;
 
     const draw = () => {
@@ -212,23 +197,6 @@ export function Compass({
       const r = rt.current;
       const el = canvas.current;
       if (!r || !el) return;
-
-      const cell = `${Math.round(r.pos.x / CELL)},${Math.round(r.pos.z / CELL)}`;
-      if (!visited.current.has(cell)) {
-        visited.current.add(cell);
-        saveAt = performance.now() + 1500;
-      }
-      if (saveAt && performance.now() > saveAt) {
-        saveAt = 0;
-        try {
-          window.localStorage.setItem(
-            VISITED_KEY,
-            JSON.stringify([...visited.current].slice(-4000)),
-          );
-        } catch {
-          /* nothing to do, and nothing worth telling him about */
-        }
-      }
 
       const ctx = el.getContext("2d");
       if (!ctx) return;
@@ -253,17 +221,19 @@ export function Compass({
       ctx.fillStyle = "rgba(120,104,96,0.16)";
       ctx.fillRect(0, 0, size, size);
 
-      ctx.fillStyle = "rgba(140,92,12,0.5)";
-      for (const key of visited.current) {
-        const [gx, gz] = key.split(",").map(Number);
-        const dx = (gx * CELL - r.pos.x) * scale;
-        const dz = (gz * CELL - r.pos.z) * scale;
-        const c = Math.cos(-CAM_YAW);
-        const s = Math.sin(-CAM_YAW);
+      const c = Math.cos(-CAM_YAW);
+      const s = Math.sin(-CAM_YAW);
+      for (const m of marks) {
+        const dx = (m.x - r.pos.x) * scale;
+        const dz = (m.z - r.pos.z) * scale;
         const px = cx + (dx * c - dz * s);
         const py = cy + (dx * s + dz * c);
         if ((px - cx) ** 2 + (py - cy) ** 2 > R * R) continue;
-        ctx.fillRect(px - 1.4, py - 1.4, 2.8, 2.8);
+        // Bright for today, mist for three weeks ago. The same rule as the world.
+        ctx.fillStyle = `rgba(140,92,12,${(0.62 - m.age * 0.42).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.1 - m.age * 0.7, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       ctx.fillStyle = "#EAA050";
@@ -291,7 +261,7 @@ export function Compass({
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [rt, worlds]);
+  }, [rt, marks]);
 
   return (
     <div className="cosmos-compass" aria-hidden>
@@ -444,18 +414,24 @@ export function Hint({
   moved,
   reduced,
   keyboard,
+  sitting,
 }: {
   near: string | null;
   moved: boolean;
   reduced: boolean;
   keyboard: boolean;
+  /** On the hearth mat the dwell is suspended, so standing still is not a verb. */
+  sitting: boolean;
 }) {
   const text = useMemo(() => {
     if (reduced) return null;
-    if (near) return keyboard ? `${near} · stand still, or press E` : `${near} · hold to open`;
+    if (near) {
+      if (!keyboard) return `${near} · hold to open`;
+      return sitting ? `${near} · press E` : `${near} · stand still, or press E`;
+    }
     if (!moved) return keyboard ? "click the ground to walk" : "tap the ground to walk";
     return null;
-  }, [near, moved, reduced, keyboard]);
+  }, [near, moved, reduced, keyboard, sitting]);
 
   if (!text) return null;
   return <p className="cosmos-hint">{text}</p>;

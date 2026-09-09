@@ -41,23 +41,15 @@ import type { Runtime } from "./runtime";
 import { Backdrop } from "./Backdrop";
 
 /**
- * The painted interior a room's back wall wears.
- *
- * A scene-side art assignment, not vault data, and the one place in this file
- * that names a specific painting. It belongs in `world.yml` as `interior_plate:`
- * and is written down in NOTES.md as the thing to move there; it is here tonight
- * because the hall interior was painted this round, is referenced by no page, and
- * the Critic counted it as the best pixels in the build reaching nothing.
- *
- * `u` is where the painted hearth sits across the image, 0 to 1, so the fire in
+ * Where a painted hearth sits across an interior plate, 0 to 1, so the fire in
  * the picture lands over the fire in the room.
+ *
+ * Art direction, not identity: the PLATE comes from `room.interior` in the vault
+ * and this is only the default alignment for one. A painting that wants another
+ * says so in its own `interior: { file, hearth_u }` and this number is not
+ * consulted. Set from the practice's hall plate, which is the only one painted.
  */
-const INTERIOR: Record<string, { url: string; u: number }> = {
-  "quiet-practice": {
-    url: "/api/cosmos/asset/wall/mj-2026-09-09b/quadrants/01-hall-interior-q2",
-    u: 0.355,
-  },
-};
+const HEARTH_U = 0.355;
 
 // ── A page, standing in a room ───────────────────────────────────────────────
 
@@ -156,6 +148,117 @@ const PageObject = memo(function PageObject({
     </group>
   );
 });
+
+// ── A person, standing in a place ────────────────────────────────────────────
+
+/**
+ * A FIGURE IS DRAWN AS A FIGURE.
+ *
+ * The Critic's deduction 7, against SCHEMA.md's own line ("a person is not an
+ * ema card") and PG's ("Maygan and everyone else are party members"): every
+ * non-monument object went through `PageObject`, so the one person in the cosmos
+ * stood on the hilltop as a postcard nailed to a stick.
+ *
+ * She is a person at a person's height. Painted when the vault has a cutout for
+ * her (`worlds/<world>/cutouts/<id>.png`, and this upgrades itself the day the
+ * painter lands one), and until then built from the same boxes and cones as the
+ * Wayfarer's own fallback, in the biome's palette, so she belongs to the world
+ * rather than sitting on top of it. Her name is in the HUD on approach, like
+ * everything else: no label floats in the world.
+ */
+const FIGURE_HEIGHT = 1.66;
+
+function StandingFigure({ p, v }: { p: Palette; v: number }) {
+  // Two hexes that are hers and not the register's, so she reads as herself at
+  // any hour: a warm shawl and dark hair. Everything else is the biome's.
+  const shawl = "#C4645C";
+  const hair = "#2A2018";
+  const skin = "#F2DAC0";
+  return (
+    <group rotation={[0, v * Math.PI * 2, 0]}>
+      <mesh geometry={GEO.cyl} material={toon(p.woodDark)} position={[-0.11, 0.09, 0]} scale={[0.17, 0.18, 0.19]} castShadow />
+      <mesh geometry={GEO.cyl} material={toon(p.woodDark)} position={[0.11, 0.09, 0]} scale={[0.17, 0.18, 0.19]} castShadow />
+      {/* A long skirt, wider at the hem: the silhouette does the work at this size. */}
+      <mesh geometry={GEO.cone} material={toon(p.paper)} position={[0, 0.5, 0]} scale={[0.58, 0.82, 0.5]} castShadow />
+      <mesh geometry={GEO.box} material={toon(shawl)} position={[0, 1.02, 0]} scale={[0.48, 0.34, 0.34]} castShadow />
+      <mesh geometry={GEO.sphere} material={toon(skin)} position={[0, 1.32, 0]} scale={0.27} castShadow />
+      <mesh geometry={GEO.sphere} material={toon(hair)} position={[0, 1.37, -0.04]} scale={[0.3, 0.3, 0.32]} castShadow />
+      <mesh geometry={GEO.box} material={toon(hair)} position={[0, 1.2, -0.13]} scale={[0.26, 0.34, 0.14]} castShadow />
+    </group>
+  );
+}
+
+function FigureObject({
+  o,
+  worldId,
+  p,
+  rt,
+  onPress,
+  onRelease,
+  painted,
+}: {
+  o: SceneObject;
+  worldId: string;
+  p: Palette;
+  rt: React.RefObject<Runtime>;
+  onPress: (id: string) => void;
+  onRelease: () => void;
+  painted: Set<string> | null;
+}) {
+  const ringMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(p.flame),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    [p.flame],
+  );
+  const url = painted === null || painted.has(o.id) ? cutoutUrl(worldId, o.id) : null;
+  const { status, tex } = useCutout(url);
+  const v = useMemo(() => (Math.abs(hashCode(o.id)) % 1000) / 1000, [o.id]);
+
+  useFrame((_, dt) => {
+    const r = rt.current;
+    if (!r) return;
+    const active = r.hovered === o.id || r.near?.id === o.id;
+    ringMat.opacity += ((active ? 0.42 : 0) - ringMat.opacity) * Math.min(1, dt * 7);
+  });
+
+  return (
+    <group
+      position={[o.at.x, 0, o.at.z]}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        if (rt.current) rt.current.hovered = o.id;
+      }}
+      onPointerOut={() => {
+        if (rt.current && rt.current.hovered === o.id) rt.current.hovered = null;
+      }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onPress(o.id);
+      }}
+      onPointerUp={() => onRelease()}
+    >
+      <mesh material={ringMat} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+        <ringGeometry args={[0.62, 0.82, 28]} />
+      </mesh>
+      {/* She stands on the ground, not above it. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+        <circleGeometry args={[0.4, 14]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.18} depthWrite={false} />
+      </mesh>
+      {status === "ok" && tex ? (
+        <Cutout tex={tex} height={FIGURE_HEIGHT} at={[0, 0, 0]} face yaw={0} />
+      ) : (
+        <StandingFigure p={p} v={v} />
+      )}
+    </group>
+  );
+}
 
 // ── A LEDGER line, standing up ───────────────────────────────────────────────
 
@@ -405,47 +508,30 @@ export const World = memo(function World({
   }, [world]);
 
   const lights = useMemo(() => lightsFor(world), [world]);
-  const interior = INTERIOR[world.id] ?? null;
   const painted = useMemo(
     () => (world.cutouts ? new Set(world.cutouts) : null),
     [world.cutouts],
   );
 
   /**
-   * The light budget, BY DISTANCE, not by room order.
+   * THE PAINTED INTERIOR COMES FROM THE VAULT NOW.
    *
-   * The Critic's deduction 8: round two took the first five lights in room
-   * order, so the lake lantern and the threshold gate's lantern, which is the
-   * mist door's own beacon, never got a flame however close he stood to them.
-   * Sorting by distance to the walker costs one pass over a list of at most a
-   * dozen, on the same quarter-second tick everything else uses.
+   * The Critic's deduction 11: this file kept its own `INTERIOR` map from world
+   * id to plate, so a second world with a painted back wall was a code edit, and
+   * the vault's own `interior:` field (which `world.yml` has carried since round
+   * 2.1) was read by nobody. It is read here. What stays in code is one number,
+   * `HEARTH_U`, where a painted hearth sits across an image, and it is a default
+   * the vault can override with `interior: { file, hearth_u }` the moment a
+   * second painting wants a different one.
    */
-  const [order, setOrder] = useState<string[]>(() => lights.map((l) => l.id));
-  const acc = useRef(0);
-  useFrame((_, dt) => {
-    const r = rt.current;
-    if (!r || lights.length <= lightBudget) return;
-    acc.current += dt;
-    if (acc.current < 0.5) return;
-    acc.current = 0;
-    const ranked = [...lights]
-      .sort(
-        (a, b) =>
-          Math.hypot(a.at.x - r.pos.x, a.at.z - r.pos.z) -
-          Math.hypot(b.at.x - r.pos.x, b.at.z - r.pos.z),
-      )
-      .map((l) => l.id);
-    setOrder((prev) =>
-      prev.length === ranked.length && prev.every((id, i) => id === ranked[i]) ? prev : ranked,
-    );
-  });
+  const interior = useMemo(() => {
+    const raw = world.layout.rooms.find((r) => r.interior)?.interior ?? null;
+    if (!raw) return null;
+    if (typeof raw === "string") return { url: raw, u: HEARTH_U };
+    return { url: raw.url, u: raw.hearth_u ?? HEARTH_U };
+  }, [world.layout.rooms]);
 
-  const lit = useMemo(() => {
-    const rank = new Map(order.map((id, i) => [id, i]));
-    return [...lights]
-      .sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99))
-      .slice(0, lightBudget);
-  }, [lights, order, lightBudget]);
+  void lightBudget;
 
   return (
     <group>
@@ -468,26 +554,22 @@ export const World = memo(function World({
         );
       })}
 
-      {/* The flames, and the lights they throw. One row of the manifest, two
-          objects, always at the same coordinates. A window's lamp is its own
-          lit panel, so it gets the light and not a second flame. */}
-      {lit.map((l) => {
+      {/* The flames. The LIGHT they throw is a slot in the canvas's fixed pool
+          (`LightPool`), because a light count that changes at a border is a
+          shader recompile and the Critic counted twenty-three of them. A flame is
+          a handful of triangles at the emitter's own coordinates, so the lamp and
+          its light still come from one row of the manifest and still cannot
+          drift apart. A window's lamp is its own lit panel: light, no flame. */}
+      {lights.map((l) => {
+        if (l.emitter === "window") return null;
         const socket = EMITTER_SOCKET[l.emitter] ?? 1.2;
         return (
           <group key={l.id} position={[l.at.x, socket, l.at.z]}>
-            {l.emitter !== "window" && (
-              <Flame
-                color={p.flame}
-                core={p.flameCore}
-                size={l.emitter === "fire" ? 1.5 : l.emitter === "altar" ? 1.2 : 0.85}
-                seed={l.at.x * 0.13 + l.at.z * 0.29}
-              />
-            )}
-            <pointLight
-              color={l.color}
-              intensity={l.intensity * (current ? 1 : 0.7)}
-              distance={l.range}
-              decay={1.7}
+            <Flame
+              color={p.flame}
+              core={p.flameCore}
+              size={l.emitter === "fire" ? 1.5 : l.emitter === "altar" ? 1.2 : 0.85}
+              seed={l.at.x * 0.13 + l.at.z * 0.29}
             />
           </group>
         );
@@ -495,12 +577,25 @@ export const World = memo(function World({
 
       {/* A monument that the keeper also lists in `objects` (so it carries a
           body to unfold) must not ALSO stand as an ema card: it is already a
-          stone, three lines down. */}
+          stone, three lines down. A figure is a person, not a card either. */}
       {world.objects
         .filter((o) => o.type !== "monument")
-        .map((o) => (
-          <PageObject key={o.id} o={o} p={p} rt={rt} onPress={onPress} onRelease={onRelease} />
-        ))}
+        .map((o) =>
+          o.type === "figure" ? (
+            <FigureObject
+              key={o.id}
+              o={o}
+              worldId={world.id}
+              p={p}
+              rt={rt}
+              onPress={onPress}
+              onRelease={onRelease}
+              painted={painted}
+            />
+          ) : (
+            <PageObject key={o.id} o={o} p={p} rt={rt} onPress={onPress} onRelease={onRelease} />
+          ),
+        )}
 
       {world.monuments.map((m) => (
         <MonumentStone key={m.id} m={m} p={p} rt={rt} onPress={onPress} onRelease={onRelease} />

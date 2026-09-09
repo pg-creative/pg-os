@@ -12,7 +12,13 @@
  */
 
 export type Register = "riso" | "painted" | "watercolor" | "paperback";
-export type Phase = "day" | "twilight" | "midnight" | "clock";
+/**
+ * `night-when-on` is the party's: a gathering is a gathering at night, whatever
+ * the clock says, and the Critic found the heart light standing on a plinth in
+ * four o'clock daylight because the world said `clock`. The vault decides which
+ * worlds are like that; the scene only knows what to do when one says so.
+ */
+export type Phase = "day" | "twilight" | "night" | "midnight" | "clock" | "night-when-on";
 
 export type RoomPurpose =
   | "traversal"
@@ -45,16 +51,22 @@ export interface Room {
   objects: string[];
   doors: Door[];
   /**
-   * The painting this room's back wall wears, as an asset URL, when the vault
-   * names one (`interior:` on the room in world.yml).
+   * The painting this room's back wall wears, when the vault names one
+   * (`interior:` on the room in world.yml). READ, as of round three: the scene's
+   * own world-id-to-plate map is deleted and a second world with an interior is
+   * a line of YAML rather than a code edit.
    *
-   * AVAILABLE, NOT YET USED. `World.tsx` still carries its own one-entry map from
-   * world id to the hall plate, because the map also holds `u`, where the painted
-   * hearth sits across the image, and that is art direction rather than vault
-   * data. Reading this field and keeping `u` beside it is the next pass; the
-   * plate's own name no longer has to live in the scene for it.
+   * The object form carries `hearth_u`, where the painted hearth sits across the
+   * image (0 to 1), so a painting can align itself. A bare string takes the
+   * scene's default.
    */
-  interior?: string | null;
+  interior?: string | { url: string; hearth_u?: number } | null;
+  /**
+   * A recorded ambient loop for this room, over the world's own `bed:`. The hall
+   * has one (`audio/bed-hall.mp3`); everywhere else falls through to the biome's
+   * bed and then to the procedural floor.
+   */
+  bed?: string | null;
 }
 
 export interface SceneObject {
@@ -100,7 +112,12 @@ export interface WorldManifest {
   weather: Record<string, number | string | null>;
   attention: Record<string, string>;
   hero: { world: string; x: number; z: number } | null;
-  backdrop: { url: string; lqip: string } | null;
+  /**
+   * The painted horizon. `crop` is the band of the plate that stands on the
+   * horizon, 0 at the top of the image: a plate whose subject sits high (the
+   * depths' red moon) says so here rather than being cut off by a default.
+   */
+  backdrop: { url: string; lqip: string; crop?: { from: number; to: number } } | null;
   bed: string | null;
   /**
    * Prop words this world has a painted cutout for on disk. The reader looks now

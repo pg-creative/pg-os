@@ -60,37 +60,17 @@ function local(dx: number, dz: number, yaw: number): { x: number; z: number } {
   return { x: dx * c - dz * s, z: dx * s + dz * c };
 }
 
-/** What a room may ask for. SCHEMA.md holds the same list; this is the renderer's half. */
-export const VOCABULARY = [
-  "torii",
-  "stone-lantern",
-  "shrine-bell",
-  "pine",
-  "dock",
-  "boat",
-  "dog",
-  "couch",
-  "standing-stone",
-  "paper-window",
-  "hearth",
-  "altar",
-  "stair",
-  "still-water",
-  "bench",
-  "brazier",
-  "crypt-door",
-  "anvil",
-  "smithy-door",
-  "gnome",
-  "heart-light",
-  // The room itself, which is a prop like any other.
-  "hall",
-  "smithy",
-  "path",
-  "fence",
-  "rock",
-  "grass",
-] as const;
+/**
+ * What a room may ask for: THE KEYS OF THE PROP REGISTRY, and nothing else.
+ *
+ * The Critic's deduction 11 was that this file kept a hand-written list beside
+ * `vault.ts`'s and the two had drifted (`torch`, `hall`, `smithy`, `path`,
+ * `fence`, `rock`, `grass` in one and not the other). A second list of the same
+ * closed set can only ever drift again, so there is no second list: the words
+ * the renderer knows are the words it can draw, derived, and a word the vault
+ * invents is silently nothing rather than half a thing.
+ */
+export const VOCABULARY: readonly string[] = Object.keys(PROPS);
 
 // ── Deterministic randomness ─────────────────────────────────────────────────
 
@@ -121,11 +101,19 @@ export function propsOf(room: Room): string[] {
 }
 
 /**
- * How many of a kind a room gets, and how it is arranged. A pine is scattered, a
- * hall is one at the anchor, a fence runs along an edge. Everything not named
- * here stands once, near the anchor, offset so two props never share a point.
+ * ONE ENTRY IS ONE PROP.
+ *
+ * The Critic's deduction 4, and it was the worst thing in the build: this file
+ * multiplied a `pine` entry by nine, so `props: [.., pine, pine, pine]` in the
+ * practice grew a hedge of twenty-seven trees with 0.62 m blockers scattered to
+ * the room's edge, which is the hall's doorstep. Five separate walks toward the
+ * hall stalled in it. The vault said three trees and the scene built a wall.
+ *
+ * SCHEMA.md's rule is the whole rule: "Repeats are allowed and mean two of the
+ * thing". So a word appearing three times places three, scattered; once places
+ * one. Nothing is invented, and a grove is nine lines of YAML when a grove is
+ * what he wants.
  */
-const SCATTER: Record<string, number> = { pine: 9, rock: 4, grass: 10, bench: 2, path: 0 };
 
 /** Props that face the room's long axis rather than a random bearing. */
 const AXIAL = new Set(["torii", "hall", "smithy", "dock", "crypt-door", "smithy-door", "paper-window"]);
@@ -178,13 +166,23 @@ function placeRoom(world: WorldManifest, r: Room): Placement[] {
     return true;
   };
 
-  // 1. The emitters. One prop per light, at the light's own coordinates. A
-  //    `window` now has a prop (a paper window on a frame), which is the
-  //    Critic's deduction 8: two bare lights stood in the hall with no lamp.
+  // 1. The emitters. One prop per light, at the light's own coordinates, AND
+  //    ONLY WHEN THE ROOM CLAIMS IT.
+  //
+  //    The Critic's deduction 8: this loop stood a lit paper window under every
+  //    `window` light in every world, so the depths got a glowing orange shoji
+  //    panel on the ash beside the stair, against `world.yml`'s own words ("in
+  //    the depths that emitter is moonlight through stone, never a paper
+  //    window") and SCHEMA.md's exception. An inventory is an inventory: a room
+  //    that lists no lamp gets no lamp, and its light comes from the sky, the
+  //    stone or the fire, which is what the vault said in the first place.
+  //
+  //    A room with no `props:` at all is still being written, so the transitional
+  //    fallback stands its lamps and stops the moment a list lands.
   for (const l of r.lights) {
     const kind = EMITTER_PROP[l.emitter];
     if (!kind) continue;
-    claim(kind);
+    if (!claim(kind) && asked.length) continue;
     // A window belongs on a wall, so it faces the room's centre.
     const rot =
       kind === "paper-window"
@@ -217,11 +215,12 @@ function placeRoom(world: WorldManifest, r: Room): Placement[] {
         : null;
   if (building) list.unshift(building);
 
-  // 4. What the room says stands in it.
-  for (const kind of list) {
+  // 4. What the room says stands in it, one for one, repeats and all.
+  const counts = new Map<string, number>();
+  for (const kind of list) counts.set(kind, (counts.get(kind) ?? 0) + 1);
+
+  for (const [kind, n] of counts) {
     if (!PROPS[kind]) continue;
-    const n = SCATTER[kind] ?? 1;
-    if (n === 0) continue;
 
     // A building squares up to its own door, and its footprint is the room's.
     //
@@ -264,11 +263,17 @@ function placeRoom(world: WorldManifest, r: Room): Placement[] {
       );
       continue;
     }
+    // Two or more of a word: scattered around the room's edge, never in the
+    // middle third where the walking happens. The position is RETRIED rather
+    // than skipped, because a room that asks for three of a thing gets three.
     for (let i = 0; i < n; i++) {
-      const ex = (rng() * 2 - 1) * hw * 0.88;
-      const ez = (rng() * 2 - 1) * hd * 0.88;
-      // Never in the middle third, where the walking happens.
-      if (Math.abs(ex) < hw * 0.3 && Math.abs(ez) < hd * 0.3) continue;
+      let ex = 0;
+      let ez = 0;
+      for (let tries = 0; tries < 12; tries++) {
+        ex = (rng() * 2 - 1) * hw * 0.88;
+        ez = (rng() * 2 - 1) * hd * 0.88;
+        if (Math.abs(ex) > hw * 0.34 || Math.abs(ez) > hd * 0.34) break;
+      }
       put(kind, cx + ex, cz + ez, rng() * Math.PI * 2, 0.8 + rng() * 0.5);
     }
   }
@@ -293,10 +298,12 @@ function placeRoom(world: WorldManifest, r: Room): Placement[] {
  */
 function fallbackProps(r: Room): string[] {
   const has = (e: string) => r.lights.some((l) => l.emitter === e);
-  if (has("fire")) return ["hall", "grass"];
-  if (r.purpose === "transition") return ["torii", "grass"];
-  if (r.purpose === "objective") return ["grass", "rock"];
-  return ["grass", "rock"];
+  // Repeats, written out, because one entry is one prop everywhere now and a
+  // room the vault has not furnished should still read as ground cover.
+  const tufts = ["grass", "grass", "grass", "grass", "grass", "grass"];
+  if (has("fire")) return ["hall", ...tufts];
+  if (r.purpose === "transition") return ["torii", ...tufts];
+  return [...tufts, "rock", "rock", "rock"];
 }
 
 /** Every prop in one world, in a stable order. */

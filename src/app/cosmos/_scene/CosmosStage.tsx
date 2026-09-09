@@ -177,10 +177,26 @@ export function CosmosStage({
     return ids;
   }, [manifest.worlds]);
 
-  /** A monument with no body of its own reads its own line. */
+  /**
+   * A monument with no body of its own reads its own line, and carries its date.
+   *
+   * The Critic's deduction 2: `mount.tsx` renders a body for every id in the
+   * manifest, monuments included, and `readBodies` reads pages only, so the
+   * stone's panel showed the blank placeholder ("The vault has not written this
+   * one yet") and the LEDGER line it was raised for never reached the screen.
+   * The keeper's half is that a monument in `objects` carries its line as the
+   * body; this half is the fallback, and it is also where the date comes from,
+   * because a rubbing is a rubbing OF a day.
+   */
   const lines = useMemo(() => {
     const map = new Map<string, string>();
     for (const w of manifest.worlds) for (const m of w.monuments) map.set(m.id, m.line);
+    return map;
+  }, [manifest.worlds]);
+
+  const dates = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const w of manifest.worlds) for (const m of w.monuments) map.set(m.id, m.date);
     return map;
   }, [manifest.worlds]);
 
@@ -189,12 +205,28 @@ export function CosmosStage({
     [manifest.worlds, hud.world],
   );
 
+  /**
+   * ONE TOUCH PER OPEN. What the panel is showing right now, in a ref, so the
+   * write is a function of the transition and not of how long he stands there.
+   * The Critic measured ten writes in twelve seconds from one man standing still.
+   */
+  const openRef = useRef<string | null>(null);
+
   // ── Opening a page. One act: it opens, it is remembered, it goes in the bag. ──
   const openPage = useCallback(
     (id: string) => {
       if (!objects.has(id)) return;
+      // Whatever opened it (a dwell, E, a held thumb, a click on the thing), this
+      // approach is spent: the dwell will not fire on it again until he leaves.
+      if (rt.current) {
+        rt.current.latched = id;
+        rt.current.dwell = 0;
+      }
+      const already = openRef.current === id;
+      openRef.current = id;
       setOpen(id);
       setSatchel((s) => (s.includes(id) ? s : [...s, id]));
+      if (already) return;
       // A fixture is a review state, not a place he has been. Writing attention
       // for an id that exists only in the harness would grow `attention.json`
       // with pages the vault has never heard of.
@@ -216,7 +248,10 @@ export function CosmosStage({
     [objects, vaultIds, manifest.hero.world, manifest.fixture],
   );
 
-  const closePage = useCallback(() => setOpen(null), []);
+  const closePage = useCallback(() => {
+    openRef.current = null;
+    setOpen(null);
+  }, []);
 
   // ── A door. The stair down is a scene state, not a second scene. ──
   const takeDoor = useCallback(
@@ -233,6 +268,10 @@ export function CosmosStage({
       r.dest = null;
       r.vel.set(0, 0, 0);
       r.dwell = 0;
+      r.intent = null;
+      // He arrives standing on the stair he just came out of; without this the
+      // dwell would take him straight back up it.
+      r.latched = `door:${r.world || to}`;
       r.target.set(r.pos.x, 1.5, r.pos.z);
       setMoved(true);
     },
@@ -246,8 +285,9 @@ export function CosmosStage({
       if (!r) return;
       const k = e.key.toLowerCase();
       if (k === "escape") {
+        r.intent = null;
         if (satchelOpen) setSatchelOpen(false);
-        else setOpen(null);
+        else closePage();
         return;
       }
       if (k === "i") return setSatchelOpen((s) => !s);
@@ -259,6 +299,8 @@ export function CosmosStage({
         return;
       }
       if ("wasd".includes(k)) {
+        // Taking hold of the keyboard cancels a walk order, and its purpose with it.
+        r.intent = null;
         r.keys.add(k);
         setMoved(true);
       }
@@ -272,7 +314,7 @@ export function CosmosStage({
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, [openPage, takeDoor, satchelOpen]);
+  }, [openPage, takeDoor, satchelOpen, closePage]);
 
   // ── The bed follows the biome; the fire follows the hearth. ──
   useEffect(() => {
@@ -290,6 +332,11 @@ export function CosmosStage({
     const r = rt.current;
     if (!r || !r.world) return;
     if (manifest.fixture) return;
+    // A man who has not moved has nothing to save. Round 2.1 posted his position
+    // every fifteen seconds forever, which is a write to the vault for standing
+    // still: the same bug as the dwell storm, one interval slower.
+    const last = savedAt.current;
+    if (Math.hypot(r.pos.x - last.x, r.pos.z - last.z) < 0.4) return;
     savedAt.current = { x: r.pos.x, z: r.pos.z };
     void fetch("/api/cosmos/touch", {
       method: "POST",
@@ -415,7 +462,13 @@ export function CosmosStage({
           open={thread}
         />
 
-        <Hint near={hud.nearTitle} moved={moved} reduced={reduced} keyboard={keyboard} />
+        <Hint
+          near={hud.nearTitle}
+          moved={moved}
+          reduced={reduced}
+          keyboard={keyboard}
+          sitting={hud.sitting}
+        />
       </div>
 
       <Satchel
@@ -423,6 +476,9 @@ export function CosmosStage({
         items={satchelItems}
         onPick={(id) => {
           setSatchelOpen(false);
+          // Rummaging in the bag is not standing in front of a thing, so it
+          // opens the page and writes nothing.
+          openRef.current = id;
           setOpen(id);
         }}
         onClose={() => setSatchelOpen(false)}
@@ -432,6 +488,7 @@ export function CosmosStage({
         object={openObject}
         body={open ? (bodies[open] ?? lines.get(open) ?? null) : null}
         source={open ? (sources[open] ?? null) : null}
+        date={open ? (dates.get(open) ?? null) : null}
         register={current?.register ?? "painted"}
         onClose={closePage}
       />

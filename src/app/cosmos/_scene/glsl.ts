@@ -10,27 +10,6 @@
  * `in`/`out`, and `precision highp float;` at the top of every fragment shader.
  */
 
-/** Fullscreen quad vertex shader: writes clip coords, ignores the camera. */
-export const SCREEN_VERT = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = vec4(position.xy, 0.0, 1.0);
-  }
-`;
-
-/** Ordinary in-world vertex shader for the plate planes and object cards. */
-export const WORLD_VERT = /* glsl */ `
-  varying vec2 vUv;
-  varying vec3 vWorld;
-  void main() {
-    vUv = uv;
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vWorld = wp.xyz;
-    gl_Position = projectionMatrix * viewMatrix * wp;
-  }
-`;
-
 /** Verbatim from flashpoint's glsl.ts. Compact and battle-tested. */
 export const NOISE = /* glsl */ `
   float hash21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
@@ -77,36 +56,5 @@ export const NOISE = /* glsl */ `
     float v=0.0, a=0.5;
     for(int i=0;i<5;i++){ v+=a*vnoise3(p); p*=2.02; a*=0.5; }
     return v;
-  }
-`;
-
-/**
- * The mist function every material shares.
- *
- * `uUntouched` is days-since-touched normalised 0..1 (attention.json drives it),
- * `uFocusDistance` is how far this object is from what the eye is on. Mist never
- * deletes anything: at full untouched the object is still there, just far away
- * behind weather.
- */
-export const MIST = /* glsl */ `
-  float mistAmount(vec2 uv, float t, float untouched, float focusDistance, float scale, float speed) {
-    vec2 q = uv * scale;
-    q.x += t * speed;
-    // One cheap warp instead of a nested fbm: a single vnoise reads the same at
-    // this scale and costs four octaves less per pixel, on a pass that runs
-    // fullscreen three times over.
-    q.y += (vnoise(q * 1.7 + t * speed * 0.4) - 0.5) * 0.5;
-    float n = fbm4(q);
-    // Untouched drives how much of the noise reads as cloud; focus distance
-    // pushes a flat veil on top so the thing you are not looking at recedes.
-    float veil = clamp(untouched * 0.72 + focusDistance * 0.34, 0.0, 1.0);
-    return clamp(smoothstep(0.34, 0.92, n) * veil + veil * 0.28, 0.0, 0.94);
-  }
-`;
-
-/** Paper grain. Register-dependent: riso wants a lot of it, watercolor almost none. */
-export const GRAIN = /* glsl */ `
-  float grain(vec2 uv, float t, float scale) {
-    return hash21(floor(uv * 900.0 / max(scale, 0.001)) + floor(t * 12.0)) - 0.5;
   }
 `;

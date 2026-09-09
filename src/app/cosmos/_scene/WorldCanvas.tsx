@@ -37,7 +37,7 @@ import { nearestWorld, worldAt } from "./contract";
 import { neighbourPalette, paletteFor, type Palette } from "./registers";
 import { lightsFor, placeWorld, roomAt } from "./place";
 import { createRuntime, HERO_RADIUS, stepWalker, STEER_MARGIN, STRIDE, type Runtime } from "./runtime";
-import { PROPS } from "./props";
+import { EMITTER_SOCKET, PROPS } from "./props";
 import { CAM_YAW, IsoCamera } from "./IsoCamera";
 import { Ground } from "./Ground";
 import { GrassField, type Clearing } from "./Grass";
@@ -146,8 +146,35 @@ function Conductor({
   const acc = useRef(0);
   const lastStep = useRef(0);
 
-  // Click to move. Raycast a mathematical plane, not the ground mesh: the plane
-  // is always there, at exactly y = 0, whatever geometry happens to be in front.
+  /**
+   * Everything a click can be aimed at, as a sphere in world space.
+   *
+   * The Critic's deduction 9: the click handler raycast the y = 0 plane only, so
+   * a click on a card's FACE, which hangs at y = 1.0, landed `1.0 / tan(15.5)` =
+   * 3.6 m behind the card and walked him past the thing he pointed at. The card's
+   * own r3f handler never fired for a mouse, because that path is a 400 ms hold
+   * meant for a thumb.
+   *
+   * Testing the ray against a sphere per interactable is exact enough (they are
+   * all about a metre across), costs a few dozen dot products on a pointerdown,
+   * and does not depend on r3f's event system running before this listener.
+   */
+  const aims = useMemo(() => {
+    const out: { id: string; c: THREE.Vector3; r: number }[] = [];
+    for (const w of worlds) {
+      for (const o of w.objects) out.push({ id: o.id, c: new THREE.Vector3(o.at.x, 1.0, o.at.z), r: 0.8 });
+      for (const m of w.monuments) out.push({ id: m.id, c: new THREE.Vector3(m.at.x, 1.3, m.at.z), r: 1.0 });
+      for (const room of w.layout.rooms) {
+        for (const d of room.doors) {
+          if (d.kind !== "stairs") continue;
+          out.push({ id: `door:${d.to}`, c: new THREE.Vector3(d.at.x, 0.4, d.at.z), r: 1.2 });
+        }
+      }
+    }
+    return out;
+  }, [worlds]);
+
+  // Click to move, or click to go and look at a thing.
   useEffect(() => {
     const el = gl.domElement;
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -164,6 +191,33 @@ function Conductor({
       const cam = (el as HTMLCanvasElement & { __cam?: THREE.Camera }).__cam;
       if (!cam) return;
       ray.setFromCamera(ndc, cam);
+
+      // A thing first. Nearest along the ray wins, so a card in front of a stone
+      // takes the click.
+      let best: { id: string; c: THREE.Vector3 } | null = null;
+      let bestT = Infinity;
+      for (const a of aims) {
+        if (ray.ray.distanceSqToPoint(a.c) > a.r * a.r) continue;
+        const t = ray.ray.origin.distanceToSquared(a.c);
+        if (t < bestT) {
+          bestT = t;
+          best = a;
+        }
+      }
+      if (best) {
+        // Walk to the thing's reach, not to the thing: arriving THROUGH it is
+        // what the steering spends its whole budget preventing.
+        const dx = r.pos.x - best.c.x;
+        const dz = r.pos.z - best.c.z;
+        const L = Math.hypot(dx, dz) || 1;
+        const stand = Math.min(L, REACH - 0.35);
+        r.dest = new THREE.Vector3(best.c.x + (dx / L) * stand, 0, best.c.z + (dz / L) * stand);
+        r.intent = { id: best.id, until: performance.now() + 12_000 };
+        return;
+      }
+
+      // The ground, as before. The plane is always there, at exactly y = 0.
+      r.intent = null;
       if (ray.ray.intersectPlane(plane, hit)) {
         hit.y = 0;
         // A low camera can raycast half a kilometre up the plane on one click
@@ -176,7 +230,33 @@ function Conductor({
     };
     el.addEventListener("pointerdown", onDown);
     return () => el.removeEventListener("pointerdown", onDown);
-  }, [gl, rt]);
+  }, [gl, rt, aims]);
+
+  /**
+   * THE ARMING. Nothing about attention runs until he has touched the thing.
+   *
+   * The Critic's deduction 1, and it is the one that matters most: the dwell ran
+   * on a timer from the first frame, so a reload that landed inside reach opened
+   * a page at 1.2 s and posted attention to the vault every 1.2 s after that, ten
+   * writes in twelve seconds of a man not being at his desk. Attention he never
+   * gave, written down as attention.
+   */
+  useEffect(() => {
+    const arm = () => {
+      if (rt.current) rt.current.armed = true;
+    };
+    const opts = { capture: true, passive: true } as const;
+    window.addEventListener("pointerdown", arm, opts);
+    window.addEventListener("keydown", arm, opts);
+    window.addEventListener("touchstart", arm, opts);
+    window.addEventListener("wheel", arm, opts);
+    return () => {
+      window.removeEventListener("pointerdown", arm, opts);
+      window.removeEventListener("keydown", arm, opts);
+      window.removeEventListener("touchstart", arm, opts);
+      window.removeEventListener("wheel", arm, opts);
+    };
+  }, [rt]);
 
   // Stash the camera where the raw listener above can reach it without React.
   const camera = useThree((s) => s.camera);
@@ -255,22 +335,41 @@ function Conductor({
     // perform from where he is standing is worse than no hint.
     r.near = nearId && nearD <= REACH ? { id: nearId, d: nearD } : null;
 
+    // The latch clears the moment the thing it belongs to is no longer the thing
+    // in front of him. That, and nothing else, is "once per approach".
+    if (r.latched && r.near?.id !== r.latched) r.latched = null;
+
     // Sitting: the hearth mat, and only the hearth mat. Read BEFORE the dwell,
     // because sitting suspends it.
     const room = roomAt(here, r.pos.x, r.pos.z);
     const fire = room?.lights.find((l) => l.emitter === "fire");
     r.sitting = !!fire && Math.hypot(fire.at.x - r.pos.x, fire.at.z - r.pos.z) < 1.9;
 
-    // Dwell: standing still, in reach, for DWELL_S. Moving resets it, which is
-    // the difference between attention and passing by. Sitting at the fire is
-    // not dwelling on the card 1.1 m away: the thread is what opens there.
-    if (r.near && !r.moving && !r.sitting) {
-      r.dwell += 0.25;
-      if (r.dwell >= DWELL_S) {
-        r.dwell = 0;
-        if (r.near.id.startsWith("door:")) onDoor(r.near.id.slice(5), "stairs");
-        else onOpen(r.near.id);
+    // A click on a thing: he walks there and it opens when he arrives. Not on a
+    // timer, not before he gets there, and never at all if he changed his mind
+    // and clicked the grass instead.
+    const fire1 = (id: string) => {
+      r.latched = id;
+      r.dwell = 0;
+      if (id.startsWith("door:")) onDoor(id.slice(5), "stairs");
+      else onOpen(id);
+    };
+    if (r.intent) {
+      if (performance.now() > r.intent.until) r.intent = null;
+      else if (!r.moving && r.near?.id === r.intent.id) {
+        const id = r.intent.id;
+        r.intent = null;
+        fire1(id);
       }
+    }
+
+    // Dwell: ARMED, standing still, in reach, and not already opened on this
+    // approach. Moving resets it, which is the difference between attention and
+    // passing by. Sitting at the fire is not dwelling on the card 1.1 m away:
+    // the thread is what opens there.
+    if (r.armed && r.near && !r.moving && !r.sitting && r.latched !== r.near.id) {
+      r.dwell += 0.25;
+      if (r.dwell >= DWELL_S) fire1(r.near.id);
     } else {
       r.dwell = 0;
     }
@@ -358,6 +457,146 @@ function KeyLight({
       />
     </>
   );
+}
+
+// ── The light pool ───────────────────────────────────────────────────────────
+
+/**
+ * EVERY LIGHT IN THE COSMOS, THROUGH A FIXED NUMBER OF SLOTS.
+ *
+ * The Critic's deduction 5, and it is arithmetic rather than taste. Three bakes
+ * `NUM_POINT_LIGHTS` into every material's GLSL as a define, so the moment the
+ * count changes, every material in the scene recompiles. Round 2.1 gave the
+ * biome he stood in six lights and each neighbour two, which means crossing a
+ * border changed the count three times and cost twenty-three programs and an
+ * 83 ms frame on Metal, twenty-four on SwiftShader.
+ *
+ * Eight slots, always mounted, always visible, never counted differently. A slot
+ * with nothing near it is turned down to zero intensity, which is a uniform and
+ * costs nothing to change. Which emitter owns which slot is decided by distance
+ * to the walker on a slow tick, across every world in sight, so the nearest
+ * eight flames in the cosmos are the eight that light, and no emitter can be
+ * starved by the room order it happens to sit in (which was deduction 8 of the
+ * round before).
+ *
+ * Nine point lights reach a fragment in total: these eight and the lantern in
+ * his hand. That number is now a constant of the build.
+ */
+const LIGHT_SLOTS = 8;
+
+function LightPool({
+  rt,
+  worlds,
+}: {
+  rt: React.RefObject<Runtime>;
+  worlds: WorldManifest[];
+}) {
+  const refs = useRef<(THREE.PointLight | null)[]>([]);
+  const acc = useRef(0);
+
+  const all = useMemo(
+    () =>
+      worlds.flatMap((w) =>
+        lightsFor(w).map((l) => ({
+          world: w.id,
+          x: l.at.x,
+          z: l.at.z,
+          y: EMITTER_SOCKET[l.emitter] ?? 1.2,
+          color: l.color,
+          range: l.range,
+          intensity: l.intensity,
+        })),
+      ),
+    [worlds],
+  );
+
+  const assign = useCallback(() => {
+    const r = rt.current;
+    if (!r) return;
+    const ranked = [...all]
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - r.pos.x, a.z - r.pos.z) - Math.hypot(b.x - r.pos.x, b.z - r.pos.z),
+      )
+      .slice(0, LIGHT_SLOTS);
+    for (let i = 0; i < LIGHT_SLOTS; i++) {
+      const slot = refs.current[i];
+      if (!slot) continue;
+      const l = ranked[i];
+      if (!l) {
+        slot.intensity = 0;
+        continue;
+      }
+      slot.position.set(l.x, l.y, l.z);
+      slot.color.set(l.color);
+      slot.distance = l.range;
+      // A neighbour's lamp still burns, a little further off, so a biome's edge
+      // reads as somewhere rather than as a wall of dark.
+      slot.intensity = l.intensity * (l.world === r.world ? 1 : 0.7);
+    }
+  }, [all, rt]);
+
+  useFrame((_, dt) => {
+    acc.current += dt;
+    if (acc.current < 0.4) return;
+    acc.current = 0;
+    assign();
+  });
+  useEffect(() => assign(), [assign]);
+
+  return (
+    <>
+      {Array.from({ length: LIGHT_SLOTS }, (_, i) => (
+        <pointLight
+          key={i}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          intensity={0}
+          distance={1}
+          decay={1.7}
+        />
+      ))}
+    </>
+  );
+}
+
+// ── The warm-up ──────────────────────────────────────────────────────────────
+
+/**
+ * Compile everything the scene can draw, once, before it has to draw it.
+ *
+ * `renderer.compile(scene, camera)` walks the tree and builds a program for
+ * every material it finds, under the lights that are actually mounted. With the
+ * light count fixed above and one cache key per mist material, that is the whole
+ * program set: a border crossing after this has nothing left to compile, which
+ * is the thing the round asked to be able to prove.
+ *
+ * The count is left on the canvas element as a plain number so a harness can
+ * read it before and after a walk without the scene shipping a debug object.
+ */
+function Warmup() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    let raf = 0;
+    // One frame in: the first render has mounted the props and their materials.
+    raf = requestAnimationFrame(() => {
+      void gl.compile(scene, camera);
+      const el = gl.domElement as HTMLCanvasElement & { __programs?: number };
+      el.__programs = gl.info.programs?.length ?? 0;
+    });
+    const tick = window.setInterval(() => {
+      const el = gl.domElement as HTMLCanvasElement & { __programs?: number };
+      el.__programs = gl.info.programs?.length ?? 0;
+    }, 500);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearInterval(tick);
+    };
+  }, [gl, scene, camera]);
+  return null;
 }
 
 // ── Focus for the depth-of-field pass ────────────────────────────────────────
@@ -505,6 +744,7 @@ export const WorldCanvas = memo(function WorldCanvas({
       const r = rt.current;
       if (!r) return;
       r.hovered = id;
+      r.intent = null;
       // A held finger opens it; a tap that lifts inside 400 ms only walks there.
       pressTimer.current = window.setTimeout(() => onOpen(id), 400);
     },
@@ -606,7 +846,10 @@ export const WorldCanvas = memo(function WorldCanvas({
         root={palette.foliage}
         tip={palette.grassTip}
         clearings={clearings}
-        count={/grass|stone|earth/i.test(current?.layout.ground ?? "grass") ? 3000 : 0}
+        /* `stone` was in this list and the forge grew a meadow on its flagstones.
+           The vault's word is the answer: grass and earth grow blades, stone and
+           ash and anything else it invents grow none. */
+        count={/grass|earth|meadow/i.test(current?.layout.ground ?? "grass") ? 3000 : 0}
         radius={22}
       />
 
@@ -620,14 +863,17 @@ export const WorldCanvas = memo(function WorldCanvas({
             rt={rt}
             onPress={press}
             onRelease={release}
-            lightBudget={isHere ? 6 : 2}
+            lightBudget={LIGHT_SLOTS}
             current={isHere}
           />
         );
       })}
 
+      <LightPool rt={rt} worlds={visible} />
+
       <Hero rt={rt} p={palette} lanternColor={palette.flame} lanternRange={9} />
 
+      <Warmup />
       <Conductor
         rt={rt}
         worlds={worlds}

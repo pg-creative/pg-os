@@ -46,6 +46,25 @@ export interface Runtime {
   hovered: string | null;
   /** Seconds he has been standing within reach of `near`. Dwell opens at 1.2. */
   dwell: number;
+  /**
+   * ATTENTION IS HIS. False until he clicks, presses a key or touches the glass;
+   * the dwell does not run before that, so a fresh load never opens anything and
+   * a page he did not ask for cannot write to the vault. Set once, never unset.
+   */
+  armed: boolean;
+  /**
+   * The one thing this approach has already opened. Cleared the moment something
+   * else is the nearest thing in reach, which is what "once per approach" means:
+   * stand there all evening and it opens once, walk away and back and it opens
+   * again. Escape does not clear it, because closing a page is not asking for it.
+   */
+  latched: string | null;
+  /**
+   * What a click on a thing asked for. He walks to its reach and it opens on
+   * arrival; a click on the ground clears it, and so does eight seconds of not
+   * getting there.
+   */
+  intent: { id: string; until: number } | null;
   /** True while he is on the hearth mat. The bed swells and the thread opens. */
   sitting: boolean;
   /** Down the stair. A scene state, not a second scene. */
@@ -80,6 +99,9 @@ export function createRuntime(x: number, z: number, world = ""): Runtime {
     near: null,
     hovered: null,
     dwell: 0,
+    armed: false,
+    latched: null,
+    intent: null,
     sitting: false,
     depth: world === "depths",
     stepAccum: 0,

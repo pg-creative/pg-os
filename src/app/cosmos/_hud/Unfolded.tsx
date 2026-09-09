@@ -27,6 +27,7 @@ export function Unfolded({
   object,
   body,
   source,
+  date,
   register,
   onClose,
 }: {
@@ -34,10 +35,22 @@ export function Unfolded({
   body: ReactNode;
   /** The page's `source:` line, if it has one. A citation, not a paragraph. */
   source: string | null;
+  /** The day a monument was raised. Set small, over the line, like a rubbing. */
+  date: string | null;
   register: string;
   onClose: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  /**
+   * A STONE OPENS AND SAYS WHAT IT IS FOR.
+   *
+   * A monument is not a page and it should not look like one: what he gets is a
+   * rubbing, the way you take one off a carved stone. The date is small and set
+   * in the stone's own colour above the line; the line itself is the whole
+   * panel, cut into the paper rather than typed on it. No plate, no eyebrow, no
+   * title: a LEDGER line already IS its title.
+   */
+  const rubbing = object?.type === "monument";
 
   // Escape closes. The world stays exactly where it was: he is still standing
   // in front of the thing, and closing a page is not walking away from it.
@@ -56,6 +69,7 @@ export function Unfolded({
       className="cosmos-page"
       data-open={object ? "true" : "false"}
       data-register={register}
+      data-kind={rubbing ? "monument" : "page"}
       role="dialog"
       aria-modal="false"
       aria-hidden={object ? undefined : true}
@@ -72,6 +86,13 @@ export function Unfolded({
             ✕
           </button>
 
+          {rubbing ? (
+            <>
+              {date && <p className="cosmos-rubbing-date">{date}</p>}
+              <div className="cosmos-rubbing">{body ?? object.title}</div>
+            </>
+          ) : (
+            <>
           {object.plate && (
             <div className="cosmos-page-plate">
               {object.plate.lqip && (
@@ -90,6 +111,8 @@ export function Unfolded({
           <h2 className="cosmos-page-title">{object.title}</h2>
           <div className="cosmos-page-body">{body}</div>
           {source && <p className="cosmos-page-source">{source}</p>}
+            </>
+          )}
         </>
       )}
     </div>

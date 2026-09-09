@@ -30,6 +30,8 @@ import { PHASES, phaseForHour } from "../../_components/emaki/theme";
 import type { Phase as WorldPhase } from "./contract";
 import type { Palette } from "./registers";
 import { NOISE } from "./glsl";
+import { CAM_YAW } from "./IsoCamera";
+import { MIST } from "./toon";
 
 const FRAG = /* glsl */ `
   precision highp float;
@@ -46,6 +48,10 @@ const FRAG = /* glsl */ `
   uniform float uBanding;
   uniform float uMistDensity;
   uniform float uMoon;
+  /** The moon's own bearing and size, in the same sin-elevation form. */
+  uniform float uMoonEl;
+  uniform float uMoonAz;
+  uniform float uMoonR;
   uniform mat4  uInvProj;
   uniform mat3  uCamRot;
 
@@ -88,12 +94,13 @@ const FRAG = /* glsl */ `
     float d = bearing(dir, uGlowEl, uGlowAz);
     col += uGlow * pow(max(0.0, 1.0 - d * 0.9), 4.0) * 0.9 * (1.0 - uMoon);
 
-    // The depths get one red moon and nothing else in the sky. It sits low, in
-    // the band of sky this camera can see, and it is a disc with a halo.
+    // The depths get one red moon and nothing else in the sky. Where it hangs is
+    // set in TypeScript, beside the camera's own pitch, because the two numbers
+    // are one number: see MOON_EL.
     if (uMoon > 0.5) {
-      float md = bearing(dir, 0.17, -1.88);
-      col = mix(col, uGlow, smoothstep(0.075, 0.062, md));
-      col += uGlow * pow(max(0.0, 1.0 - md * 3.4), 3.0) * 0.5;
+      float md = bearing(dir, uMoonEl, uMoonAz);
+      col = mix(col, uGlow, smoothstep(uMoonR * 1.10, uMoonR * 0.92, md));
+      col += uGlow * pow(max(0.0, 1.0 - md * 5.5), 3.0) * 0.65;
     }
 
     // Slow cloud banding, the only motion up there. Weather thickens it.
@@ -125,6 +132,35 @@ export interface SkyLook {
   glowAz: number;
   moon: boolean;
 }
+
+/**
+ * WHERE THE MOON HANGS, and why it is these three numbers.
+ *
+ * The Critic's deduction 3: the disc sat at asin(0.17) = 9.8 degrees of
+ * elevation and this camera holds 6.5 degrees of sky at the top centre, so the
+ * red moon of the depths was three and a third degrees above the frame on every
+ * device. It was never a moon anyone could see.
+ *
+ * The camera's own arithmetic decides this, so it cannot drift again. The top
+ * edge of the frame sits at `FOV/2 - PITCH` degrees of elevation; a direction at
+ * elevation `e` and `h` degrees off the view axis lands at NDC
+ * `tan(e + PITCH) / (cos(h) * tan(FOV/2))`. At 3.6 degrees up and 6.3 degrees
+ * off-axis the disc's centre lands at 0.87 of the frame and its top edge at
+ * 0.93, inside the band on the desktop, at DPR 2 and on a phone (a narrower lens
+ * moves it sideways, never up). The horizon is at 0.686, so it clears that too:
+ * a moon standing in the sky over the crypt, not behind the reader's head.
+ */
+const MOON_ELEV_DEG = 3.6;
+const MOON_RADIUS_DEG = 1.4;
+/** Off the view axis, so it is not a bullseye behind the walker. */
+const MOON_OFFSET_DEG = 6.3;
+const D2R = Math.PI / 180;
+/** The bearing the camera looks along, from its yaw. */
+const VIEW_AZ = Math.atan2(-Math.sin(CAM_YAW), -Math.cos(CAM_YAW));
+export const MOON_EL = Math.sin(MOON_ELEV_DEG * D2R);
+export const MOON_AZ = VIEW_AZ + MOON_OFFSET_DEG * D2R;
+/** Chord between two unit vectors that far apart, which is what `bearing` returns. */
+export const MOON_R = 2 * Math.sin((MOON_RADIUS_DEG * D2R) / 2);
 
 /**
  * The hour, live, ticked on the minute.
@@ -166,7 +202,12 @@ export function skyFor(
   hour: number,
   theme: "light" | "dark",
 ): SkyLook {
-  const resolved = phase === "clock" ? phaseForHour(hour) : phase;
+  const resolved =
+    phase === "clock"
+      ? phaseForHour(hour)
+      : phase === "night-when-on"
+        ? "night"
+        : phase;
   const base: SkyLook = {
     top: p.skyTop,
     mid: p.skyMid,
@@ -213,6 +254,73 @@ function shade(hex: string, t: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
+/**
+ * The red on the ash: light the moon actually throws.
+ *
+ * A moon in the sky and no sign of it on the floor is a sticker. One soft pool
+ * on the ground under the moon's own bearing, following the eye so it is always
+ * "over there" rather than a rug he can walk off, at the register's own glow
+ * hex. Always mounted, faded to nothing where there is no moon, so the depths
+ * cost the scene no new shader program to enter.
+ */
+function moonPoolTexture(): THREE.CanvasTexture {
+  const size = 128;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(255,255,255,0.85)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.34)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+let POOL: THREE.CanvasTexture | null = null;
+
+function MoonPool({ color, on }: { color: string; on: boolean }) {
+  const mesh = useRef<THREE.Mesh>(null);
+  const material = useMemo(() => {
+    if (!POOL) POOL = moonPoolTexture();
+    return new THREE.MeshBasicMaterial({
+      map: POOL,
+      color: new THREE.Color(color),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      fog: false,
+    });
+  }, [color]);
+
+  useFrame((_, dt) => {
+    const m = mesh.current;
+    if (!m) return;
+    const eye = MIST.uFocus.value;
+    m.position.set(eye.x + Math.sin(MOON_AZ) * 30, 0.03, eye.z + Math.cos(MOON_AZ) * 30);
+    const want = on ? 0.5 : 0;
+    material.opacity += (want - material.opacity) * Math.min(1, dt * 2.5);
+    m.visible = material.opacity > 0.004;
+  });
+
+  return (
+    <mesh
+      ref={mesh}
+      material={material}
+      rotation={[-Math.PI / 2, 0, 0]}
+      renderOrder={-60}
+      frustumCulled={false}
+    >
+      <planeGeometry args={[74, 74]} />
+    </mesh>
+  );
+}
+
 export function Sky({
   look,
   banding,
@@ -237,6 +345,9 @@ export function Sky({
       uBanding: { value: banding },
       uMistDensity: { value: mistDensity },
       uMoon: { value: look.moon ? 1 : 0 },
+      uMoonEl: { value: MOON_EL },
+      uMoonAz: { value: MOON_AZ },
+      uMoonR: { value: MOON_R },
       uInvProj: { value: new THREE.Matrix4() },
       uCamRot: { value: new THREE.Matrix3() },
     }),
@@ -254,17 +365,20 @@ export function Sky({
   });
 
   return (
-    <mesh frustumCulled={false} renderOrder={-100}>
-      <planeGeometry args={[2, 2]} />
-      <shaderMaterial
-        ref={mat}
-        vertexShader={VERT}
-        fragmentShader={FRAG}
-        uniforms={uniforms}
-        depthWrite={false}
-        depthTest={false}
-        fog={false}
-      />
-    </mesh>
+    <>
+      <mesh frustumCulled={false} renderOrder={-100}>
+        <planeGeometry args={[2, 2]} />
+        <shaderMaterial
+          ref={mat}
+          vertexShader={VERT}
+          fragmentShader={FRAG}
+          uniforms={uniforms}
+          depthWrite={false}
+          depthTest={false}
+          fog={false}
+        />
+      </mesh>
+      <MoonPool color={look.glow} on={look.moon} />
+    </>
   );
 }

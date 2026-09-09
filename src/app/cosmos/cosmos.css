@@ -574,6 +574,44 @@
   color: var(--ink-faint);
 }
 
+/* ── A monument, as a rubbing ──────────────────────────────────────────────
+   A stone is not a page. What he gets when one opens is what you get when you
+   lay paper over carved letters and take a rubbing: the date small and dry at
+   the top, the line itself large, cut INTO the sheet rather than printed on it
+   (one light edge below the letters, one dark one above), and nothing else. No
+   plate, no eyebrow, no title, because a LEDGER line is already its own title. */
+
+.cosmos-page[data-kind="monument"] {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(120, 104, 96, 0.13), transparent 62%),
+    var(--paper);
+}
+
+.cosmos-rubbing-date {
+  margin: 0 0 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--ink-faint);
+}
+
+.cosmos-rubbing {
+  font-family: var(--display);
+  font-size: 21px;
+  line-height: 1.42;
+  color: color-mix(in srgb, var(--ink) 82%, var(--paper));
+  text-shadow:
+    0 1px 0 color-mix(in srgb, var(--paper) 88%, white),
+    0 -1px 0 rgba(60, 48, 40, 0.22);
+}
+
+.cosmos-rubbing p {
+  margin: 0 0 10px;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
 /* ── The satchel ───────────────────────────────────────────────────────── */
 
 .cosmos-satchel {
