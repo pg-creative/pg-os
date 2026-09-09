@@ -7,7 +7,7 @@ import { useSound } from "./SoundProvider";
 import { useDragToDismiss } from "./useDragToDismiss";
 import { MODE_CONFIG } from "../../lib/modes";
 
-type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal" | "todo";
+type Destination = "ship" | "queue" | "essay" | "linkedin" | "yuriko" | "hc-journal" | "evening-pages" | "todo";
 
 interface CaptureSheetProps {
   onClose: () => void;
@@ -29,6 +29,9 @@ const DESTINATIONS: DestConfig[] = [
   { id: "queue",      label: "Queue",      icon: "🧭", hint: "Drops into queue",         showTitle: false, showContext: true  },
   { id: "todo",       label: "Todo",       icon: "☑",  hint: "Creates a task",          showTitle: false, showContext: true  },
   { id: "hc-journal", label: "HC Journal", icon: "📖", hint: "Writes to Hero's journal", showTitle: false, showContext: false },
+  // The evening pages the cosmos reads. One act, one home: writes today's page
+  // under knowledge/journal/pages/ AND to Hero's Chronicle (plan 7i, D12).
+  { id: "evening-pages", label: "Evening",  icon: "🌒", hint: "Writes tonight's page",   showTitle: false, showContext: false },
   { id: "essay",      label: "Essay",      icon: "✍",  hint: "Starts an essay draft",   showTitle: true,  showContext: false },
   { id: "linkedin",   label: "LinkedIn",   icon: "💼", hint: "Drafts a LinkedIn post",   showTitle: true,  showContext: false },
   { id: "yuriko",     label: "Yuriko",     icon: "🌙", hint: "Sends to Yuriko",         showTitle: true,  showContext: false },
@@ -51,7 +54,7 @@ interface StatusMsg {
 
 // Destinations that write to the local laptop filesystem and aren't usable
 // from cloud (Vercel) deployments. The capture sheet hides these in cloud mode.
-const LAPTOP_ONLY_DESTINATIONS: Destination[] = ["essay"];
+const LAPTOP_ONLY_DESTINATIONS: Destination[] = ["essay", "evening-pages"];
 
 export function CaptureSheet({ onClose, initialDestination }: CaptureSheetProps) {
   const { brand } = useMode();

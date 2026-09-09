@@ -21,6 +21,13 @@
  *   2. the inline 32 px LQIP, which travels in the HTML and costs no round trip
  *   3. hero.webp, then the WebGL canvas fading in over 600 ms
  * The canvas arrives as `children`, so the scene never mounts its own slot.
+ *
+ * PHASE MODE (dev labs, 2026-09-09). Round one shipped `dev/_shared/LabSky.tsx`
+ * for the seven bake-off variants, and the Critic's never-restart check failed it
+ * as "a new home for a job that had one": D7 says ONE component owns the slot on
+ * every route. LabSky is deleted; `<EmakiBackdrop phase="twilight" />` is what the
+ * labs mount. A lab passes its phase as a prop instead of reading the live palette,
+ * which is the whole reason a lab exists.
  */
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -51,15 +58,36 @@ const FADE_MS = 600;
 
 export function EmakiBackdrop({
   world,
+  phase,
   children,
 }: {
   world?: WorldBackdrop;
+  /** Dev labs: pin the slot to one phase instead of following the live palette. */
+  phase?: Phase;
   children?: ReactNode;
 }) {
-  return world ? (
-    <WorldSlot world={world}>{children}</WorldSlot>
-  ) : (
-    <TabSlot />
+  if (world) return <WorldSlot world={world}>{children}</WorldSlot>;
+  if (phase) return <PhaseSlot phase={phase} />;
+  return <TabSlot />;
+}
+
+/**
+ * The pinned-phase slot the dev labs mount. Same four layers the tab slot paints,
+ * driven by a prop rather than by `useMode`, and using the labs' own `el-*` classes
+ * so a variant keeps its existing stylesheet.
+ */
+function PhaseSlot({ phase }: { phase: Phase }) {
+  const tk = PHASES[phase];
+  return (
+    <>
+      <div className="el-backdrop" style={{ background: tk.bg }} />
+      <div
+        className="el-backdrop-img"
+        style={{ backgroundImage: `url('${tk.backdropImg}')` }}
+      />
+      <div className="el-overlay" style={{ background: tk.overlayGradient }} />
+      <div className="el-ambient" style={{ background: tk.ambientWash }} />
+    </>
   );
 }
 

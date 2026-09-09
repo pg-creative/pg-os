@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { routeCapture, CaptureDestination } from "@/lib/capture";
 
-const VALID: CaptureDestination[] = ["ship", "queue", "essay", "linkedin", "yuriko", "hc-journal"];
+const VALID: CaptureDestination[] = [
+  "ship",
+  "queue",
+  "essay",
+  "linkedin",
+  "yuriko",
+  "hc-journal",
+  // The evening pages the cosmos reads (plan 7i, D12). Local filesystem, so it
+  // is one of the destinations the capture sheet hides in cloud mode.
+  "evening-pages",
+];
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));

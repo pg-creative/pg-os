@@ -9,7 +9,7 @@ import {
   WashiPanel,
   KintsugiSeam,
 } from "../../../_components/emaki/materials";
-import { LabSky } from "../../_shared/LabSky";
+import { EmakiBackdrop } from "../../../_components/emaki/EmakiBackdrop";
 import {
   useCockpitData,
   demoCards,
@@ -348,7 +348,7 @@ export default function V4Shrine({ phase }: { phase: Phase }) {
       }}
     >
       <style>{EMAKI_CSS}</style>
-      <LabSky phase={phase} />
+      <EmakiBackdrop phase={phase} />
       <FoxfireLayer phase={phase} />
 
       {/* shrine path column */}

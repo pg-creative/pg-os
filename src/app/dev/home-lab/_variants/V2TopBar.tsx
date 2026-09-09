@@ -20,7 +20,7 @@ import {
   GlyphDusk,
   GlyphMoon,
 } from "../../../_components/emaki/materials";
-import { LabSky } from "../../_shared/LabSky";
+import { EmakiBackdrop } from "../../../_components/emaki/EmakiBackdrop";
 
 /* ── Mock data ── */
 
@@ -831,7 +831,7 @@ export default function V2TopBar() {
         }}
       >
         {/* World painting layers */}
-        <LabSky phase={phase} />
+        <EmakiBackdrop phase={phase} />
         <FoxfireLayer phase={phase} />
 
         {/* ── TOP NAV BAR ── */}

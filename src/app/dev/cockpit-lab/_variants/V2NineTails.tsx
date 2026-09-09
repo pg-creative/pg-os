@@ -10,7 +10,7 @@ import {
   WashiPanel,
   KintsugiSeam,
 } from "../../../_components/emaki/materials";
-import { LabSky } from "../../_shared/LabSky";
+import { EmakiBackdrop } from "../../../_components/emaki/EmakiBackdrop";
 import {
   useCockpitData,
   demoCards,
@@ -334,7 +334,7 @@ export default function V2NineTails({ phase }: { phase: Phase }) {
       }}
     >
       <style>{EMAKI_CSS}</style>
-      <LabSky phase={phase} />
+      <EmakiBackdrop phase={phase} />
       <FoxfireLayer phase={phase} />
 
       {/* ── Command core: centered orbital stage ── */}

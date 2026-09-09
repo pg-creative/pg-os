@@ -38,7 +38,7 @@ import {
   GlyphDusk,
   GlyphMoon,
 } from "../../../_components/emaki/materials";
-import { LabSky } from "../../_shared/LabSky";
+import { EmakiBackdrop } from "../../../_components/emaki/EmakiBackdrop";
 import { MarvisCorner } from "../../../_components/views/cockpit/MarvisCorner";
 
 /* ── Mock data (same as reference page) ── */
@@ -774,7 +774,7 @@ export default function V4Editorial() {
         }}
       >
         {/* World painting — full page backdrop */}
-        <LabSky phase={phase} />
+        <EmakiBackdrop phase={phase} />
         <FoxfireLayer phase={phase} />
 
         {/* Ultra-slim fixed rail */}

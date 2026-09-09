@@ -9,7 +9,7 @@ import {
   WashiPanel,
   KintsugiSeam,
 } from "../../../_components/emaki/materials";
-import { LabSky } from "../../_shared/LabSky";
+import { EmakiBackdrop } from "../../../_components/emaki/EmakiBackdrop";
 import {
   useCockpitData,
   demoCards,
@@ -166,7 +166,7 @@ export default function V1Foxfire({ phase }: { phase: Phase }) {
       `}</style>
 
       {/* Background layers (fixed, behind everything) */}
-      <LabSky phase={phase} />
+      <EmakiBackdrop phase={phase} />
       <FoxfireLayer phase={phase} />
 
       {/* Constellation readout — top-left */}
