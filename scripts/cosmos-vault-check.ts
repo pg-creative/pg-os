@@ -22,6 +22,7 @@ import {
   cosmosRoot,
   parsePage,
   parseWorldsYml,
+  readAllManifests,
   readPages,
   readWorlds,
   resolveVaultPath,
@@ -62,9 +63,12 @@ try {
     fail(`hero_plate is not on disk: ${qp.heroPlate}`);
   else ok("quiet-practice hero_plate resolves and exists");
 
-  if (qp?.phase !== "twilight")
-    fail(`round one pins phase to twilight, world.yml says ${qp?.phase}`);
-  else ok("phase is pinned to twilight");
+  // Round two lifts D9 ("sky by hour returns"), so `clock` is legal now; the
+  // hall stays twilight-tinted through its register, not through a pinned phase.
+  const PHASES = ["day", "twilight", "midnight", "night", "clock", null];
+  if (!PHASES.includes(qp?.phase ?? null))
+    fail(`world.yml phase is ${qp?.phase}, which is not one of ${PHASES.join(", ")}`);
+  else ok(`phase is ${qp?.phase ?? "unset (follows the clock)"}`);
 
   const preset = sceneForRegister(qp?.register ?? null);
   if (!preset.sky.top) fail("register maps to no scene preset");
@@ -135,6 +139,70 @@ try {
 } catch (err) {
   if (err instanceof VaultError) ok("a page whose plate file is absent throws");
   else fail(`wrong error type for an absent plate: ${(err as Error).name}`);
+}
+
+// 6. The layout contract (round two). Every manifest is emitted and checked, so
+// a world.yml with a room that nothing can reach, a door to nowhere, or two
+// biomes sitting on top of each other fails here rather than on screen.
+try {
+  const manifests = readAllManifests({ drafts: true }, root);
+  const worldIds = new Set(manifests.map((m) => m.id));
+  if (manifests.length === 0) fail("no manifests emitted");
+  else ok(`${manifests.length} manifests emit`);
+
+  for (const m of manifests) {
+    const roomIds = new Set<string>();
+    for (const r of m.layout.rooms) {
+      if (roomIds.has(r.id)) fail(`${m.id}: two rooms share the id ${r.id}`);
+      roomIds.add(r.id);
+    }
+    // Room.objects must never dangle: the scene looks every id up.
+    const objectIds = new Set(m.objects.map((o) => o.id));
+    for (const r of m.layout.rooms) {
+      for (const id of r.objects) {
+        if (!objectIds.has(id)) fail(`${m.id}/${r.id}: object id ${id} is in no manifest`);
+      }
+      for (const d of r.doors) {
+        if (!roomIds.has(d.to) && !worldIds.has(d.to))
+          fail(`${m.id}/${r.id}: door leads to ${d.to}, which is neither a room nor a world`);
+      }
+    }
+    for (const o of m.objects) {
+      if (!roomIds.has(o.room)) fail(`${m.id}: ${o.id} stands in room ${o.room}, which does not exist`);
+    }
+    // Monuments are the forge's, and only the forge's (Critic round one, 3).
+    if (m.id !== "forge" && m.monuments.length)
+      fail(`${m.id} carries ${m.monuments.length} monuments; they belong to the forge`);
+  }
+  ok("every room id is unique, every object is in a real room, no door leads nowhere");
+
+  // Biomes must not overlap: the scene finds the world at a point by testing
+  // these rectangles, so two worlds sharing ground means one is unreachable.
+  for (let i = 0; i < manifests.length; i++) {
+    for (let j = i + 1; j < manifests.length; j++) {
+      const a = manifests[i].layout;
+      const b = manifests[j].layout;
+      const overlapX = Math.abs(a.origin.x - b.origin.x) < (a.size.w + b.size.w) / 2;
+      const overlapZ = Math.abs(a.origin.z - b.origin.z) < (a.size.d + b.size.d) / 2;
+      if (overlapX && overlapZ)
+        fail(`${manifests[i].id} and ${manifests[j].id} sit on the same ground`);
+    }
+  }
+  ok("no two biomes sit on the same ground");
+
+  const forge = manifests.find((m) => m.id === "forge");
+  if (forge && forge.monuments.length) {
+    const dates = forge.monuments.map((m) => m.date);
+    const sorted = [...dates].sort();
+    if (dates.join("|") !== sorted.join("|")) fail("forge monuments are not in date order");
+    else ok(`${dates.length} monuments stand in the forge, in date order`);
+  }
+
+  const thread = manifests[0]?.thread;
+  if (!thread?.season) fail("the thread carries no season");
+  else ok(`the thread reads season ${thread.season}, chapter ${thread.chapter?.id ?? "(none)"}`);
+} catch (err) {
+  fail(`layout: ${(err as Error).message}`);
 }
 
 console.log(failures === 0 ? "\nvault check passed" : `\nvault check FAILED (${failures})`);

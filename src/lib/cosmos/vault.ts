@@ -74,12 +74,21 @@ export interface VaultPage {
   type: string;
   title: string;
   world: string;
+  /** Empty string ONLY on the lenient path, where a plateless page mists. */
   plate: string;
   register: Register | null;
   private: boolean;
   status: "canon" | "draft";
   body: string;
   file: string;
+  /** Which room of the world's layout this page stands in. */
+  room: string | null;
+  /** Where in the room, in world units. Null means "place me deterministically". */
+  at: { x: number; z: number } | null;
+  /** How much room the object takes. 1 is the default; see SCHEMA.md. */
+  weight: number;
+  /** The witness writes it, never a hand. Null when it has never been read back. */
+  touched: string | null;
 }
 
 export interface ScenePreset {
@@ -265,6 +274,48 @@ export class VaultError extends Error {
   }
 }
 
+/** `at: { x: 3, z: -1 }`, or `at: [3, -1]`. Anything else is null. */
+function asPoint(v: unknown): { x: number; z: number } | null {
+  if (Array.isArray(v) && v.length >= 2) {
+    const [x, z] = v;
+    if (typeof x === "number" && typeof z === "number") return { x, z };
+    return null;
+  }
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.x === "number" && typeof o.z === "number") {
+      return { x: o.x, z: o.z };
+    }
+  }
+  return null;
+}
+
+/** The fields shared by the strict and lenient parsers. Plate is handled above. */
+function pageFrom(
+  d: Record<string, unknown>,
+  body: string,
+  file: string,
+  plate: string,
+): VaultPage {
+  const rel = path.basename(file);
+  return {
+    id: String(d.id ?? rel.replace(/\.md$/, "")),
+    type: String(d.type ?? "lore"),
+    title: String(d.title ?? d.id ?? rel),
+    world: String(d.world),
+    plate,
+    register: asRegister(d.register),
+    private: d.private === true,
+    status: d.status === "canon" ? "canon" : "draft",
+    body,
+    file,
+    room: typeof d.room === "string" ? d.room : null,
+    at: asPoint(d.at),
+    weight: typeof d.weight === "number" ? d.weight : 1,
+    touched: typeof d.touched === "string" ? d.touched : null,
+  };
+}
+
 /**
  * Parse one page's frontmatter and body. THROWS when `plate` is missing.
  * `plateExists` is injected so the rule is testable without touching disk.
@@ -292,17 +343,50 @@ export function parsePage(
     throw new VaultError(`page ${rel} has no \`world:\``);
   }
 
+  return pageFrom(d, fm.content.trim(), file, d.plate);
+}
+
+/**
+ * The same parse, refusing nothing but a page with no world.
+ *
+ * Critic round one, deduction 7: "Delete one `plate:` line anywhere and every
+ * world becomes a Next 500 page." The rule is right and the blast radius was
+ * wrong. `parsePage` still throws, `scripts/cosmos-vault-check.ts` still calls it
+ * and still exits 1, and the pre-commit hook now runs that check. What changes is
+ * the RENDERER: a page whose plate went missing comes back with `plate: ""` and
+ * mists over in the scene, which is what an untended page is supposed to do.
+ * The world stays up; the check is where the refusal lives.
+ *
+ * Returns null only when the page names no world, because a page that belongs to
+ * no world cannot be placed anywhere at all.
+ */
+export function parsePageLenient(
+  text: string,
+  file: string,
+  plateExists: (plate: string) => boolean,
+): { page: VaultPage | null; error: string | null } {
+  let fm: ReturnType<typeof matter>;
+  try {
+    fm = matter(text);
+  } catch (err) {
+    return { page: null, error: `${path.basename(file)}: ${(err as Error).message}` };
+  }
+  const d = fm.data as Record<string, unknown>;
+  const rel = path.basename(file);
+
+  if (!d.world || typeof d.world !== "string") {
+    return { page: null, error: `${rel} has no \`world:\`` };
+  }
+
+  const named = typeof d.plate === "string" ? d.plate : null;
+  const ok = named !== null && plateExists(named);
   return {
-    id: String(d.id ?? rel.replace(/\.md$/, "")),
-    type: String(d.type ?? "lore"),
-    title: String(d.title ?? d.id ?? rel),
-    world: d.world,
-    plate: d.plate,
-    register: asRegister(d.register),
-    private: d.private === true,
-    status: d.status === "canon" ? "canon" : "draft",
-    body: fm.content.trim(),
-    file,
+    page: pageFrom(d, fm.content.trim(), file, ok ? named! : ""),
+    error: ok
+      ? null
+      : named === null
+        ? `${rel} has no \`plate:\``
+        : `${rel} names \`${named}\`, which is not on disk`,
   };
 }
 
@@ -417,18 +501,60 @@ export function readWeather(root = cosmosRoot()): Record<string, unknown> {
   }
 }
 
-/** `state/attention.json`: `{ page_id: last_touched }`. Mist reads it, never deletes. */
-export function readAttention(root = cosmosRoot()): Record<string, string> {
+/** The raw `state/attention.json` object, page keys and the `hero` key together. */
+function readAttentionRaw(root: string): Record<string, unknown> {
   const file = path.join(root, "state", "attention.json");
   if (!fs.existsSync(file)) return {};
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
   }
 }
 
-export interface Monument {
+/**
+ * `state/attention.json`: `{ page_id: last_touched }`. Mist reads it, never deletes.
+ * The reserved `hero` key holds where PG last stood and is filtered out here, so
+ * the attention map stays exactly what its name says.
+ */
+export function readAttention(root = cosmosRoot()): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(readAttentionRaw(root))) {
+    if (k !== HERO_KEY && typeof v === "string") out[k] = v;
+  }
+  return out;
+}
+
+/** The reserved key in `state/attention.json` that is a position, not a timestamp. */
+export const HERO_KEY = "hero";
+
+export interface HeroState {
+  world: string;
+  x: number;
+  z: number;
+}
+
+/**
+ * Where PG last stood. The never-restart proof on the survival side: a fresh load
+ * lands the hero where he left off, because the position is a file in a git repo
+ * and not a number in a browser's localStorage.
+ */
+export function readHero(root = cosmosRoot()): HeroState | null {
+  const raw = readAttentionRaw(root)[HERO_KEY];
+  if (!raw || typeof raw !== "object") return null;
+  const h = raw as Record<string, unknown>;
+  if (typeof h.world !== "string") return null;
+  if (typeof h.x !== "number" || typeof h.z !== "number") return null;
+  return { world: h.world, x: h.x, z: h.z };
+}
+
+/**
+ * One parsed LEDGER line. Named for what it is, not for what it becomes: a
+ * `Monument` is the placed object in the forge world, and it is a different type
+ * with a position on it.
+ */
+export interface LedgerLine {
   id: string;
   date: string;
   text: string;
@@ -439,10 +565,10 @@ export interface Monument {
  * verbatim: "YYYY-MM-DD · GAME SAVED ✦ · what shipped". Nothing is written back:
  * the ledger is append-only and only PG appends to it.
  */
-export function readMonuments(root = cosmosRoot(), limit = 24): Monument[] {
+export function readMonuments(root = cosmosRoot(), limit = 24): LedgerLine[] {
   const file = path.resolve(path.join(root, "..", "self", "LEDGER.md"));
   if (!fs.existsSync(file)) return [];
-  const out: Monument[] = [];
+  const out: LedgerLine[] = [];
   const lines = fs.readFileSync(file, "utf8").split("\n");
   for (const line of lines) {
     const m = line.match(/^-\s*(\d{4}-\d{2}-\d{2})\s*·\s*GAME SAVED[^·]*·\s*(.+)$/);
@@ -489,26 +615,25 @@ export function heroLqipDataUri(worldId: string, root = cosmosRoot()): string | 
   return `data:image/webp;base64,${fs.readFileSync(file).toString("base64")}`;
 }
 
-// ── Round two: the scene contract ────────────────────────────────────────────
-//
-// The scene half (`src/app/cosmos/**`) consumes these and nothing else. The
-// keeper's reader emits them; until it does, the scene runs off its own
-// fixtures under `_scene/fixtures/` and picks the reader up the moment it
-// exists. The handshake is one optional export from this module:
-//
-//     export function readCosmosManifest(
-//       opts?: { drafts?: boolean },
-//       root?: string,
-//     ): WorldManifest[]
-//
-// One entry per world, ordered as `worlds.yml` orders them, laid out on one
-// shared ground plane by each world's `layout.origin`. The scene looks the
-// export up dynamically, so a build never breaks on its absence.
-//
-// Prose still never crosses: titles, ids, geometry and asset URLs only. A page
-// body reaches the client as server-rendered nodes, exactly as in round one.
+// ── The layout contract, and the manifest the scene builds against ───────────
 
-export type SceneRoomPurpose =
+/**
+ * ONE manifest per world, and it is the only thing that crosses to the client.
+ *
+ * Round one shipped a `SceneManifest` of plate planes and scroll geometry. Round
+ * two walks a plane instead of scrolling a painting (plan 7i), so the shape is
+ * rooms, lights and doors: "world.yml gains layout: (origin, size, ground,
+ * rooms[] with id, anchor {x,z}, size {w,d}, purpose, lights[], objects[],
+ * doors[] with to and kind)".
+ *
+ * Ids, geometry and asset URLs only. PROSE NEVER TRAVELS. Bodies are fetched one
+ * page at a time from /api/cosmos/body, behind the gate, when a page unfolds, so
+ * a `/_next` chunk (served unauthenticated by the middleware passthrough) can
+ * never carry a line PG wrote.
+ */
+export type WorldPhase = "day" | "twilight" | "midnight" | "clock";
+
+export type RoomPurpose =
   | "traversal"
   | "orientation"
   | "recovery"
@@ -516,78 +641,638 @@ export type SceneRoomPurpose =
   | "transition"
   | "objective";
 
-export interface SceneLight {
-  emitter: "lantern" | "torch" | "brazier" | "altar" | "fire" | "window";
+export type LightEmitter =
+  | "lantern"
+  | "torch"
+  | "brazier"
+  | "altar"
+  | "fire"
+  | "window";
+
+export type Light = {
+  emitter: LightEmitter;
   at: { x: number; z: number };
   range: number;
   color: string;
   intensity: number;
-}
+};
 
-export interface SceneDoor {
-  to: string;
-  kind: "mist" | "stairs";
-  at: { x: number; z: number };
-}
+export type Door = { to: string; kind: "mist" | "stairs"; at: { x: number; z: number } };
 
-export interface SceneRoom {
+export type Room = {
   id: string;
   anchor: { x: number; z: number };
   size: { w: number; d: number };
-  purpose: SceneRoomPurpose;
-  lights: SceneLight[];
+  purpose: RoomPurpose;
+  lights: Light[];
   objects: string[];
-  doors: SceneDoor[];
-}
+  doors: Door[];
+};
 
-export interface SceneObjectSpec {
+export type SceneObject = {
   id: string;
-  /** Drives which procedural prop carries the page: object, creed, chapter, lore. */
   type: string;
   title: string;
   room: string;
   at: { x: number; z: number };
   plate: { url: string; lqip: string } | null;
-  /** ISO date the witness or a dwell last recorded. Null means never touched. */
   touched: string | null;
   weight: number;
-}
+};
 
-export interface SceneMonument {
+export type Monument = {
   id: string;
   date: string;
   line: string;
   at: { x: number; z: number };
+};
+
+export type WorldManifest = {
+  id: string;
+  title: string;
+  register: Register;
+  phase: WorldPhase;
+  private: boolean;
+  layout: {
+    origin: { x: number; z: number };
+    size: { w: number; d: number };
+    ground: string;
+    rooms: Room[];
+  };
+  objects: SceneObject[];
+  monuments: Monument[];
+  thread: { season: string; chapter: { id: string; title: string; line: string } | null };
+  weather: Record<string, number | string | null>;
+  attention: Record<string, string>;
+  hero: { world: string; x: number; z: number } | null;
+  backdrop: { url: string; lqip: string } | null;
+  bed: string | null;
+};
+
+const PURPOSES: RoomPurpose[] = [
+  "traversal",
+  "orientation",
+  "recovery",
+  "reward",
+  "transition",
+  "objective",
+];
+
+const EMITTERS: LightEmitter[] = [
+  "lantern",
+  "torch",
+  "brazier",
+  "altar",
+  "fire",
+  "window",
+];
+
+/** Every light is motivated by a thing you can see (plan 7i, strategy point 6). */
+const EMITTER_DEFAULTS: Record<LightEmitter, { range: number; color: string; intensity: number }> = {
+  lantern: { range: 6, color: "#EAA050", intensity: 1.1 },
+  torch: { range: 7, color: "#E8903C", intensity: 1.3 },
+  brazier: { range: 9, color: "#D8702C", intensity: 1.5 },
+  altar: { range: 8, color: "#F0D8A0", intensity: 1.2 },
+  fire: { range: 10, color: "#E86828", intensity: 1.6 },
+  window: { range: 12, color: "#C8C0E0", intensity: 0.7 },
+};
+
+/**
+ * The ground a register stands on, when world.yml names none. These are MATERIAL
+ * KEYS, not colours: the scene owns what stone looks like in each register, and a
+ * hex here would be the reader deciding a thing that is not its to decide.
+ */
+const GROUND_BY_REGISTER: Record<Register, string> = {
+  painted: "stone",
+  riso: "grass",
+  paperback: "ash",
+  watercolor: "water",
+};
+
+function num(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
-export interface SceneThread {
-  season: string;
-  chapter: { id: string; title: string; line: string } | null;
+function asSize(v: unknown, fallback: { w: number; d: number }): { w: number; d: number } {
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return { w: num(o.w, fallback.w), d: num(o.d, fallback.d) };
+  }
+  return fallback;
+}
+
+function asPurpose(v: unknown): RoomPurpose {
+  return typeof v === "string" && (PURPOSES as string[]).includes(v)
+    ? (v as RoomPurpose)
+    : "traversal";
+}
+
+/** `emitter:` is the field; `type:` is accepted as its alias (the plan names both). */
+function asEmitter(v: unknown, alias: unknown): LightEmitter {
+  for (const candidate of [v, alias]) {
+    if (typeof candidate === "string" && (EMITTERS as string[]).includes(candidate)) {
+      return candidate as LightEmitter;
+    }
+  }
+  return "lantern";
+}
+
+export function parseLight(raw: unknown, roomAnchor: { x: number; z: number }): Light {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const emitter = asEmitter(o.emitter, o.type);
+  const d = EMITTER_DEFAULTS[emitter];
+  return {
+    emitter,
+    at: asPoint(o.at) ?? roomAnchor,
+    range: num(o.range, d.range),
+    color: typeof o.color === "string" ? o.color : d.color,
+    intensity: num(o.intensity, d.intensity),
+  };
+}
+
+export function parseDoor(raw: unknown, roomAnchor: { x: number; z: number }): Door | null {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  if (typeof o.to !== "string" || !o.to) return null;
+  return {
+    to: o.to,
+    kind: o.kind === "stairs" ? "stairs" : "mist",
+    at: asPoint(o.at) ?? roomAnchor,
+  };
+}
+
+export function parseRoom(id: string, raw: unknown): Room {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const anchor = asPoint(o.anchor) ?? { x: 0, z: 0 };
+  return {
+    id,
+    anchor,
+    size: asSize(o.size, { w: 12, d: 12 }),
+    purpose: asPurpose(o.purpose),
+    lights: Array.isArray(o.lights) ? o.lights.map((l) => parseLight(l, anchor)) : [],
+    // Filled from the pages that name this room; a `objects:` list in the yml is
+    // an author's hint and is merged in, never trusted on its own.
+    objects: Array.isArray(o.objects) ? o.objects.filter((x): x is string => typeof x === "string") : [],
+    doors: Array.isArray(o.doors)
+      ? o.doors.map((d) => parseDoor(d, anchor)).filter((d): d is Door => d !== null)
+      : [],
+  };
 }
 
 export interface WorldLayout {
   origin: { x: number; z: number };
   size: { w: number; d: number };
-  /** Ground material key: grass, stone, sand, water, ash. */
   ground: string;
-  rooms: SceneRoom[];
+  rooms: Room[];
 }
 
-export interface WorldManifest {
-  id: string;
-  title: string;
-  register: Register;
-  phase: "day" | "twilight" | "midnight" | "clock";
-  private: boolean;
-  layout: WorldLayout;
-  objects: SceneObjectSpec[];
-  /** LEDGER lines. Forge world only; every other world sends an empty array. */
-  monuments: SceneMonument[];
-  thread: SceneThread;
-  weather: Record<string, number | string | null>;
-  attention: Record<string, string>;
-  /** Where the Wayfarer last stood. The touch route writes it, the scene reads it. */
-  hero: { world: string; x: number; z: number } | null;
-  backdrop: { url: string; lqip: string } | null;
-  bed: string | null;
+/** Default footprint, when a world.yml names no size. */
+const DEFAULT_SIZE = { w: 40, d: 40 };
+/** Mist between two biomes when neither names an origin. */
+const DEFAULT_GAP = 8;
+
+/**
+ * Where a world sits on the shared plane when its world.yml names no origin.
+ *
+ * `origin` is the CENTRE of a world's rectangle, and the scene finds which biome
+ * a point is in by testing those rectangles, so five worlds all defaulting to
+ * {0,0} would stack and only the first would ever be reachable. They tile along x
+ * in registry order instead: quiet-practice, the home base, sits at the origin
+ * and the rest run east of it. The cartographer's `layout.origin` overrides this
+ * the moment one lands.
+ */
+export function defaultOrigin(index: number): { x: number; z: number } {
+  return { x: index * (DEFAULT_SIZE.w + DEFAULT_GAP), z: 0 };
 }
+
+/**
+ * One room, the size of the world, lit by one lantern. What a world gets before
+ * the cartographer has drawn it, so an `unbuilt` biome is still ground you can
+ * stand on and a border you can cross rather than a 404.
+ */
+export function defaultLayout(register: Register, index = 0): WorldLayout {
+  const origin = defaultOrigin(index);
+  return {
+    origin,
+    size: { ...DEFAULT_SIZE },
+    ground: GROUND_BY_REGISTER[register],
+    rooms: [
+      {
+        id: "field",
+        anchor: { ...origin },
+        size: { ...DEFAULT_SIZE },
+        purpose: "orientation",
+        lights: [{ emitter: "lantern", at: { ...origin }, ...EMITTER_DEFAULTS.lantern }],
+        objects: [],
+        doors: [],
+      },
+    ],
+  };
+}
+
+/**
+ * The `layout:` block of a world.yml. `rooms:` may be a map of id to room, or a
+ * list of rooms each carrying its own `id:`. Both shapes read the same here, so
+ * the cartographer can write whichever is clearer per world.
+ */
+export function parseLayout(raw: unknown, register: Register, index = 0): WorldLayout {
+  const fallback = defaultLayout(register, index);
+  if (!raw || typeof raw !== "object") return fallback;
+  const o = raw as Record<string, unknown>;
+
+  let rooms: Room[] = [];
+  if (Array.isArray(o.rooms)) {
+    rooms = o.rooms
+      .map((r) => {
+        const rr = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+        return typeof rr.id === "string" ? parseRoom(rr.id, rr) : null;
+      })
+      .filter((r): r is Room => r !== null);
+  } else if (o.rooms && typeof o.rooms === "object") {
+    rooms = Object.entries(o.rooms as Record<string, unknown>).map(([id, r]) =>
+      parseRoom(id, r),
+    );
+  }
+
+  return {
+    origin: asPoint(o.origin) ?? fallback.origin,
+    size: asSize(o.size, fallback.size),
+    ground: typeof o.ground === "string" ? o.ground : fallback.ground,
+    rooms: rooms.length ? rooms : fallback.rooms,
+  };
+}
+
+/** The raw `layout:` block, straight off a world.yml, or null when there is none. */
+export function readLayoutBlock(worldFile: string | null, root: string): unknown {
+  if (!worldFile) return null;
+  const abs = path.join(root, worldFile);
+  if (!fs.existsSync(abs)) return null;
+  try {
+    const parsed = yamlEngine.parse(fs.readFileSync(abs, "utf8")) as Record<string, unknown> | null;
+    return parsed && typeof parsed === "object" ? parsed.layout ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Placement ────────────────────────────────────────────────────────────────
+
+/** FNV-1a, the same hash the round-one layout used. Same page, same spot, forever. */
+function hash(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Where a page with no `at:` stands. A deterministic point inside its room, on a
+ * ring at 62 percent of the room's half-size so nothing lands on the anchor (the
+ * anchor is where the room's own light and its place page sit) and nothing lands
+ * on the wall. Index spreads the ring; the hash jitters it.
+ */
+export function placeInRoom(id: string, index: number, total: number, room: Room): { x: number; z: number } {
+  const h = hash(id);
+  const jitter = (h % 1000) / 1000;
+  const angle = ((index + 0.5) / Math.max(total, 1)) * Math.PI * 2 + jitter * 0.6;
+  const rx = (room.size.w / 2) * 0.62;
+  const rz = (room.size.d / 2) * 0.62;
+  return {
+    x: round2(room.anchor.x + Math.cos(angle) * rx * (0.72 + jitter * 0.28)),
+    z: round2(room.anchor.z + Math.sin(angle) * rz * (0.72 + jitter * 0.28)),
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Monuments stand along the LONG axis of their room, oldest first (Critic round
+ * one, deduction 3: they were hanging in the sky over the quiet practice; they
+ * belong "out of the quiet practice, on the ground, in the forge"). The room is
+ * the forge's `monuments` room. In date order, evenly spaced, on the ground.
+ */
+export function placeMonuments(
+  lines: { id: string; date: string; text: string }[],
+  room: Room,
+): Monument[] {
+  const long = room.size.w >= room.size.d ? "x" : "z";
+  const span = (long === "x" ? room.size.w : room.size.d) * 0.86;
+  const n = lines.length;
+  const sorted = [...lines].sort((a, b) => a.date.localeCompare(b.date));
+  return sorted.map((m, i) => {
+    const t = n <= 1 ? 0.5 : i / (n - 1);
+    const offset = (t - 0.5) * span;
+    // A gentle stagger across the short axis so the row reads as a path and not
+    // a ruler; deterministic, so a new ship never moves an old stone.
+    const sway = (((hash(m.id) % 200) / 200) - 0.5) * (long === "x" ? room.size.d : room.size.w) * 0.22;
+    return {
+      id: m.id,
+      date: m.date,
+      line: m.text,
+      at:
+        long === "x"
+          ? { x: round2(room.anchor.x + offset), z: round2(room.anchor.z + sway) }
+          : { x: round2(room.anchor.x + sway), z: round2(room.anchor.z + offset) },
+    };
+  });
+}
+
+// ── The thread ───────────────────────────────────────────────────────────────
+
+/** Season anchor: "Seasons are his birthday quarters (Q1 starts Oct 2)" (PROMPT.md). */
+export const SEASON_START = "2026-10-02";
+export const SEASON_LENGTH = 91;
+
+/**
+ * A PURE FUNCTION of the date, and it writes nothing (plan 7h, D14: writing
+ * `season_started_at` into Hero's Chronicle resets tier ratchets, which is a wipe,
+ * and tiers are grades). The same function the witness route computes `season_day`
+ * with; exported here so the thread panel and the weather cannot disagree.
+ */
+export function seasonOf(now = new Date()): { quarter: number; day: number; name: string } {
+  const start = new Date(`${SEASON_START}T00:00:00`);
+  const since = Math.floor((now.getTime() - start.getTime()) / 86_400_000);
+  const day = (((since % SEASON_LENGTH) + SEASON_LENGTH) % SEASON_LENGTH) + 1;
+  const index = Math.floor(since / SEASON_LENGTH);
+  const quarter = (((index % 4) + 4) % 4) + 1;
+  return { quarter, day, name: `Q${quarter}` };
+}
+
+/**
+ * The newest draft chapter: its title and its first real line. Never a task,
+ * never a count (plan 7i: the MAIN THREAD panel is "the witness's last draft
+ * chapter title and one line, plus the season name").
+ *
+ * "First real line" skips frontmatter (already stripped), HTML comments, and the
+ * blockquote marker, because a chapter's opening line is usually PG's own words
+ * quoted back at him.
+ */
+export function firstLine(body: string): string {
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("<!--")) continue;
+    const text = line.replace(/^>\s?/, "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+export function newestDraftChapter(
+  root = cosmosRoot(),
+): { id: string; title: string; line: string } | null {
+  const dir = path.join(root, "chapters");
+  if (!fs.existsSync(dir)) return null;
+  const names = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".md"))
+    .sort()
+    .reverse();
+  for (const name of names) {
+    const file = path.join(dir, name);
+    let fm: ReturnType<typeof matter>;
+    try {
+      fm = matter(fs.readFileSync(file, "utf8"));
+    } catch {
+      continue;
+    }
+    const d = fm.data as Record<string, unknown>;
+    if (d.status !== "draft") continue;
+    return {
+      id: String(d.id ?? name.replace(/\.md$/, "")),
+      title: String(d.title ?? d.id ?? name),
+      line: firstLine(fm.content),
+    };
+  }
+  return null;
+}
+
+// ── The manifest ─────────────────────────────────────────────────────────────
+
+/** A page's blur-up: its own `-lqip.webp` sibling, else the world's hero LQIP. */
+function plateLqip(plate: string, root: string, worldFallback: string | null): string {
+  const r = resolveVaultPath(root, plate);
+  if (r) {
+    const sibling = r.abs.replace(/\.[a-z0-9]+$/i, "-lqip.webp");
+    if (fs.existsSync(sibling)) {
+      return `data:image/webp;base64,${fs.readFileSync(sibling).toString("base64")}`;
+    }
+  }
+  return worldFallback ?? "";
+}
+
+/** The page types that stand as props in a room. `place` pages ARE their room. */
+const OBJECT_TYPES = new Set(["object", "creed", "chapter", "lore"]);
+
+/**
+ * Every page of a world, with a plateless page kept rather than thrown (the
+ * lenient path; see `parsePageLenient`). Logs ONCE per read, naming the count and
+ * the first offender, so a missing plate is loud in the log and quiet on screen.
+ */
+export function readPagesForScene(
+  worldId: string,
+  opts: { drafts?: boolean } = {},
+  root = cosmosRoot(),
+): VaultPage[] {
+  const exists = plateChecker(root);
+  const out: VaultPage[] = [];
+  const problems: string[] = [];
+
+  for (const dir of PAGE_DIRS) {
+    const abs = path.join(root, dir);
+    if (!fs.existsSync(abs)) continue;
+    for (const name of fs.readdirSync(abs).sort()) {
+      if (!name.endsWith(".md")) continue;
+      const file = path.join(abs, name);
+      const { page, error } = parsePageLenient(fs.readFileSync(file, "utf8"), file, exists);
+      if (!page) {
+        if (error) problems.push(error);
+        continue;
+      }
+      if (page.world !== worldId) continue;
+      if (page.status === "draft" && !opts.drafts) continue;
+      if (error) problems.push(error);
+      out.push(page);
+    }
+  }
+
+  if (problems.length) {
+    console.warn(
+      `[cosmos] ${worldId}: ${problems.length} page(s) without a usable plate; they mist. First: ${problems[0]}`,
+    );
+  }
+  return out;
+}
+
+/** One page's body, for the gated per-page fetch. Null when there is no such page. */
+export function readPageBody(
+  id: string,
+  root = cosmosRoot(),
+): { id: string; title: string; type: string; world: string; body: string } | null {
+  const exists = plateChecker(root);
+  for (const dir of PAGE_DIRS) {
+    const abs = path.join(root, dir);
+    if (!fs.existsSync(abs)) continue;
+    for (const name of fs.readdirSync(abs).sort()) {
+      if (!name.endsWith(".md")) continue;
+      const file = path.join(abs, name);
+      const { page } = parsePageLenient(fs.readFileSync(file, "utf8"), file, exists);
+      if (!page || page.id !== id) continue;
+      return {
+        id: page.id,
+        title: page.title,
+        type: page.type,
+        world: page.world,
+        body: page.body,
+      };
+    }
+  }
+  return null;
+}
+
+function asWorldPhase(v: string | null): WorldPhase {
+  if (v === "day" || v === "twilight" || v === "clock") return v;
+  if (v === "midnight" || v === "night") return "midnight";
+  // Sky by hour returns in round two (plan 7i: "D9 lifted"), so a world that
+  // pins nothing follows the clock rather than freezing at one hour.
+  return "clock";
+}
+
+/**
+ * ONE manifest per world. This is the function the scene builds against.
+ *
+ * It never throws for content reasons: an unbuilt world with no folder returns a
+ * default layout and an empty prop list, and a plateless page comes back misted.
+ * It returns null only when the world is not in `worlds.yml` at all.
+ */
+export function readWorldManifest(
+  worldId: string,
+  opts: { drafts?: boolean } = {},
+  root = cosmosRoot(),
+): WorldManifest | null {
+  const registry = readWorlds(root);
+  const index = registry.findIndex((w) => w.id === worldId);
+  if (index < 0) return null;
+  const world = registry[index];
+
+  const register: Register = world.register ?? "painted";
+  const layout = parseLayout(readLayoutBlock(world.worldFile, root), register, index);
+  const roomById = new Map(layout.rooms.map((r) => [r.id, r]));
+  const firstRoom =
+    layout.rooms.find((r) => r.purpose === "orientation") ?? layout.rooms[0];
+
+  const worldLqip = heroLqipDataUri(worldId, root);
+  const pages = readPagesForScene(worldId, opts, root);
+  const attention = readAttention(root);
+
+  // Group by room first, so `at`-less pages spread inside their own room rather
+  // than around the whole world.
+  const byRoom = new Map<string, VaultPage[]>();
+  for (const p of pages) {
+    if (p.type !== "place" && !OBJECT_TYPES.has(p.type)) continue;
+    const roomId = p.room && roomById.has(p.room) ? p.room : firstRoom.id;
+    const list = byRoom.get(roomId) ?? [];
+    list.push(p);
+    byRoom.set(roomId, list);
+  }
+
+  const objects: SceneObject[] = [];
+  for (const [roomId, list] of byRoom) {
+    const room = roomById.get(roomId) ?? firstRoom;
+    // A `place` page IS its room, so it stands on the anchor. Exactly one can:
+    // two objects at the same point is a thing you cannot click. The rest of the
+    // places in a room take a ring position like everything else, until the
+    // cartographer gives each its own room.
+    let anchorTaken = false;
+    list.forEach((p, i) => {
+      let at = p.at;
+      if (!at && p.type === "place" && !anchorTaken) {
+        at = { ...room.anchor };
+        anchorTaken = true;
+      }
+      objects.push({
+        id: p.id,
+        type: p.type,
+        title: p.title,
+        room: room.id,
+        at: at ?? placeInRoom(p.id, i, list.length, room),
+        plate: p.plate
+          ? { url: assetUrl(root, p.plate) ?? "", lqip: plateLqip(p.plate, root, worldLqip) }
+          : null,
+        touched: p.touched ?? attention[p.id] ?? null,
+        weight: p.weight,
+      });
+    });
+  }
+
+  // Room.objects is exactly the ids standing in that room, so nothing the scene
+  // looks up by id can dangle.
+  const placed = new Map<string, string[]>();
+  for (const o of objects) {
+    const list = placed.get(o.room) ?? [];
+    list.push(o.id);
+    placed.set(o.room, list);
+  }
+  const rooms = layout.rooms.map((r) => ({
+    ...r,
+    objects: Array.from(new Set([...(placed.get(r.id) ?? [])])),
+  }));
+
+  // Monuments are the forge's, and only the forge's (Critic round one, 3).
+  let monuments: Monument[] = [];
+  if (worldId === "forge") {
+    const room =
+      rooms.find((r) => r.id === "monuments") ??
+      rooms.find((r) => r.purpose === "reward") ??
+      rooms[0];
+    monuments = placeMonuments(readMonuments(root, 400), room);
+  }
+
+  const weatherRaw = readWeather(root) as Record<string, unknown>;
+  const weather: Record<string, number | string | null> = {};
+  for (const [k, v] of Object.entries(weatherRaw)) {
+    weather[k] = typeof v === "number" || typeof v === "string" ? v : null;
+  }
+
+  const heroPlateUrl = heroUrlFor(worldId, "a", world.heroPlate, root);
+
+  return {
+    id: world.id,
+    title: world.title,
+    register,
+    phase: asWorldPhase(world.phase),
+    private: world.private,
+    layout: { origin: layout.origin, size: layout.size, ground: layout.ground, rooms },
+    objects,
+    monuments,
+    thread: { season: seasonOf().name, chapter: newestDraftChapter(root) },
+    weather,
+    attention,
+    hero: readHero(root),
+    backdrop: heroPlateUrl ? { url: heroPlateUrl, lqip: worldLqip ?? "" } : null,
+    bed: world.bed,
+  };
+}
+
+/** Every world in the registry, unbuilt ones included, so a biome switch is free. */
+export function readAllManifests(
+  opts: { drafts?: boolean } = {},
+  root = cosmosRoot(),
+): WorldManifest[] {
+  const out: WorldManifest[] = [];
+  for (const w of readWorlds(root)) {
+    const m = readWorldManifest(w.id, opts, root);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
+/**
+ * The name the scene half looks up (`src/app/cosmos/_scene/contract.ts`): one
+ * entry per world, ordered as `worlds.yml` orders them, laid out on one shared
+ * ground plane by each world's `layout.origin`.
+ */
+export const readCosmosManifest = readAllManifests;

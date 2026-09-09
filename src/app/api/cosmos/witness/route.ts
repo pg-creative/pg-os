@@ -25,7 +25,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
-import { cosmosRoot, readMonuments, readWorlds } from "../../../../lib/cosmos/vault";
+import {
+  cosmosRoot,
+  readMonuments,
+  readWorlds,
+  seasonOf,
+} from "../../../../lib/cosmos/vault";
 
 const exec = promisify(execFile);
 
@@ -74,11 +79,13 @@ async function commitsSince(workspace: string, since: string): Promise<number> {
  * Birthday quarters are a PURE FUNCTION of the date. Nothing is written to Hero's
  * Chronicle: writing `season_started_at` there resets tier ratchets, which is a
  * wipe, and tiers are grades (plan 7h, D14).
+ *
+ * The arithmetic itself moved to `lib/cosmos/vault.ts` in round two, so this
+ * route's `season_day` and the thread panel's season name cannot drift apart.
+ * Round one had two copies of it; `seasonOf` is the one.
  */
-function seasonDay(now: Date, start = new Date("2026-10-02T00:00:00"), length = 91): number {
-  const since = daysBetween(now, start);
-  const wrapped = ((since % length) + length) % length;
-  return wrapped + 1;
+function seasonDay(now: Date): number {
+  return seasonOf(now).day;
 }
 
 export async function POST() {
