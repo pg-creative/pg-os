@@ -1,308 +1,506 @@
 "use client";
 
 /**
- * WorldCanvas — the one WebGL layer, mounted inside the slot EmakiBackdrop owns.
+ * The one persistent scene. Everything that moves, moves in here.
  *
- * EXTENDS: `_components/emaki/EmakiBackdrop.tsx` (the fixed inset-0 z0 slot; this
- * component never opens its own), `_components/useIdleDetector.tsx` (the existing
- * 90 s detector, reused rather than re-implemented), and `dev/backdrop-lab`'s depth
- * ratios through lib/cosmos/layout.ts.
+ * EXTENDS: round one's `WorldCanvas`, with its scroll conductor removed. Lenis,
+ * GSAP and ScrollTrigger are gone from the repo: nothing scrolls, because the
+ * verb is now walking. What is kept and reused: the fbm mist chunk, the sky
+ * shader's screen quad, the lazy-armed ambient bed, the idle detector driving
+ * `frameloop`, and the touch route.
  *
- * It fuses the recipe's z0 to z2 into one WebGL layer: sky, plates, objects,
- * monuments, mist and particles all live in the canvas. z3, the dwell panel, stays
- * DOM, because a page of PG's own words should be selectable text in the world's
- * register, not a texture.
+ * FOLLOWS `build-isometric-arpg`: one authoritative simulation step per frame,
+ * deterministic and serializable (position and heading are all the save needs),
+ * and no second system layered on before the first has gameplay proof.
  *
- * Scroll is Lenis plus GSAP ScrollTrigger, and progress is always
- * (viewportTop - sectionTop) / (sectionHeight - viewportHeight). Never wheel delta,
- * which desyncs the moment anyone flicks a trackpad, and never elapsed time, which
- * is not scroll at all.
+ * The React tree here re-renders about five times a minute. Walking, the camera,
+ * the mist, the lantern and the flames are all mutations on `rt`, the runtime
+ * object, inside `useFrame`. What React is told about, on a 250 ms tick, is only
+ * what a person could see change in the HUD: the biome he is in, the thing he is
+ * near, and how long he has been standing there.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { gsap } from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import Lenis from "lenis";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import * as THREE from "three";
 import { useIdleDetector } from "../../_components/useIdleDetector";
-import { PHASES } from "../../_components/emaki/theme";
-import { DEPTHS } from "../../../lib/cosmos/layout";
-import type { SceneManifest } from "./types";
-import { Sky } from "./Sky";
-import { PlatePlane, type PlateLayer } from "./PlatePlane";
-import { Mist } from "./Mist";
-import { Particles } from "./Particles";
-import { VaultObjects } from "./VaultObject";
-import { Monuments } from "./Monument";
-import { AmbientBedToggle } from "./AmbientBed";
+import type { CosmosManifest, WorldManifest } from "./contract";
+import { nearestWorld, worldAt } from "./contract";
+import { mixPalettes, paletteFor, type Palette } from "./palette";
+import { lightsFor, roomAt } from "./dressing";
+import { createRuntime, stepWalker, STRIDE, type Runtime } from "./runtime";
+import { CAM_YAW, IsoCamera } from "./IsoCamera";
+import { Ground } from "./Ground";
+import { Sky, skyFor, type SkyLook } from "./Sky";
+import { World, worldBlockers } from "./World";
+import { Hero } from "./Hero";
+import { Postfx, type PostQuality } from "./Postfx";
+import { MIST } from "./toon";
 
-/** Dwell, not click. 900 ms of held attention is what counts as looking. */
-const DWELL_MS = 900;
+/** Stand this close for this long and the page unfolds. Or press E. */
+export const REACH = 1.2;
+export const DWELL_S = 1.2;
 
-/**
- * Weather maps to sky, mist density and particle count. Nothing else. No
- * threshold, no streak, no grade, and a null (the witness has not run, or the
- * Whoop token is dead) leaves the sky exactly where it was.
- */
-function mistFromWeather(w: SceneManifest["weather"], base: number): number {
-  let d = base;
-  if (typeof w.days_since_ship === "number") {
-    d += Math.min(w.days_since_ship, 14) * 0.012;
-  }
-  if (typeof w.recovery === "number") {
-    // Low recovery reads as a thicker morning, never as a warning.
-    d += (1 - Math.min(Math.max(w.recovery / 100, 0), 1)) * 0.14;
-  }
-  return Math.min(Math.max(d, 0.08), 0.95);
+export interface HudState {
+  world: string;
+  worldTitle: string;
+  register: string;
+  /** Title of what he is near or hovering, or null. One line, never a list. */
+  nearTitle: string | null;
+  nearId: string | null;
+  dwell: number;
+  sitting: boolean;
+  depth: boolean;
+  /** Where he stands, for the compass's remembered ground. */
+  x: number;
+  z: number;
 }
 
-export function WorldCanvas({
-  manifest,
-  source,
-  onSource,
-  onDwell,
+// ── The per-frame conductor ──────────────────────────────────────────────────
+
+function Conductor({
+  rt,
+  worlds,
+  palette,
+  onTick,
+  onOpen,
+  onDoor,
+  onStep,
+  theme,
 }: {
-  manifest: SceneManifest;
-  /** Which painting of the same subject is on the planes right now. */
-  source: "a" | "b";
-  onSource: (next: "a" | "b") => void;
-  onDwell: (id: string | null) => void;
+  rt: React.RefObject<Runtime>;
+  worlds: WorldManifest[];
+  palette: Palette;
+  onTick: (s: HudState) => void;
+  onOpen: (id: string) => void;
+  onDoor: (to: string, kind: "mist" | "stairs") => void;
+  onStep: () => void;
+  theme: "light" | "dark";
 }) {
-  const progressRef = useRef(0);
-  const parallaxRef = useRef({ x: 0, y: 0 });
-  const targetRef = useRef({ x: 0, y: 0 });
-  const [hovered, setHovered] = useState<string | null>(null);
-  const [reduced, setReduced] = useState(false);
-  const dwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dwellFor = useRef<string | null>(null);
+  const gl = useThree((s) => s.gl);
+  const acc = useRef(0);
+  const lastStep = useRef(0);
 
-  const idle = useIdleDetector({ timeoutMs: 90_000 });
-
-  const tk = PHASES[manifest.phase];
-  const mistDensity = useMemo(
-    () => mistFromWeather(manifest.weather, manifest.preset.mist.density),
-    [manifest],
-  );
-
-  const getProgress = useCallback(() => progressRef.current, []);
-  const getParallax = useCallback(() => parallaxRef.current, []);
-
-  // ── Reduced motion. The canvas unmounts entirely; the still plate remains. ──
+  // Click to move. Raycast a mathematical plane, not the ground mesh: the plane
+  // is always there, at exactly y = 0, whatever geometry happens to be in front.
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const apply = () => setReduced(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
+    const el = gl.domElement;
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const hit = new THREE.Vector3();
 
-  // ── Scroll. Lenis drives, ScrollTrigger measures, the rule does the maths. ──
+    const onDown = (e: PointerEvent) => {
+      const r = rt.current;
+      if (!r || r.paused) return;
+      const rect = el.getBoundingClientRect();
+      ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const cam = (el as HTMLCanvasElement & { __cam?: THREE.Camera }).__cam;
+      if (!cam) return;
+      ray.setFromCamera(ndc, cam);
+      if (ray.ray.intersectPlane(plane, hit)) {
+        r.dest = hit.clone();
+        r.dest.y = 0;
+      }
+    };
+    el.addEventListener("pointerdown", onDown);
+    return () => el.removeEventListener("pointerdown", onDown);
+  }, [gl, rt]);
+
+  // Stash the camera where the raw listener above can reach it without React.
+  const camera = useThree((s) => s.camera);
   useEffect(() => {
-    if (reduced) return;
-    gsap.registerPlugin(ScrollTrigger);
+    (gl.domElement as HTMLCanvasElement & { __cam?: THREE.Camera }).__cam = camera;
+  }, [gl, camera]);
 
-    const lenis = new Lenis({ duration: 1.1, smoothWheel: true });
-    const section = document.getElementById("cosmos-scroll");
+  useFrame((state, dtRaw) => {
+    const r = rt.current;
+    if (!r) return;
+    // Clamp: a backgrounded tab returns with a one second delta and the walker
+    // would teleport through a wall.
+    const dt = Math.min(dtRaw, 0.05);
 
-    const onRaf = (time: number) => lenis.raf(time * 1000);
-    gsap.ticker.add(onRaf);
-    gsap.ticker.lagSmoothing(0);
-    lenis.on("scroll", ScrollTrigger.update);
+    if (!r.paused) stepWalker(r, dt, CAM_YAW);
 
-    let trigger: ScrollTrigger | null = null;
-    if (section) {
-      trigger = ScrollTrigger.create({
-        trigger: section,
-        start: "top top",
-        end: "bottom bottom",
-        // (viewportTop - sectionTop) / (sectionHeight - viewportHeight), which is
-        // exactly what ScrollTrigger's progress is between these two markers.
-        onUpdate: (self) => {
-          progressRef.current = self.progress;
-        },
-      });
+    // The mist takes the lantern, the eye and the register, once, for everything.
+    MIST.uTime.value += dt;
+    MIST.uLantern.value.copy(r.lantern);
+    MIST.uFocus.value.copy(r.target);
+    MIST.uFloor.value = theme === "light" ? 1 : 0;
+
+    // Footsteps, on the stride the dust uses, so sound and picture are one gait.
+    if (r.moving && r.stepAccum - lastStep.current > STRIDE) {
+      lastStep.current = r.stepAccum;
+      onStep();
+    }
+    if (!r.moving) lastStep.current = r.stepAccum;
+
+    // ── The slow tick: everything React is allowed to hear about. ──
+    acc.current += dt;
+    if (acc.current < 0.25) return;
+    acc.current = 0;
+
+    const here = worldAt(worlds, r.pos.x, r.pos.z) ?? nearestWorld(worlds, r.pos.x, r.pos.z);
+    r.world = here.id;
+    r.depth = here.id === "depths";
+
+    // Nearest thing worth standing in front of: a page, a monument, or a door.
+    let nearId: string | null = null;
+    let nearTitle: string | null = null;
+    let nearD = Infinity;
+    for (const w of worlds) {
+      for (const o of w.objects) {
+        const d = Math.hypot(o.at.x - r.pos.x, o.at.z - r.pos.z);
+        if (d < nearD) {
+          nearD = d;
+          nearId = o.id;
+          nearTitle = o.title;
+        }
+      }
+      for (const m of w.monuments) {
+        const d = Math.hypot(m.at.x - r.pos.x, m.at.z - r.pos.z);
+        if (d < nearD) {
+          nearD = d;
+          nearId = m.id;
+          nearTitle = m.line;
+        }
+      }
+      for (const room of w.layout.rooms) {
+        for (const door of room.doors) {
+          if (door.kind !== "stairs") continue;
+          const d = Math.hypot(door.at.x - r.pos.x, door.at.z - r.pos.z);
+          if (d < nearD) {
+            nearD = d;
+            nearId = `door:${door.to}`;
+            nearTitle = door.to === "depths" ? "Down" : "Up";
+          }
+        }
+      }
+    }
+    r.near = nearId && nearD < REACH * 3 ? { id: nearId, d: nearD } : null;
+
+    // Dwell: standing still, in reach, for DWELL_S. Moving resets it, which is
+    // the difference between attention and passing by.
+    if (r.near && nearD <= REACH && !r.moving) {
+      r.dwell += 0.25;
+      if (r.dwell >= DWELL_S) {
+        r.dwell = 0;
+        if (r.near.id.startsWith("door:")) onDoor(r.near.id.slice(5), "stairs");
+        else onOpen(r.near.id);
+      }
+    } else {
+      r.dwell = 0;
     }
 
-    const onPointer = (e: PointerEvent) => {
-      targetRef.current.x = (e.clientX / window.innerWidth - 0.5) * 2;
-      targetRef.current.y = (e.clientY / window.innerHeight - 0.5) * 2;
-    };
-    window.addEventListener("pointermove", onPointer, { passive: true });
+    // Sitting: the hearth mat, and only the hearth mat.
+    const room = roomAt(here, r.pos.x, r.pos.z);
+    const fire = room?.lights.find((l) => l.emitter === "fire");
+    r.sitting = !!fire && Math.hypot(fire.at.x - r.pos.x, fire.at.z - r.pos.z) < 2.2;
 
-    let raf = 0;
-    const smooth = () => {
-      parallaxRef.current.x += (targetRef.current.x - parallaxRef.current.x) * 0.06;
-      parallaxRef.current.y += (targetRef.current.y - parallaxRef.current.y) * 0.06;
-      raf = requestAnimationFrame(smooth);
-    };
-    raf = requestAnimationFrame(smooth);
+    // How deep in the mist between two biomes he is, 0 at a heart, 1 in the gap.
+    const inside = worldAt(worlds, r.pos.x, r.pos.z);
+    r.border = inside ? 0 : 1;
 
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("pointermove", onPointer);
-      gsap.ticker.remove(onRaf);
-      trigger?.kill();
-      lenis.destroy();
-    };
-  }, [reduced]);
+    onTick({
+      world: here.id,
+      worldTitle: here.title,
+      register: here.register,
+      nearTitle: r.near ? nearTitle : null,
+      nearId: r.near?.id ?? null,
+      dwell: r.dwell,
+      sitting: r.sitting,
+      depth: r.depth,
+      x: r.pos.x,
+      z: r.pos.z,
+    });
+    void state;
+    void palette;
+  });
 
-  // ── Dwell. Hover or touch-hold for 900 ms unfolds the page. ──
-  const startDwell = useCallback(
-    (id: string) => {
-      if (dwellFor.current === id) return;
-      dwellFor.current = id;
-      if (dwellTimer.current) clearTimeout(dwellTimer.current);
-      dwellTimer.current = setTimeout(() => {
-        onDwell(id);
-        // Attention only. The witness owns `touched:` in frontmatter; the panel
-        // records that PG looked, and nothing else.
-        void fetch("/api/cosmos/touch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id }),
-          keepalive: true,
-        }).catch(() => {});
-      }, DWELL_MS);
-    },
-    [onDwell],
-  );
+  return null;
+}
 
-  const cancelDwell = useCallback(() => {
-    dwellFor.current = null;
-    if (dwellTimer.current) {
-      clearTimeout(dwellTimer.current);
-      dwellTimer.current = null;
-    }
-  }, []);
+// ── Lights ───────────────────────────────────────────────────────────────────
 
-  useEffect(() => () => cancelDwell(), [cancelDwell]);
+/**
+ * One key light and one fill. Everything else in the world is a torch, a lantern,
+ * a brazier or a hearth, and every one of those is mounted next to the thing that
+ * appears to be producing it (`author-game-levels`: motivate every local light).
+ *
+ * The key follows the camera target so the shadow map stays tight around what is
+ * on screen; a fixed sun over a 200 unit plane would spend its whole resolution
+ * on empty ground.
+ */
+function KeyLight({
+  rt,
+  p,
+  theme,
+}: {
+  rt: React.RefObject<Runtime>;
+  p: Palette;
+  theme: "light" | "dark";
+}) {
+  const dir = useRef<THREE.DirectionalLight>(null);
 
-  // ── The three plate planes, at backdrop-lab's ported depths. ──
-  const plate = source === "b" && manifest.heroAlt ? manifest.heroAlt : manifest.hero;
-  const layers: PlateLayer[] = useMemo(() => {
-    const [far, mid, , near] = DEPTHS;
-    return [
-      {
-        // The distant valley. The whole plate, biggest, furthest, most air.
-        depth: far,
-        still: plate,
-        maskTop: 1.0,
-        maskFeather: 0.02,
-        opacity: 1,
-        size: [26, 14.6],
-        z: -11.4,
-      },
-      {
-        // The middle ground: the lower two thirds of the same painting, a real
-        // slab of it rather than a ghost copy, at its own depth and rate.
-        depth: mid,
-        still: plate,
-        maskTop: 0.62,
-        maskFeather: 0.16,
-        opacity: 0.96,
-        size: [15, 8.4],
-        z: -6.3,
-      },
-      {
-        // The near ground: the loop, scrubbed by scroll, cropped to the steps.
-        depth: near,
-        still: null,
-        frames: manifest.frames,
-        maskTop: 0.46,
-        maskFeather: 0.14,
-        opacity: 1,
-        size: [10.4, 5.85],
-        z: -1.6,
-      },
-    ];
-  }, [manifest, plate]);
-
-  // Under reduced motion there is no canvas at all: EmakiBackdrop's still plate
-  // is already behind this, and it is a complete picture on its own.
-  if (reduced) return null;
+  useFrame(() => {
+    const r = rt.current;
+    if (!r || !dir.current) return;
+    dir.current.position.set(r.target.x + 14, 22, r.target.z + 9);
+    dir.current.target.position.set(r.target.x, 0, r.target.z);
+    dir.current.target.updateMatrixWorld();
+  });
 
   return (
     <>
-      <Canvas
-        dpr={[1, 1.8]}
-        frameloop={idle ? "demand" : "always"}
-        gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
-        camera={{ position: [0, 0, 5], fov: 42, near: 0.1, far: 60 }}
-        style={{ position: "absolute", inset: 0 }}
-        onPointerMissed={() => {
-          setHovered(null);
-          cancelDwell();
-          onDwell(null);
-        }}
-      >
-        <Sky preset={manifest.preset} phase={manifest.phase} mistDensity={mistDensity} />
-
-        {layers.map((layer, i) => (
-          <PlatePlane
-            key={i}
-            layer={layer}
-            preset={manifest.preset}
-            mistDensity={mistDensity}
-            progress={getProgress}
-            parallax={getParallax}
-          />
-        ))}
-
-        <Monuments
-          monuments={manifest.monuments}
-          preset={manifest.preset}
-          // Wet dark slate, not a text token: the earlier pass used PHASES
-          // textMuted, which at twilight is a pale lavender, and the stones read
-          // as fog panels standing in the valley.
-          ink="#2A2233"
-          light={tk.goldBright}
-          mistDensity={mistDensity}
-        />
-
-        <VaultObjects
-          objects={manifest.objects}
-          preset={manifest.preset}
-          paper="#EFE2C6"
-          ink={tk.panelInkBorder}
-          edge={tk.goldBright}
-          hovered={hovered}
-          onHover={setHovered}
-          onDwellStart={startDwell}
-          onDwellCancel={cancelDwell}
-        />
-
-        <Particles preset={manifest.preset} progress={getProgress} />
-
-        <Mist
-          preset={manifest.preset}
-          mistDensity={mistDensity}
-          progress={getProgress}
-        />
-      </Canvas>
-
-      <div className="cosmos-chrome">
-        {/* Light-mode-independent phase indicator. The world is twilight because
-            the plate is twilight, and it says so rather than implying it. */}
-        <span className="cosmos-chip" aria-label={`Phase: ${tk.phaseName}`}>
-          <span aria-hidden>◗</span>
-          <span>{tk.phaseName.toLowerCase()}</span>
-        </span>
-        {/* Two paintings of the same subject in the same register, one from
-            Higgsfield's still and one from Midjourney, switchable live. Taste is
-            PG's call and it is easier to make with both on the same wall. */}
-        {manifest.heroAlt && (
-          <button
-            type="button"
-            className="cosmos-chip"
-            aria-label={`Plate source ${source === "a" ? "A" : "B"}, click to switch`}
-            onClick={() => onSource(source === "a" ? "b" : "a")}
-          >
-            <span aria-hidden>◨</span>
-            <span>plate {source}</span>
-          </button>
-        )}
-        <AmbientBedToggle />
-      </div>
+      <hemisphereLight
+        color={p.key}
+        groundColor={p.ambient}
+        intensity={theme === "light" ? 1.25 : 0.72}
+      />
+      <ambientLight color={p.fill} intensity={theme === "light" ? 0.55 : 0.28} />
+      <directionalLight
+        ref={dir}
+        color={p.key}
+        intensity={theme === "light" ? 1.5 : 1.05}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-left={-24}
+        shadow-camera-right={24}
+        shadow-camera-top={24}
+        shadow-camera-bottom={-24}
+        shadow-camera-near={1}
+        shadow-camera-far={60}
+        shadow-bias={-0.0012}
+        shadow-normalBias={0.03}
+      />
     </>
   );
 }
+
+// ── Focus for the depth-of-field pass ────────────────────────────────────────
+
+function FocusProbe({
+  rt,
+  set,
+}: {
+  rt: React.RefObject<Runtime>;
+  set: (v: number) => void;
+}) {
+  const acc = useRef(0);
+  const camera = useThree((s) => s.camera);
+  useFrame((_, dt) => {
+    acc.current += dt;
+    if (acc.current < 0.3) return;
+    acc.current = 0;
+    const r = rt.current;
+    if (!r) return;
+    // The pass wants distance normalised into the camera's near..far range.
+    const cam = camera as THREE.PerspectiveCamera;
+    const d = camera.position.distanceTo(r.pos);
+    set(Math.min(0.98, Math.max(0.02, (d - cam.near) / (cam.far - cam.near))));
+  });
+  return null;
+}
+
+// ── The canvas ───────────────────────────────────────────────────────────────
+
+export function WorldCanvas({
+  manifest,
+  rt,
+  theme,
+  onTick,
+  onOpen,
+  onDoor,
+  onStep,
+  reduced,
+}: {
+  manifest: CosmosManifest;
+  rt: React.RefObject<Runtime>;
+  theme: "light" | "dark";
+  onTick: (s: HudState) => void;
+  onOpen: (id: string) => void;
+  onDoor: (to: string, kind: "mist" | "stairs") => void;
+  onStep: () => void;
+  reduced: boolean;
+}) {
+  const idle = useIdleDetector({ timeoutMs: 90_000 });
+  const target = useRef(new THREE.Vector3(manifest.hero.x, 0.9, manifest.hero.z));
+  const [here, setHere] = useState(manifest.hero.world);
+  const [focus, setFocus] = useState(0.35);
+  const [quality, setQuality] = useState<PostQuality>("full");
+
+  const worlds = manifest.worlds;
+
+  const current = useMemo(
+    () => worlds.find((w) => w.id === here) ?? worlds[0],
+    [worlds, here],
+  );
+
+  /**
+   * The palette on screen is the biome's, blended toward the neighbour while he
+   * is in the mist between them. Crossing a border is a fade, not a cut, which
+   * is the only way "borders are mist" can be true of the materials as well as
+   * the ground.
+   */
+  const palette = useMemo(() => {
+    const p = paletteFor(current?.register);
+    return p;
+  }, [current]);
+
+  const sky: SkyLook = useMemo(
+    () => skyFor(palette, current?.phase ?? "clock", new Date().getHours(), theme),
+    [palette, current, theme],
+  );
+
+  // Which biomes are close enough to draw. Everything else is behind the mist
+  // and costs nothing, which is what makes five worlds on one plane affordable.
+  const visible = useMemo(() => {
+    const hx = manifest.hero.x;
+    const hz = manifest.hero.z;
+    void hx;
+    void hz;
+    return worlds.filter((w) => {
+      if (!current) return true;
+      const dx = w.layout.origin.x - current.layout.origin.x;
+      const dz = w.layout.origin.z - current.layout.origin.z;
+      return Math.hypot(dx, dz) < 74;
+    });
+  }, [worlds, current, manifest.hero]);
+
+  // Blockers, once, for every world that can be walked into from here.
+  const blockers = useMemo(() => worldBlockers(visible), [visible]);
+  useEffect(() => {
+    if (rt.current) rt.current.blockers = blockers;
+  }, [blockers, rt]);
+
+  useEffect(() => {
+    MIST.uMistColor.value.set(palette.mist);
+    MIST.uMistDensity.value = palette.mistDensity;
+    MIST.uLanternR.value = 6.5;
+  }, [palette]);
+
+  const handleTick = useCallback(
+    (s: HudState) => {
+      setHere((prev) => (prev === s.world ? prev : s.world));
+      onTick(s);
+    },
+    [onTick],
+  );
+
+  const press = useCallback(
+    (id: string) => {
+      const r = rt.current;
+      if (!r) return;
+      r.hovered = id;
+      // A held finger opens it; a tap that lifts inside 400 ms only walks there.
+      pressTimer.current = window.setTimeout(() => onOpen(id), 400);
+    },
+    [onOpen, rt],
+  );
+  const pressTimer = useRef<number | null>(null);
+  const release = useCallback(() => {
+    if (pressTimer.current !== null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }, []);
+  useEffect(() => () => release(), [release]);
+
+  /**
+   * The pass budget, measured rather than assumed (`optimize-threejs-games`:
+   * "measure before changing behavior"). Over one second of real frames: if the
+   * worst tenth is slower than 17 ms the depth of field steps down to a cheaper
+   * bokeh, and if it is still slow it goes off. Only ever downward, so it cannot
+   * oscillate on a single bad frame.
+   */
+  useEffect(() => {
+    if (reduced) return;
+    let raf = 0;
+    const times: number[] = [];
+    let last = performance.now();
+    let checks = 0;
+    const tick = () => {
+      const now = performance.now();
+      times.push(now - last);
+      last = now;
+      if (times.length >= 90) {
+        const sorted = [...times].sort((a, b) => a - b);
+        const p90 = sorted[Math.floor(sorted.length * 0.9)];
+        times.length = 0;
+        checks++;
+        if (p90 > 17.5) {
+          setQuality((q) => (q === "full" ? "cheap" : q === "cheap" ? "off" : q));
+        }
+        if (checks >= 4) return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [reduced]);
+
+  const dpr = useMemo<[number, number]>(() => [1, reduced ? 1 : 1.75], [reduced]);
+
+  return (
+    <Canvas
+      dpr={dpr}
+      frameloop={idle && !reduced ? "demand" : "always"}
+      shadows
+      gl={{
+        antialias: false,
+        alpha: false,
+        powerPreference: "high-performance",
+        stencil: false,
+      }}
+      camera={{ fov: 26, near: 1, far: 140, position: [22, 22, 22] }}
+      style={{ position: "absolute", inset: 0, touchAction: "none" }}
+    >
+      <color attach="background" args={[sky.top]} />
+      <Sky look={sky} banding={palette.banding} mistDensity={palette.mistDensity} />
+      <KeyLight rt={rt} p={palette} theme={theme} />
+      <IsoCamera rt={rt} target={target} />
+      <Ground worlds={worlds} target={target} />
+
+      {visible.map((w) => {
+        const p = w.id === current?.id ? palette : mixPalettes(paletteFor(w.register), palette, 0.18);
+        // Lights are budgeted by biome: the one he is standing in gets them all,
+        // a neighbour across the mist gets its two brightest, and nothing beyond
+        // that mounts a light at all.
+        const budget = w.id === current?.id ? Math.min(5, lightsFor(w).length) : 2;
+        return (
+          <World
+            key={w.id}
+            world={w}
+            p={p}
+            rt={rt}
+            onPress={press}
+            onRelease={release}
+            lightBudget={budget}
+          />
+        );
+      })}
+
+      <Hero rt={rt} p={palette} lanternColor={palette.flame} lanternRange={9} />
+
+      <Conductor
+        rt={rt}
+        worlds={worlds}
+        palette={palette}
+        onTick={handleTick}
+        onOpen={onOpen}
+        onDoor={onDoor}
+        onStep={onStep}
+        theme={theme}
+      />
+      <FocusProbe rt={rt} set={setFocus} />
+
+      {!reduced && (
+        <Postfx quality={quality} grain={palette.grain} focusDistance={focus} />
+      )}
+    </Canvas>
+  );
+}
+
+export { createRuntime };
+export type { Runtime };

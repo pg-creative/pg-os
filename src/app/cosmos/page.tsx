@@ -1,20 +1,31 @@
 /**
- * /cosmos redirects to the first world in the registry.
+ * /cosmos — the world.
  *
- * EXTENDS: `worlds.yml`, which is the only place a world's existence is declared.
- * There is no hardcoded "quiet-practice" here: reorder the registry and this
- * follows, which is what "a second world is a folder plus a manifest line" means.
+ * Round one redirected here to `/cosmos/<first world>`, because a world was a
+ * page. Round two has one persistent scene with every biome on one plane, so
+ * this IS the route and `/cosmos/<world>` is a deep link into it.
+ *
+ * The reader runs at request time, never at build time (plan 7h, D3: a
+ * build-time read freezes the layer that is supposed to evolve nightly).
  */
 
-import { redirect } from "next/navigation";
-import { readWorlds } from "../../lib/cosmos/vault";
+import { MountCosmos } from "./_data/mount";
 
 export const dynamic = "force-dynamic";
 
-export default function CosmosIndex() {
-  const worlds = readWorlds();
-  // Unbuilt worlds have no folder yet; the first buildable one wins.
-  const first = worlds.find((w) => w.status !== "unbuilt") ?? worlds[0];
-  if (!first) redirect("/");
-  redirect(`/cosmos/${first.id}`);
+export default async function CosmosPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? null;
+
+  return (
+    <MountCosmos
+      fixture={one(sp.fixture)}
+      world={null}
+      drafts={one(sp.drafts) === "1"}
+    />
+  );
 }

@@ -1,0 +1,168 @@
+/**
+ * The scene's half of the vault contract.
+ *
+ * The same shape as the `WorldManifest` block in `src/lib/cosmos/vault.ts`,
+ * declared here so no client component ever imports a module that pulls in
+ * `node:fs`. TypeScript is structural: the keeper's reader returns these, this
+ * file names them, and nothing has to cross.
+ *
+ * Ids, geometry, titles and asset URLs only. A page body still reaches the
+ * browser as server-rendered nodes, never as a string in a client chunk, because
+ * `/_next` is served without the cosmos cookie and `/cosmos` is not.
+ */
+
+export type Register = "riso" | "painted" | "watercolor" | "paperback";
+export type Phase = "day" | "twilight" | "midnight" | "clock";
+
+export type RoomPurpose =
+  | "traversal"
+  | "orientation"
+  | "recovery"
+  | "reward"
+  | "transition"
+  | "objective";
+
+export interface Light {
+  emitter: "lantern" | "torch" | "brazier" | "altar" | "fire" | "window";
+  at: { x: number; z: number };
+  range: number;
+  color: string;
+  intensity: number;
+}
+
+export interface Door {
+  to: string;
+  kind: "mist" | "stairs";
+  at: { x: number; z: number };
+}
+
+export interface Room {
+  id: string;
+  anchor: { x: number; z: number };
+  size: { w: number; d: number };
+  purpose: RoomPurpose;
+  lights: Light[];
+  objects: string[];
+  doors: Door[];
+}
+
+export interface SceneObject {
+  id: string;
+  type: string;
+  title: string;
+  room: string;
+  at: { x: number; z: number };
+  plate: { url: string; lqip: string } | null;
+  touched: string | null;
+  weight: number;
+}
+
+export interface Monument {
+  id: string;
+  date: string;
+  line: string;
+  at: { x: number; z: number };
+}
+
+export interface Thread {
+  season: string;
+  chapter: { id: string; title: string; line: string } | null;
+}
+
+export interface Layout {
+  origin: { x: number; z: number };
+  size: { w: number; d: number };
+  ground: string;
+  rooms: Room[];
+}
+
+export interface WorldManifest {
+  id: string;
+  title: string;
+  register: Register;
+  phase: Phase;
+  private: boolean;
+  layout: Layout;
+  objects: SceneObject[];
+  monuments: Monument[];
+  thread: Thread;
+  weather: Record<string, number | string | null>;
+  attention: Record<string, string>;
+  hero: { world: string; x: number; z: number } | null;
+  backdrop: { url: string; lqip: string } | null;
+  bed: string | null;
+}
+
+/** Everything the client half needs, in one object. */
+export interface CosmosManifest {
+  worlds: WorldManifest[];
+  /** Where the Wayfarer stands on this load. Never null: the hall is the floor. */
+  hero: { world: string; x: number; z: number };
+  thread: Thread;
+  /** Which world the URL asked for, if any. */
+  focus: string | null;
+  /** The fixture name when one is driving, so the HUD can say so. */
+  fixture: string | null;
+  /** Ids already unfolded, newest last. The satchel reads it. */
+  satchel: string[];
+}
+
+// ── Small shared helpers, used by both halves of the scene ───────────────────
+
+/** Days since an ISO timestamp, or null when a thing was never touched. */
+export function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return (Date.now() - t) / 86_400_000;
+}
+
+/**
+ * 0 means touched today, 1 means never. Mist is a function of this and it never
+ * deletes: at 1 the thing is still there, just behind weather.
+ */
+export function untouchedFor(iso: string | null): number {
+  const d = daysSince(iso);
+  if (d === null) return 1;
+  return Math.min(Math.max(d / 21, 0), 1);
+}
+
+/** The world whose layout rectangle contains a point, or null out in the mist. */
+export function worldAt(
+  worlds: WorldManifest[],
+  x: number,
+  z: number,
+): WorldManifest | null {
+  for (const w of worlds) {
+    const { origin, size } = w.layout;
+    if (
+      x >= origin.x - size.w / 2 &&
+      x <= origin.x + size.w / 2 &&
+      z >= origin.z - size.d / 2 &&
+      z <= origin.z + size.d / 2
+    ) {
+      return w;
+    }
+  }
+  return null;
+}
+
+/** The nearest world by centre distance. Used while crossing a border band. */
+export function nearestWorld(
+  worlds: WorldManifest[],
+  x: number,
+  z: number,
+): WorldManifest {
+  let best = worlds[0];
+  let bestD = Infinity;
+  for (const w of worlds) {
+    const dx = w.layout.origin.x - x;
+    const dz = w.layout.origin.z - z;
+    const d = dx * dx + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      best = w;
+    }
+  }
+  return best;
+}

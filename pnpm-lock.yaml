@@ -32,6 +32,9 @@ importers:
       '@react-three/fiber':
         specifier: 9.7.0
         version: 9.7.0(@types/react@19.2.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.185.0)
+      '@react-three/postprocessing':
+        specifier: 3.1.1
+        version: 3.1.1(@react-three/fiber@9.7.0(@types/react@19.2.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.185.0))(@types/three@0.185.4)(postprocessing@6.39.4(three@0.185.0))(react@19.0.0)(three@0.185.0)
       '@supabase/supabase-js':
         specifier: ^2.104.1
         version: 2.104.1
@@ -56,15 +59,9 @@ importers:
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
-      gsap:
-        specifier: 3.15.0
-        version: 3.15.0
       iron-session:
         specifier: ^8.0.4
         version: 8.0.4
-      lenis:
-        specifier: 1.3.26
-        version: 1.3.26(react@19.0.0)
       mermaid:
         specifier: ^11.15.0
         version: 11.15.0
@@ -83,6 +80,9 @@ importers:
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
+      postprocessing:
+        specifier: 6.39.4
+        version: 6.39.4(three@0.185.0)
       react:
         specifier: 19.0.0
         version: 19.0.0
@@ -1664,6 +1664,14 @@ packages:
         optional: true
       react-native:
         optional: true
+
+  '@react-three/postprocessing@3.1.1':
+    resolution: {integrity: sha512-WG0dhAt/JDGU3eimwq21wuajvXS7SYN5u1kBau/ElTkllFB3CSpwILJNpNctZGxo4Dz157shB66CQb9ZSU/zMQ==}
+    peerDependencies:
+      '@react-three/fiber': '>=9.7.0'
+      postprocessing: ^6.36.0
+      react: ^19.0.0
+      three: '>= 0.156.0'
 
   '@sheerun/mutationobserver-shim@0.3.3':
     resolution: {integrity: sha512-DetpxZw1fzPD5xUBrIAoplLChO2VB8DlL5Gg+I1IR9b2wPqYIca2WSUxL5g1vLeR4MsQq1NeWriXAVffV+U1Fw==}
@@ -4460,9 +4468,6 @@ packages:
   growly@1.3.0:
     resolution: {integrity: sha512-+xGQY0YyAWCnqy7Cd++hc2JqMYzlm0dG30Jd0beaA64sROr8C4nt8Yc9V5Ro3avlSUDTN0ulqP/VBKi1/lLygw==}
 
-  gsap@3.15.0:
-    resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
-
   gzip-size@5.1.1:
     resolution: {integrity: sha512-FNHi6mmoHvs1mxZAds4PpdCS6QG8B4C1krxJsMutgxl5t3+GlRTzzI3NEkifXx2pVsOvJdOGSmIgDhQ55FwdPA==}
     engines: {node: '>=6'}
@@ -5373,20 +5378,6 @@ packages:
     resolution: {integrity: sha512-XI5MPzVNApjAyhQzphX8BkmKsKUxD4LdyK24iZeQGinBN9yTQT3bFlCBy/aVx2HrNcqQGsdot8ghrjyrvMCoEA==}
     deprecated: use String.prototype.padStart()
 
-  lenis@1.3.26:
-    resolution: {integrity: sha512-s/xTCZCxTFvHbAN1OzuhNaN5YPJH2ail0XAkctKW1b+RUAG4nUL5UHLXwNko1h8aEeT2jspBXegMgPJd8zcuag==}
-    peerDependencies:
-      '@nuxt/kit': '>=3.0.0'
-      react: '>=17.0.0'
-      vue: '>=3.0.0'
-    peerDependenciesMeta:
-      '@nuxt/kit':
-        optional: true
-      react:
-        optional: true
-      vue:
-        optional: true
-
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
@@ -5788,6 +5779,12 @@ packages:
 
   mute-stream@0.0.8:
     resolution: {integrity: sha512-nnbWWOkoWyUsTjKrhgD0dcz22mdkSnpYqbEjIm2nhwhuxlSkpywJmBo8h0ZqJdkp73mb90SssHkN4rsRaBAfAA==}
+
+  n8ao@2.0.1:
+    resolution: {integrity: sha512-MoP1QKUdj4/3cKEnhFl917t0eQwWGER1l43ckz5mNOPyYWGRDGQbVoTOQz/VBvy01in6QVNG+AL6Xxx5AjZBYA==}
+    peerDependencies:
+      postprocessing: '>=6.30.0'
+      three: '>=0.137'
 
   nan@2.27.0:
     resolution: {integrity: sha512-hC+0LidcL3XE4rp1C4H54KujgXKzbfyTngZTwBByQxsOxCEKZT0MPQ4hOKUH2jU1OYstqdDH4onyHPDzcV0XdQ==}
@@ -6611,6 +6608,11 @@ packages:
   postcss@8.5.10:
     resolution: {integrity: sha512-pMMHxBOZKFU6HgAZ4eyGnwXF/EvPGGqUr0MnZ5+99485wwW41kW91A4LOGxSHhgugZmSChL5AlElNdwlNgcnLQ==}
     engines: {node: ^10 || ^12 || >=14}
+
+  postprocessing@6.39.4:
+    resolution: {integrity: sha512-oAS/PjAbc/xT3OzjUrGsorJ4J064XwhVD2t0OwKLP/E8QwDMUJ0oOv6ZI1SYMtLchv4g0ySEx+JcLy92+48vlA==}
+    peerDependencies:
+      three: '>= 0.168.0 < 0.186.0'
 
   potpack@1.0.2:
     resolution: {integrity: sha512-choctRBIV9EMT9WGAZHn3V7t0Z2pMQyl0EZE6pFc/6ml3ssw7Dlf/oAOvFwjm1HVsqfQN8GfeFyJ+d8tRzqueQ==}
@@ -10395,6 +10397,17 @@ snapshots:
       - '@types/react'
       - immer
 
+  '@react-three/postprocessing@3.1.1(@react-three/fiber@9.7.0(@types/react@19.2.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.185.0))(@types/three@0.185.4)(postprocessing@6.39.4(three@0.185.0))(react@19.0.0)(three@0.185.0)':
+    dependencies:
+      '@react-three/fiber': 9.7.0(@types/react@19.2.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.185.0)
+      maath: 0.10.8(@types/three@0.185.4)(three@0.185.0)
+      n8ao: 2.0.1(postprocessing@6.39.4(three@0.185.0))(three@0.185.0)
+      postprocessing: 6.39.4(three@0.185.0)
+      react: 19.0.0
+      three: 0.185.0
+    transitivePeerDependencies:
+      - '@types/three'
+
   '@sheerun/mutationobserver-shim@0.3.3': {}
 
   '@standard-schema/spec@1.1.0': {}
@@ -13895,8 +13908,6 @@ snapshots:
 
   growly@1.3.0: {}
 
-  gsap@3.15.0: {}
-
   gzip-size@5.1.1:
     dependencies:
       duplexer: 0.1.2
@@ -15061,10 +15072,6 @@ snapshots:
 
   left-pad@1.3.0: {}
 
-  lenis@1.3.26(react@19.0.0):
-    optionalDependencies:
-      react: 19.0.0
-
   leven@3.1.0: {}
 
   levenary@1.1.1:
@@ -15476,6 +15483,11 @@ snapshots:
       thunky: 1.1.0
 
   mute-stream@0.0.8: {}
+
+  n8ao@2.0.1(postprocessing@6.39.4(three@0.185.0))(three@0.185.0):
+    dependencies:
+      postprocessing: 6.39.4(three@0.185.0)
+      three: 0.185.0
 
   nan@2.27.0:
     optional: true
@@ -16481,6 +16493,10 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postprocessing@6.39.4(three@0.185.0):
+    dependencies:
+      three: 0.185.0
 
   potpack@1.0.2: {}
 

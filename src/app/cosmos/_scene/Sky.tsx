@@ -1,24 +1,30 @@
 "use client";
 
 /**
- * Sky — one fullscreen quad behind everything.
+ * The sky, by the hour, over a biome that keeps its own register.
  *
- * EXTENDS: `_components/emaki/theme.ts` PHASES. It imports the same three phases
- * and the same hexes; it does not add a fourth. Round one PINS the phase from
- * world.yml rather than calling phaseForHour, because a twilight world is twilight
- * at lunch (plan 7h, D9). phaseForHour is imported and used only as the fallback
- * when a world declares no phase, so the by-the-hour path stays live for round two.
+ * Round one pinned every world to twilight (the Critic's D9 amendment, adopted
+ * for that round only). Round two lifts it: a world whose manifest says
+ * `phase: clock` follows `phaseForHour` from the OS's own theme, so the cosmos
+ * and the dashboard are never in different weather at the same minute. A world
+ * that pins its phase keeps it: the hall is a twilight room at lunchtime because
+ * the lantern is lit inside it, and the depths are midnight forever.
  *
- * A drei ScreenQuad renders nothing here, which is the single most common failure
- * in this stack: the shader compiles, the canvas is full size, the frame is empty.
- * A plane of [2,2] with a vertex shader writing clip coords directly is the fix.
+ * The register owns the hue family and the hour owns the value. That separation
+ * is what makes five biomes under one sky read as one world rather than five
+ * screenshots: riso stays cream at every hour, it just gets a lower sun.
+ *
+ * A drei ScreenQuad renders nothing here, which is the most common way this
+ * exact shader ships broken: a plane of [2,2] with a vertex shader writing clip
+ * coordinates directly is the fix, and it is round one's, kept.
  */
 
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { PHASES, phaseForHour, type Phase } from "../../_components/emaki/theme";
-import type { ScenePreset } from "../../../lib/cosmos/vault";
+import { PHASES, phaseForHour } from "../../_components/emaki/theme";
+import type { Phase as WorldPhase } from "./contract";
+import type { Palette } from "./palette";
 import { NOISE, SCREEN_VERT } from "./glsl";
 
 const FRAG = /* glsl */ `
@@ -31,70 +37,137 @@ const FRAG = /* glsl */ `
   uniform vec3  uHorizon;
   uniform vec3  uGlow;
   uniform float uGlowY;
+  uniform float uGlowX;
   uniform float uBanding;
   uniform float uMistDensity;
+  uniform float uMoon;
 
   ${NOISE}
 
   void main() {
     float y = vUv.y;
 
-    // Three-stop vertical ramp. Painted twilight wants the plum at the top and
-    // the sakura band low; riso posterizes it flat via uBanding.
-    vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.62, y));
-    col = mix(col, uTop, smoothstep(0.5, 1.0, y));
+    vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.58, y));
+    col = mix(col, uTop, smoothstep(0.46, 1.0, y));
 
-    // One low sun, sitting where the register says. Never a lens flare.
-    float d = distance(vec2(vUv.x, y), vec2(0.62, uGlowY));
-    col += uGlow * pow(max(0.0, 1.0 - d * 1.55), 3.2) * 0.55;
+    // One low sun where the register puts it. Never a lens flare.
+    float d = distance(vec2(vUv.x, y), vec2(uGlowX, uGlowY));
+    col += uGlow * pow(max(0.0, 1.0 - d * 1.5), 3.2) * 0.6;
 
-    // Slow cloud banding, the only motion in the sky. Weather thickens it.
-    vec2 q = vec2(vUv.x * 2.6 + uTime * 0.006, y * 5.2);
-    float clouds = fbm4(q) - 0.5;
-    col += clouds * 0.075 * (0.55 + uMistDensity);
+    // The depths get one red moon and nothing else in the sky.
+    if (uMoon > 0.5) {
+      float md = distance(vec2(vUv.x, y) * vec2(1.0, 1.0), vec2(0.70, 0.80));
+      col = mix(col, uGlow, smoothstep(0.062, 0.052, md));
+      col += uGlow * pow(max(0.0, 1.0 - md * 5.0), 3.0) * 0.35;
+    }
+
+    // Slow cloud banding, the only motion up there. Weather thickens it.
+    vec2 q = vec2(vUv.x * 2.6 + uTime * 0.005, y * 5.0);
+    col += (fbm4(q) - 0.5) * 0.07 * (0.55 + uMistDensity);
 
     // Riso: quantize to ink steps and kill the gradient entirely.
-    if (uBanding > 0.5) {
-      col = floor(col * 5.0 + 0.5) / 5.0;
-    }
+    if (uBanding > 0.5) col = floor(col * 5.0 + 0.5) / 5.0;
 
     gl_FragColor = vec4(col, 1.0);
   }
 `;
 
-function hex(c: string): THREE.Color {
-  return new THREE.Color(c);
+export interface SkyLook {
+  top: string;
+  mid: string;
+  horizon: string;
+  glow: string;
+  glowY: number;
+  glowX: number;
+  moon: boolean;
+}
+
+/**
+ * The register's hues, moved by the hour. `theme` is PG's light/dark toggle: in
+ * light mode the sky never goes below a twilight value, so the world is legible
+ * on cream paper at three in the morning; in dark mode the hour runs to its full
+ * depth. It shifts the value, never the hue: the biome stays itself.
+ */
+export function skyFor(
+  p: Palette,
+  phase: WorldPhase,
+  hour: number,
+  theme: "light" | "dark",
+): SkyLook {
+  const resolved = phase === "clock" ? phaseForHour(hour) : phase;
+  const base: SkyLook = {
+    top: p.skyTop,
+    mid: p.skyMid,
+    horizon: p.skyHorizon,
+    glow: p.skyGlow,
+    glowY: 0.28,
+    glowX: 0.62,
+    moon: false,
+  };
+
+  if (resolved === "midnight" || resolved === "night") {
+    return {
+      ...base,
+      top: shade(p.skyTop, theme === "light" ? -0.05 : -0.3),
+      mid: shade(p.skyMid, theme === "light" ? -0.05 : -0.34),
+      horizon: shade(p.skyHorizon, theme === "light" ? -0.16 : -0.42),
+      glow: PHASES.night.foxfire,
+      glowY: 0.66,
+      moon: p.banding < 0.5 && p.mistDensity > 0.6,
+    };
+  }
+  if (resolved === "day") {
+    return {
+      ...base,
+      top: shade(p.skyTop, p.banding > 0.5 ? 0 : 0.5),
+      mid: shade(p.skyMid, p.banding > 0.5 ? 0 : 0.44),
+      horizon: shade(p.skyHorizon, p.banding > 0.5 ? 0.04 : 0.3),
+      glow: p.skyGlow,
+      glowY: 0.2,
+    };
+  }
+  // Twilight is the authored value: every register was painted at dusk first.
+  return base;
+}
+
+/** Lighten or darken a hex toward white or black. */
+function shade(hex: string, t: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const to = t >= 0 ? 255 : 0;
+  const k = Math.abs(t);
+  const r = Math.round(((n >> 16) & 255) + (to - ((n >> 16) & 255)) * k);
+  const g = Math.round(((n >> 8) & 255) + (to - ((n >> 8) & 255)) * k);
+  const b = Math.round((n & 255) + (to - (n & 255)) * k);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
 export function Sky({
-  preset,
-  phase,
+  look,
+  banding,
   mistDensity,
 }: {
-  preset: ScenePreset;
-  /** Pinned by the world. Null falls back to the hour, the round-two path. */
-  phase: Phase | null;
+  look: SkyLook;
+  banding: number;
   mistDensity: number;
 }) {
   const mat = useRef<THREE.ShaderMaterial>(null);
 
-  const resolved: Phase = phase ?? phaseForHour(new Date().getHours());
-  const tk = PHASES[resolved];
-
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
-      uTop: { value: hex(preset.sky.top) },
-      uMid: { value: hex(preset.sky.mid) },
-      uHorizon: { value: hex(preset.sky.horizon) },
-      // The glow reads the live phase token, so the sky and the OS chrome
-      // cannot drift apart: one hex, two surfaces.
-      uGlow: { value: hex(tk.goldBright) },
-      uGlowY: { value: preset.sky.glowY },
-      uBanding: { value: preset.sky.banding },
+      uTop: { value: new THREE.Color(look.top) },
+      uMid: { value: new THREE.Color(look.mid) },
+      uHorizon: { value: new THREE.Color(look.horizon) },
+      uGlow: { value: new THREE.Color(look.glow) },
+      uGlowY: { value: look.glowY },
+      uGlowX: { value: look.glowX },
+      uBanding: { value: banding },
       uMistDensity: { value: mistDensity },
+      uMoon: { value: look.moon ? 1 : 0 },
     }),
-    [preset, tk, mistDensity],
+    // Rebuilt on every look change: five uniform objects is cheaper than a
+    // per-frame branch, and the look only changes when the biome does.
+    [look, banding, mistDensity],
   );
 
   useFrame((_, dt) => {
