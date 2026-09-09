@@ -5,14 +5,19 @@
  * same scene. A deep link does not open a different page: it puts the Wayfarer
  * down in that biome and lets him walk out of it.
  *
- * The reader throws on a plateless page by contract. `readBodies` catches it per
- * world (the Critic's deduction 7: one bad page took every world down), and the
- * check that must fail loudly is the vault's own, in the pre-commit hook.
+ * `readBodies` reads through the LENIENT reader, so a page whose plate went
+ * missing mists alone and its neighbours keep their words (the Critic's round-two
+ * deduction 2). The check that must fail loudly is the vault's own, in the
+ * pre-commit hook.
+ *
+ * DRAFTS ARE ON here by default. `drafts` arrives as the raw `?drafts=` value:
+ * absent means on, `0` is the canon view. It also accepts a boolean, so a caller
+ * that parsed the parameter itself still works.
  */
 
 import type { ReactNode } from "react";
 import { CosmosStage } from "../_scene/CosmosStage";
-import { readBodies, readCosmos, seasonLabel } from "./read";
+import { draftsWanted, readBodies, readCosmos, seasonLabel } from "./read";
 
 /**
  * The vault body is markdown, and remark and rehype are deliberately not
@@ -64,10 +69,12 @@ export function MountCosmos({
 }: {
   fixture: string | null;
   world: string | null;
-  drafts: boolean;
+  /** The raw `?drafts=` value. Absent means drafts on; `0` is the canon view. */
+  drafts: string | boolean | null;
 }) {
-  const manifest = readCosmos({ fixture, world, drafts });
-  const text = readBodies(drafts);
+  const wantDrafts = draftsWanted(drafts);
+  const manifest = readCosmos({ fixture, world, drafts: wantDrafts });
+  const text = readBodies(wantDrafts);
 
   const bodies: Record<string, ReactNode> = {};
   const sources: Record<string, string> = {};

@@ -120,12 +120,15 @@ function scheduleCommit(root: string): void {
  * The pathspec on the commit means a half-staged index belonging to somebody else
  * in this checkout is never swept into a state commit. Never pushes.
  */
-export async function commitState(root = cosmosRoot()): Promise<boolean> {
+export async function commitState(
+  root = cosmosRoot(),
+  message = COMMIT_MESSAGE,
+): Promise<boolean> {
   try {
     await exec("git", ["-C", root, "add", "state"], { timeout: 15_000 });
     await exec(
       "git",
-      ["-C", root, "commit", "-q", "-m", COMMIT_MESSAGE, "--", "state"],
+      ["-C", root, "commit", "-q", "-m", message, "--", "state"],
       { timeout: 15_000 },
     );
     return true;
@@ -134,6 +137,34 @@ export async function commitState(root = cosmosRoot()): Promise<boolean> {
     // The file is written either way and the next touch tries again.
     return false;
   }
+}
+
+/**
+ * `state/weather.json`, written by the witness and by nobody else.
+ *
+ * The Critic's deduction 4: "weather is written by nobody and read by nobody",
+ * and every field in the file was null. The witness route computes the five
+ * fields COSMOLOGY.md names (`recovery`, `pages_days_ago`, `days_since_ship`,
+ * `sky`, `season_day`) and this lands them, on the current branch, with the same
+ * posture as attention: written immediately, committed once, never pushed.
+ *
+ * The whole file is REPLACED rather than merged. Attention is a memory and never
+ * deletes; weather is today, and yesterday's recovery is not a thing to keep.
+ */
+export async function writeWeather(
+  weather: Record<string, number | string | null>,
+  root = cosmosRoot(),
+): Promise<void> {
+  const dir = path.join(root, "state");
+  await fs.promises.mkdir(dir, { recursive: true });
+  const sorted = Object.fromEntries(
+    Object.entries(weather).sort(([a], [b]) => a.localeCompare(b)),
+  );
+  await fs.promises.writeFile(
+    path.join(dir, "weather.json"),
+    JSON.stringify(sorted, null, 2) + "\n",
+  );
+  await commitState(root, "state: weather");
 }
 
 /** A dwell. Lands on disk now, because a decision should survive a closed tab. */

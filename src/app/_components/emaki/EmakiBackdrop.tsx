@@ -8,19 +8,14 @@
  * panel gaps and margins, so data-dense tabs stay legible (heavier scrim) while
  * calm tabs feel more immersive (lighter scrim). Phase follows the live palette.
  *
- * WORLD MODE (cosmos, 2026-09-09). This one component owns the fixed inset-0 z0
- * slot on EVERY route, per plan 7h D7: "One component owns the slot on every
- * route: EmakiBackdrop gains a `world` mode keyed by the same registry."
- * PaintedBackdrop, the quadruple-stacked sky that backdrop-lab diagnosed as "a
- * double-image smear, not parallax", is deleted in the same commit rather than
- * left alongside as a fourth system.
- *
- * In world mode the slot paints in three steps so the first frame is never
- * empty and never a flash of the wrong palette:
- *   1. the phase gradient as a plain CSS background, before any network work
- *   2. the inline 32 px LQIP, which travels in the HTML and costs no round trip
- *   3. hero.webp, then the WebGL canvas fading in over 600 ms
- * The canvas arrives as `children`, so the scene never mounts its own slot.
+ * WORLD MODE: DELETED, round 2.1. Round two added a `world` prop and a
+ * `WorldSlot` that painted a sky, a blur-up and a plate behind the cosmos canvas.
+ * The Critic's amendment audit, D7: "the `world` mode is mounted by nothing, and
+ * `/cosmos` paints its own slot, so the one-component rule is untrue of the one
+ * route it was written for." Superseded code gets deleted rather than parked, so
+ * it is gone, and with it `WorldBackdrop` and the world-level LQIP in
+ * `lib/cosmos/vault.ts` that existed to feed it. The cosmos route owns its own
+ * fixed slot in `cosmos.css`; this component owns every OTHER route's.
  *
  * PHASE MODE (dev labs, 2026-09-09). Round one shipped `dev/_shared/LabSky.tsx`
  * for the seven bake-off variants, and the Critic's never-restart check failed it
@@ -30,7 +25,6 @@
  * which is the whole reason a lab exists.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
 import { useMode } from "../ModeProvider";
 import { useActiveTab } from "../useActiveTab";
 import { PHASES, type Phase } from "./theme";
@@ -42,31 +36,12 @@ function phaseForMode(mode: string): Phase {
   return "night"; // laputa-midnight, howls, mononoke
 }
 
-export interface WorldBackdrop {
-  /** Pinned per world for round one, not computed from the hour. */
-  phase: Phase;
-  /** Extensionless asset URL for the 2048 px still. */
-  hero: string;
-  /** Inline data URI, 32 px wide. Present in the HTML, so it paints instantly. */
-  lqip: string | null;
-  /** Sky hexes from the world's register preset, used before the plate loads. */
-  sky: { top: string; mid: string; horizon: string };
-}
-
-/** The 600 ms the OS already uses for a backdrop change. */
-const FADE_MS = 600;
-
 export function EmakiBackdrop({
-  world,
   phase,
-  children,
 }: {
-  world?: WorldBackdrop;
   /** Dev labs: pin the slot to one phase instead of following the live palette. */
   phase?: Phase;
-  children?: ReactNode;
 }) {
-  if (world) return <WorldSlot world={world}>{children}</WorldSlot>;
   if (phase) return <PhaseSlot phase={phase} />;
   return <TabSlot />;
 }
@@ -88,87 +63,6 @@ function PhaseSlot({ phase }: { phase: Phase }) {
       <div className="el-overlay" style={{ background: tk.overlayGradient }} />
       <div className="el-ambient" style={{ background: tk.ambientWash }} />
     </>
-  );
-}
-
-function WorldSlot({
-  world,
-  children,
-}: {
-  world: WorldBackdrop;
-  children?: ReactNode;
-}) {
-  const [heroReady, setHeroReady] = useState(false);
-  const tk = PHASES[world.phase];
-
-  useEffect(() => {
-    const img = new Image();
-    img.onload = () => setHeroReady(true);
-    // A missing plate must not leave the slot stuck on the LQIP forever.
-    img.onerror = () => setHeroReady(true);
-    img.src = world.hero;
-    return () => {
-      img.onload = null;
-      img.onerror = null;
-    };
-  }, [world.hero]);
-
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 0,
-        pointerEvents: "none",
-        // Step 1. Paints on the first frame, before any image request.
-        background: `linear-gradient(180deg, ${world.sky.top} 0%, ${world.sky.mid} 52%, ${world.sky.horizon} 100%)`,
-      }}
-    >
-      {/* Step 2. Inline LQIP, blurred up. */}
-      {world.lqip && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage: `url("${world.lqip}")`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "blur(28px)",
-            transform: "scale(1.08)",
-            opacity: heroReady ? 0 : 1,
-            transition: `opacity ${FADE_MS}ms ease`,
-          }}
-        />
-      )}
-      {/* Step 3. The still plate. The canvas fades in over it. */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundImage: `url("${world.hero}")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          opacity: heroReady ? 1 : 0,
-          transition: `opacity ${FADE_MS}ms ease`,
-        }}
-      />
-      {/* The scene. pointerEvents come back on so dwell can reach the objects. */}
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
-        {children}
-      </div>
-      {/* Phase-tinted floor wash, the same overlay the tabs use, at half weight:
-          the world is the subject here, not a surface behind panels. */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          background: tk.ambientWash,
-          opacity: 0.5,
-        }}
-      />
-    </div>
   );
 }
 

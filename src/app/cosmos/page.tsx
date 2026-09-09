@@ -25,7 +25,7 @@ export default async function CosmosPage({
     <MountCosmos
       fixture={one(sp.fixture)}
       world={null}
-      drafts={one(sp.drafts) === "1"}
+      drafts={one(sp.drafts)}
     />
   );
 }

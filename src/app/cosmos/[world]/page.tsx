@@ -32,6 +32,6 @@ export default async function WorldDeepLink({
   if (!manifest.worlds.some((w) => w.id === world)) notFound();
 
   return (
-    <MountCosmos fixture={fixture} world={world} drafts={one(sp.drafts) === "1"} />
+    <MountCosmos fixture={fixture} world={world} drafts={one(sp.drafts)} />
   );
 }

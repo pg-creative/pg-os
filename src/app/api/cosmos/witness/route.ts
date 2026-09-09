@@ -1,15 +1,20 @@
 /**
- * POST /api/cosmos/witness — plumbing only. It writes nothing this round.
+ * POST /api/cosmos/witness — the weather, written.
  *
  * EXTENDS: `src/app/api/kitsu/sweep/route.ts`'s shape (a POST that a launchd job
  * curls, silently no-ops when nothing is running) and `src/lib/projectState.ts`'s
  * git reading. The witness itself is Kitsu's 03:10 job (plan 8c), so this route is
  * the seam, not a second agent.
  *
- * Round one scope, deliberately small: recompute what `state/weather.json` WOULD
- * say from the vault, the LEDGER and `git log`, and return it. Nothing is written,
- * no agent runs, no plate is generated, and `scripts/com.pgos.witness.plist` is
- * drafted but not installed.
+ * ROUND 2.1: it writes. The Critic's deduction 4 was that "`weather` reaches the
+ * manifest and is read by nothing; `state/weather.json` is all null", and a dry
+ * run that has never once written the file is a seam nobody has tested. This POST
+ * now computes the five fields COSMOLOGY.md names and lands them in
+ * `state/weather.json`, committed on the current branch and never pushed, exactly
+ * like attention. `?dry=1` keeps the old behaviour for a look without a write.
+ *
+ * It still runs no agent, generates no plate, and
+ * `scripts/com.pgos.witness.plist` is drafted and not installed.
  *
  * The rules it will inherit when it does write, from 7g-1 and 7h:
  *   may write:  myth/drafts/*.md with status: draft, state/*.json, straight to main
@@ -24,13 +29,16 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   cosmosRoot,
   readMonuments,
   readWorlds,
   seasonOf,
 } from "../../../../lib/cosmos/vault";
+import { writeWeather } from "../../../../lib/cosmos/state";
+import { getTokens, isExpired, refreshAndStore } from "@/lib/tokenStore";
+import { fetchWhoopVitals, refreshWhoopToken } from "@/lib/whoop";
 
 const exec = promisify(execFile);
 
@@ -88,7 +96,32 @@ function seasonDay(now: Date): number {
   return seasonOf(now).day;
 }
 
-export async function POST() {
+/**
+ * Whoop recovery, through the token store the OS already owns.
+ *
+ * witness/PROMPT.md, verbatim: "A dead token means `recovery: null` and the sky
+ * does not shift. No error surface." No token, an expired refresh, a 500 from
+ * Whoop: all of them are null and none of them is an error. The body is the only
+ * signal the cosmos takes from outside PG's own files, and it is allowed to be
+ * missing.
+ */
+async function whoopRecovery(): Promise<number | null> {
+  try {
+    const current = await getTokens("whoop");
+    if (!current?.refreshToken) return null;
+    const tokens = isExpired(current)
+      ? await refreshAndStore("whoop", refreshWhoopToken)
+      : current;
+    if (!tokens.accessToken) return null;
+    const vitals = await fetchWhoopVitals(tokens.accessToken);
+    return typeof vitals.recovery === "number" ? vitals.recovery : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const dry = req.nextUrl.searchParams.get("dry") === "1";
   const root = cosmosRoot();
   const workspace = path.resolve(root, "..");
   const now = new Date();
@@ -103,11 +136,7 @@ export async function POST() {
   const since = new Date(now.getTime() - 7 * 86_400_000).toISOString().slice(0, 10);
   const commits = await commitsSince(workspace, since);
 
-  /**
-   * Whoop is the only body signal and it is allowed to be missing: a dead token
-   * means recovery null and the sky does not shift. No error surface.
-   */
-  const recovery: number | null = null;
+  const recovery = await whoopRecovery();
 
   // Sky is a name the scene maps to mist density, never a score.
   const sky =
@@ -125,14 +154,13 @@ export async function POST() {
     season_day: seasonDay(now),
   };
 
+  if (!dry) await writeWeather(weather);
+
   return NextResponse.json({
     ok: true,
-    dryRun: true,
-    note: "Round one: this route computes and returns weather. It writes nothing.",
-    wouldWrite: {
-      file: path.join(root, "state", "weather.json"),
-      contents: weather,
-    },
+    dryRun: dry,
+    wrote: dry ? null : path.join(root, "state", "weather.json"),
+    weather,
     read: {
       worlds: readWorlds(root).length,
       monuments: monuments.length,

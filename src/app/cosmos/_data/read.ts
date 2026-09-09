@@ -1,38 +1,79 @@
 /**
- * The seam between the two halves of round two.
+ * The seam between the two halves of the cosmos: the vault reader and the scene.
  *
- * The keeper's reader emits `WorldManifest[]` from one optional export on
- * `src/lib/cosmos/vault.ts`. This module looks that export up at RUNTIME rather
- * than importing it, for one reason: the two halves are being built at the same
- * time in the same tree, and a scene that fails to compile because a reader has
- * not landed yet is a scene nobody can look at. Until it lands, the fixtures
- * drive, and the route is playable on day one.
+ * The manifest that crosses is ids, titles, geometry and asset URLs. PROSE NEVER
+ * CROSSES. Bodies are read here, on the server, and rendered into React nodes by
+ * `mount.tsx`, because `/_next` is served without the cosmos cookie and `/cosmos`
+ * is not.
  *
- * `?fixture=<name>` forces a fixture even once the reader exists. That is not a
- * development leftover: it is the Critic's harness, five deterministic states
- * that can be screenshotted and compared (`test-playable-web-games`).
+ * Three things changed in round 2.1, all of them the Critic's:
  *
- * PROSE NEVER CROSSES. Bodies are read here, on the server, and rendered into
- * React nodes by the route. Only ids, titles, geometry and asset URLs go into
- * the manifest that reaches a client chunk, because `/_next` is served without
- * the cosmos cookie and `/cosmos` is not.
+ *   1. DRAFTS ARE ON behind the gate (deduction 1). Every one of the fourteen
+ *      pages is `status: draft` and the D3 rule was written to keep the witness's
+ *      drafts away from canon readers; it ended up hiding PG's own pages from
+ *      their only reader, so `/cosmos` was an empty green field. Behind the gate
+ *      the default is now drafts-on with a `draft` flag on each object, and
+ *      `?drafts=0` is the canon view.
+ *   2. ONE BAD PAGE MISTS ALONE (deduction 2). `readBodies` called the strict
+ *      reader, which throws on the first plateless page in ANY directory, so one
+ *      missing `plate:` line caught every body in the cosmos away. It calls
+ *      `readPagesForScene` now, the lenient per-page reader, which is the same
+ *      reader the manifest uses.
+ *   3. NO SILENT FALLBACK TO INVENTED CANON (deduction 13). A missing reader
+ *      export used to fall back to the fixtures, whose names, seasons and
+ *      LEDGER-shaped lines are invented and live in a PUBLIC repo. It throws now,
+ *      loudly, with the export it wanted named in the log, and `?fixture=` only
+ *      answers where `fixturesEnabled()` says so.
+ *
+ * On the fixtures, said plainly rather than claimed: the module still SHIPS in
+ * the server bundle, because it lives under `_scene/` and moving that file is the
+ * scene's to make. What this file guarantees is that no production request can
+ * reach it: `?fixture=` is ignored unless `NODE_ENV !== "production"` or
+ * `COSMOS_FIXTURES=1` (the harness sets the latter under `next start`), and the
+ * reader never falls back to it. Nothing invented can reach a screen by accident.
  */
 
 import * as vault from "../../../lib/cosmos/vault";
 import type { CosmosManifest, WorldManifest } from "../_scene/contract";
-import { fixture, isFixtureName, FIXTURE_WORLDS } from "../_scene/fixtures";
+import { fixture, isFixtureName } from "../_scene/fixtures";
 
-/** The shape the keeper's reader will have. Looked up, never imported. */
+/** The keeper's reader. Looked up by name at request time, never imported. */
 type Reader = (
   opts?: { drafts?: boolean },
   root?: string,
 ) => WorldManifest[];
 
-function reader(): Reader | null {
+function reader(): Reader {
   const mod = vault as unknown as Record<string, unknown>;
   const fn = mod.readCosmosManifest;
-  return typeof fn === "function" ? (fn as Reader) : null;
+  if (typeof fn !== "function") {
+    // LOUD. A renamed export must never quietly serve the harness's invented
+    // words as PG's cosmos. The message names the module and the export so the
+    // fix is one line and not an afternoon.
+    const message =
+      "[cosmos] src/lib/cosmos/vault.ts exports no readCosmosManifest(). " +
+      "The vault reader is the only source for this route; there is no fallback.";
+    console.error(message);
+    throw new Error(message);
+  }
+  return fn as Reader;
 }
+
+/**
+ * Are the harness's deterministic states reachable?
+ *
+ * `?fixture=<name>` drives five review states the Critic screenshots. They are
+ * real test infrastructure and they are also invented canon in a public repo, so
+ * they answer in development and under `COSMOS_FIXTURES=1`, and nowhere else. The
+ * harness sets that variable; a production `next start` on the mini does not, and
+ * there the parameter is simply ignored.
+ */
+export function fixturesEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.COSMOS_FIXTURES === "1";
+}
+
+/** The one draft rule, from the reader. Re-exported so the route needs one import. */
+export const draftsWanted = vault.draftsWanted;
 
 export interface PageText {
   body: string;
@@ -41,33 +82,30 @@ export interface PageText {
 }
 
 /**
- * Every page's words, keyed by id. Read with the existing reader, which throws
- * on a plateless page by contract. The THROW IS CAUGHT HERE and only here: the
- * Critic's deduction 7 was that one bad page took every world down with a 500.
- * The rule still holds where it belongs, in the vault check and the pre-commit
- * hook; a renderer's job when a page is malformed is to leave that page in the
- * mist, not to close the world.
+ * Every page's words, keyed by id, through the LENIENT reader.
+ *
+ * A page whose plate went missing comes back with no plate and mists in the
+ * scene; its neighbours keep their words. The refusal still exists where it
+ * belongs: `parsePage` throws, `scripts/cosmos-vault-check.ts` exits 1, and the
+ * pre-commit hook runs that check.
  */
 export function readBodies(drafts: boolean): Record<string, PageText> {
   const out: Record<string, PageText> = {};
   try {
-    const worlds = vault.readWorlds();
-    for (const w of worlds) {
+    for (const w of vault.readWorlds()) {
       if (w.status === "unbuilt") continue;
-      try {
-        for (const p of vault.readPages(w.id, { drafts })) {
-          const extra = p as unknown as { source?: unknown };
-          out[p.id] = {
-            body: p.body,
-            source: typeof extra.source === "string" ? extra.source : null,
-          };
-        }
-      } catch {
-        // One world's pages are unreadable. The others still stand.
+      for (const p of vault.readPagesForScene(w.id, { drafts })) {
+        const extra = p as unknown as { source?: unknown };
+        out[p.id] = {
+          body: p.body,
+          source: typeof extra.source === "string" ? extra.source : null,
+        };
       }
     }
-  } catch {
-    // No vault on this machine at all. The fixtures are the world today.
+  } catch (err) {
+    // The REGISTRY is unreadable (no worlds.yml, bad YAML). That is not one bad
+    // page, it is no vault at all, and it is loud in the log.
+    console.error("[cosmos] readBodies:", (err as Error).message);
   }
   return out;
 }
@@ -83,15 +121,12 @@ export function readCosmos(opts: {
   drafts?: boolean;
 }): CosmosManifest {
   const wanted = opts.fixture ?? null;
-  if (isFixtureName(wanted)) {
+  if (wanted && fixturesEnabled() && isFixtureName(wanted)) {
     const f = fixture(wanted);
     return opts.world ? { ...f, focus: opts.world } : f;
   }
 
-  const read = reader();
-  const worlds: WorldManifest[] = read
-    ? read({ drafts: opts.drafts })
-    : FIXTURE_WORLDS;
+  const worlds = reader()({ drafts: opts.drafts });
 
   const home =
     worlds.find((w) => w.hero) ??

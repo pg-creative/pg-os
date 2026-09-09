@@ -20,6 +20,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
+import { REGISTERS, type Register } from "./registers.ts";
+
+/**
+ * One register map, and it is `registers.ts`. Round two carried two: `SCENE_PRESETS`
+ * here (checked by the script, rendered by nothing) and `PALETTES` in the scene,
+ * and they disagreed about the same colour. `SCENE_PRESETS` is deleted; the scene
+ * derives its palette from `REGISTERS` and this file reads the same object.
+ * Re-exported so a consumer needs one import, never two definitions.
+ */
+export { REGISTERS, type Register };
 
 /**
  * gray-matter bundles js-yaml and exposes it as `matter.engines.yaml`, which its
@@ -51,7 +61,6 @@ export function wallPlatesRoot(): string {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type Register = "riso" | "painted" | "paperback" | "watercolor";
 export type WorldStatus = "draft" | "unbuilt" | "canon";
 
 export interface WorldEntry {
@@ -91,135 +100,11 @@ export interface VaultPage {
   touched: string | null;
 }
 
-export interface ScenePreset {
-  sky: {
-    top: string;
-    mid: string;
-    horizon: string;
-    glow: string;
-    glowY: number;
-    banding: number;
-  };
-  mist: { color: string; density: number; scale: number; speed: number };
-  grain: { amount: number; scale: number };
-  particles: {
-    count: number;
-    colors: [string, string, string];
-    shape: "petal" | "mote";
-    drift: number;
-    wind: number;
-  };
-}
-
-// ── Register to scene ────────────────────────────────────────────────────────
-
-/**
- * EXTENDS: `_components/emaki/theme.ts` PHASES. The painted preset takes its hexes
- * from PHASES.twilight so the cosmos and the OS read as one hand, exactly the
- * Worldsmith's rule ("the painted hexes are the literal values the OS uses").
- *
- * Round one only needs `painted` complete (plan 7h, D11). The other three are
- * deliberate stubs: real hexes, real values, visibly different on screen, but not
- * yet tuned against a plate. A world can already declare them without new code.
- */
-const SCENE_PRESETS: Record<Register, ScenePreset> = {
-  painted: {
-    // PHASES.twilight: bg #0e0816, accent #E0A0D0, gold #C88840, goldBright #EAA050.
-    sky: {
-      top: "#0e0816",
-      mid: "#3b1f4a",
-      horizon: "#E0A0D0",
-      glow: "#EAA050",
-      glowY: 0.3,
-      banding: 0.0,
-    },
-    mist: { color: "#C8A8D8", density: 0.55, scale: 2.4, speed: 0.035 },
-    grain: { amount: 0.055, scale: 1.0 },
-    particles: {
-      // Sakura on the wind, the twilight signature (emaki-ambient recipe).
-      count: 46,
-      colors: ["#E0A0D0", "#F4E8F8", "#E8B0D8"],
-      shape: "petal",
-      drift: -1,
-      wind: 0.55,
-    },
-  },
-  riso: {
-    // Cream paper, 3 to 4 inks, halftone, NO gradients. banding 1.0 posterizes the sky.
-    sky: {
-      top: "#ECE2CE",
-      mid: "#E4D2B4",
-      horizon: "#D8BE94",
-      glow: "#8C5C08",
-      glowY: 0.22,
-      banding: 1.0,
-    },
-    mist: { color: "#D8C8A8", density: 0.15, scale: 1.4, speed: 0.012 },
-    grain: { amount: 0.18, scale: 2.6 },
-    particles: {
-      count: 18,
-      colors: ["#8C5C08", "#FCF8F0", "#EAD6A0"],
-      shape: "mote",
-      drift: 1,
-      wind: 0.1,
-    },
-  },
-  paperback: {
-    // Dark fantasy paperback: one red moon, heavy grain, midnight weather only.
-    sky: {
-      top: "#07060a",
-      mid: "#150a10",
-      horizon: "#2a1016",
-      glow: "#A02028",
-      glowY: 0.72,
-      banding: 0.0,
-    },
-    mist: { color: "#3a2028", density: 0.82, scale: 3.2, speed: 0.02 },
-    grain: { amount: 0.14, scale: 1.0 },
-    particles: {
-      count: 8,
-      colors: ["#A02028", "#6a3038", "#D8A090"],
-      shape: "mote",
-      drift: -1,
-      wind: 0.2,
-    },
-  },
-  watercolor: {
-    // Ink-wash: teal-black, one golden light.
-    sky: {
-      top: "#06181c",
-      mid: "#0b2a2e",
-      horizon: "#1c4a48",
-      glow: "#E8C066",
-      glowY: 0.4,
-      banding: 0.0,
-    },
-    mist: { color: "#7FB3AC", density: 0.38, scale: 2.0, speed: 0.045 },
-    grain: { amount: 0.03, scale: 1.2 },
-    particles: {
-      count: 24,
-      colors: ["#E8C066", "#CFE8E0", "#8FC8BC"],
-      shape: "mote",
-      drift: 1,
-      wind: 0.3,
-    },
-  },
-};
-
-/** Falls back to painted, the only complete preset this round. */
-export function sceneForRegister(register: string | null): ScenePreset {
-  if (register && register in SCENE_PRESETS) {
-    return SCENE_PRESETS[register as Register];
-  }
-  return SCENE_PRESETS.painted;
-}
-
 // ── Pure parsers ─────────────────────────────────────────────────────────────
 
+/** A register is legal exactly when `registers.ts` has a look for it. */
 function asRegister(v: unknown): Register | null {
-  return v === "riso" || v === "painted" || v === "paperback" || v === "watercolor"
-    ? v
-    : null;
+  return typeof v === "string" && v in REGISTERS ? (v as Register) : null;
 }
 
 /** Parse `worlds.yml` text into ordered world entries. Pure, unit-testable. */
@@ -490,6 +375,21 @@ export function readPages(
   return out;
 }
 
+/**
+ * How a request's `drafts` parameter becomes a boolean, in one place, so the page
+ * route and the manifest route cannot disagree about what PG sees.
+ *
+ * ABSENT MEANS ON. The Critic's deduction 1: all fourteen pages are
+ * `status: draft`, and the D3 rule, written to keep the witness's drafts away
+ * from canon readers, ended up hiding his own vault from its only reader. Behind
+ * the gate this is his vault. `?drafts=0` is the canon view.
+ */
+export function draftsWanted(v: string | boolean | null | undefined): boolean {
+  if (typeof v === "boolean") return v;
+  if (v === null || v === undefined || v === "") return true;
+  return !["0", "false", "no", "off"].includes(v.toLowerCase());
+}
+
 /** `state/weather.json`, or all-nulls when the witness has not run. */
 export function readWeather(root = cosmosRoot()): Record<string, unknown> {
   const file = path.join(root, "state", "weather.json");
@@ -578,41 +478,65 @@ export function readMonuments(root = cosmosRoot(), limit = 24): LedgerLine[] {
   return out.slice(-limit);
 }
 
-/** The number of loop frames actually on disk, so the scene never asks for a 404. */
-export function loopFrames(worldId: string, root = cosmosRoot()): string[] {
-  const dir = path.join(root, "worlds", worldId, "plates", "loop");
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => /^frame-\d+\.webp$/.test(f))
-    .sort()
-    .map((f) => `/api/cosmos/asset/vault/worlds/${worldId}/plates/loop/${f.replace(/\.webp$/, "")}`);
-}
+/**
+ * DELETED in round 2.1, and named here so the next reader knows they went on
+ * purpose rather than by accident:
+ *
+ *   `loopFrames`        the scrub sequence reader. Round one scrolled a painting;
+ *                       round two walks a plane. Nothing scrubs, so the 96 frames
+ *                       and their reader are superseded, and superseded gets
+ *                       deleted. The recipe survives in `cosmos/scripts/cut-frames.sh`.
+ *   `heroUrlFor`'s `b`  the live-switchable second source. One backdrop per world.
+ *   `heroLqipDataUri`   the WORLD-level blur-up, which existed for `WorldSlot`
+ *                       (also deleted). An LQIP is now a sibling of its own image,
+ *                       never a fallback borrowed from another picture.
+ */
 
 /**
- * The scene's hero URL for one source. Prefers the generated webp in the vault
- * (`plates/hero.webp`, `plates/hero-b.webp`), which is sized and compressed for
- * the plane; falls back to the raw plate the manifest names, so a world that has
- * not been through the frame cut still renders.
+ * The world's backdrop URL. Prefers the generated webp in the vault
+ * (`plates/hero.webp`), which is sized and compressed for the plane; falls back to
+ * the raw plate `world.yml` names, so a world that has never been through the
+ * frame cut still has a horizon.
  */
 export function heroUrlFor(
   worldId: string,
-  which: "a" | "b",
   platePath: string | null,
   root = cosmosRoot(),
 ): string | null {
-  const name = which === "a" ? "hero" : "hero-b";
-  if (fs.existsSync(path.join(root, "worlds", worldId, "plates", `${name}.webp`))) {
-    return `/api/cosmos/asset/vault/worlds/${worldId}/plates/${name}`;
+  if (fs.existsSync(path.join(root, "worlds", worldId, "plates", "hero.webp"))) {
+    return `/api/cosmos/asset/vault/worlds/${worldId}/plates/hero`;
   }
   return platePath ? assetUrl(root, platePath) : null;
 }
 
-/** The inline 32 px blur-up, as a data URI so first paint costs no round trip. */
-export function heroLqipDataUri(worldId: string, root = cosmosRoot()): string | null {
-  const file = path.join(root, "worlds", worldId, "plates", "hero-lqip.webp");
-  if (!fs.existsSync(file)) return null;
-  return `data:image/webp;base64,${fs.readFileSync(file).toString("base64")}`;
+/**
+ * The inline blur-up for one image: its own `-lqip.webp` sibling, read as a data
+ * URI so first paint costs no round trip. Empty string when there is none, which
+ * is a scene that paints the register's sky first and nothing worse.
+ */
+export function lqipFor(abs: string | null): string {
+  if (!abs) return "";
+  const sibling = abs.replace(/\.[a-z0-9]+$/i, "-lqip.webp");
+  if (!fs.existsSync(sibling)) return "";
+  return `data:image/webp;base64,${fs.readFileSync(sibling).toString("base64")}`;
+}
+
+/**
+ * The 256 px card for one page, cut by `cosmos/scripts/cut-frames.sh cards`.
+ * Lives beside the world it belongs to (`worlds/<id>/cards/<page-id>.webp`), so a
+ * world is still a folder plus a manifest line.
+ */
+export function cardFor(
+  worldId: string,
+  pageId: string,
+  root = cosmosRoot(),
+): { url: string; lqip: string } | null {
+  const abs = path.join(root, "worlds", worldId, "cards", `${pageId}.webp`);
+  if (!fs.existsSync(abs)) return null;
+  return {
+    url: `/api/cosmos/asset/vault/worlds/${worldId}/cards/${encodeURIComponent(pageId)}`,
+    lqip: lqipFor(abs),
+  };
 }
 
 // ── The layout contract, and the manifest the scene builds against ───────────
@@ -659,6 +583,52 @@ export type Light = {
 
 export type Door = { to: string; kind: "mist" | "stairs"; at: { x: number; z: number } };
 
+/**
+ * What stands in a room, as data.
+ *
+ * The Critic's deduction 5: round two furnished rooms from English words inside
+ * their ids, so `lake-edge` grew a dock and a boat the vault never named and
+ * `the-yard` (which the vault DID furnish, in prose) grew nothing. "Vault is data,
+ * never the surface." A room now says what stands in it, in a closed vocabulary
+ * that `SCHEMA.md` names and `scripts/cosmos-vault-check.ts` enforces, and the
+ * scene owns only what each word LOOKS like.
+ *
+ * Closed on purpose. A prop the scene cannot build is a hole in the world, so a
+ * new word costs one line here, one row in SCHEMA.md and one factory or cutout,
+ * and the check refuses the commit until all three exist.
+ */
+export const PROPS = [
+  "torii",
+  "stone-lantern",
+  "shrine-bell",
+  "pine",
+  "dock",
+  "boat",
+  "dog",
+  "couch",
+  "standing-stone",
+  "paper-window",
+  "hearth",
+  "altar",
+  "stair",
+  "still-water",
+  "bench",
+  "brazier",
+  "crypt-door",
+  "anvil",
+  "smithy-door",
+  "gnome",
+  "heart-light",
+] as const;
+
+export type Prop = (typeof PROPS)[number];
+
+const PROP_SET: ReadonlySet<string> = new Set(PROPS);
+
+export function isProp(v: unknown): v is Prop {
+  return typeof v === "string" && PROP_SET.has(v);
+}
+
 export type Room = {
   id: string;
   anchor: { x: number; z: number };
@@ -666,6 +636,8 @@ export type Room = {
   purpose: RoomPurpose;
   lights: Light[];
   objects: string[];
+  /** The scenery standing in this room. Vocabulary above, order is dressing order. */
+  props: Prop[];
   doors: Door[];
 };
 
@@ -676,6 +648,20 @@ export type SceneObject = {
   room: string;
   at: { x: number; z: number };
   plate: { url: string; lqip: string } | null;
+  /**
+   * The 256 px thumbnail the scene puts on the ema card in the world. The full
+   * `plate` is for the panel only: the Critic measured 7.6 MB of images per cold
+   * load because a 1456 px quadrant was the texture of an 0.82 m card.
+   * Null until `scripts/cut-frames.sh cards <world>` has run for that page.
+   */
+  card: { url: string; lqip: string } | null;
+  /**
+   * True while the page is `status: draft`. Behind the gate drafts are ON by
+   * default (deduction 1: the D3 rule was hiding his own pages from their only
+   * reader), so the panel needs to say which words are still waiting on his
+   * "that one" rather than pretending they are canon.
+   */
+  draft: boolean;
   touched: string | null;
   weight: number;
 };
@@ -812,6 +798,9 @@ export function parseRoom(id: string, raw: unknown): Room {
     // Filled from the pages that name this room; a `objects:` list in the yml is
     // an author's hint and is merged in, never trusted on its own.
     objects: Array.isArray(o.objects) ? o.objects.filter((x): x is string => typeof x === "string") : [],
+    // An unknown word is DROPPED here and FAILS the vault check, so a typo is a
+    // refused commit rather than a prop that silently never appears.
+    props: Array.isArray(o.props) ? o.props.filter(isProp) : [],
     doors: Array.isArray(o.doors)
       ? o.doors.map((d) => parseDoor(d, anchor)).filter((d): d is Door => d !== null)
       : [],
@@ -863,6 +852,8 @@ export function defaultLayout(register: Register, index = 0): WorldLayout {
         purpose: "orientation",
         lights: [{ emitter: "lantern", at: { ...origin }, ...EMITTER_DEFAULTS.lantern }],
         objects: [],
+        // One lantern needs one lamp, or the light has no source (plan 7i, 6).
+        props: ["stone-lantern"],
         doors: [],
       },
     ],
@@ -1052,20 +1043,22 @@ export function newestDraftChapter(
 
 // ── The manifest ─────────────────────────────────────────────────────────────
 
-/** A page's blur-up: its own `-lqip.webp` sibling, else the world's hero LQIP. */
-function plateLqip(plate: string, root: string, worldFallback: string | null): string {
-  const r = resolveVaultPath(root, plate);
-  if (r) {
-    const sibling = r.abs.replace(/\.[a-z0-9]+$/i, "-lqip.webp");
-    if (fs.existsSync(sibling)) {
-      return `data:image/webp;base64,${fs.readFileSync(sibling).toString("base64")}`;
-    }
-  }
-  return worldFallback ?? "";
+/** A page's blur-up: its own `-lqip.webp` sibling, or nothing. */
+function plateLqip(plate: string, root: string): string {
+  return lqipFor(resolveVaultPath(root, plate)?.abs ?? null);
 }
 
-/** The page types that stand as props in a room. `place` pages ARE their room. */
-const OBJECT_TYPES = new Set(["object", "creed", "chapter", "lore"]);
+/**
+ * The page types that stand in a room. `place` pages ARE their room and stand on
+ * its anchor.
+ *
+ * `figure` joined this set in round 2.1. The Critic's deduction 5: "`vault.ts`
+ * places `object`, `creed`, `chapter`, `lore` and never `figure`, so
+ * `figures/maygan.md` stands nowhere", against PG's own "Maygan and everyone else
+ * are party members". A figure is placed like anything else; what a figure LOOKS
+ * like is the scene's, and a person is not a card.
+ */
+const OBJECT_TYPES = new Set(["object", "creed", "chapter", "lore", "figure"]);
 
 /**
  * Every page of a world, with a plateless page kept rather than thrown (the
@@ -1107,11 +1100,30 @@ export function readPagesForScene(
   return out;
 }
 
-/** One page's body, for the gated per-page fetch. Null when there is no such page. */
+/**
+ * One page's body, for the gated per-page fetch. Null when there is no such page.
+ *
+ * A MONUMENT is a body too. Its id is `ledger-<n>-<date>` and its words are the
+ * LEDGER line itself, read in place from `../self/LEDGER.md` and never copied
+ * into the vault. That is what makes "shipping raises monuments" a thing you can
+ * stand in front of and open, rather than a hint pill that lies (deduction 6).
+ */
 export function readPageBody(
   id: string,
   root = cosmosRoot(),
 ): { id: string; title: string; type: string; world: string; body: string } | null {
+  if (/^ledger-\d+-\d{4}-\d{2}-\d{2}$/.test(id)) {
+    const line = readMonuments(root, 400).find((m) => m.id === id);
+    if (!line) return null;
+    return {
+      id: line.id,
+      title: line.date,
+      type: "monument",
+      world: "forge",
+      body: line.text,
+    };
+  }
+
   const exists = plateChecker(root);
   for (const dir of PAGE_DIRS) {
     const abs = path.join(root, dir);
@@ -1164,7 +1176,6 @@ export function readWorldManifest(
   const firstRoom =
     layout.rooms.find((r) => r.purpose === "orientation") ?? layout.rooms[0];
 
-  const worldLqip = heroLqipDataUri(worldId, root);
   const pages = readPagesForScene(worldId, opts, root);
   const attention = readAttention(root);
 
@@ -1200,12 +1211,47 @@ export function readWorldManifest(
         room: room.id,
         at: at ?? placeInRoom(p.id, i, list.length, room),
         plate: p.plate
-          ? { url: assetUrl(root, p.plate) ?? "", lqip: plateLqip(p.plate, root, worldLqip) }
+          ? { url: assetUrl(root, p.plate) ?? "", lqip: plateLqip(p.plate, root) }
           : null,
+        card: cardFor(worldId, p.id, root),
+        draft: p.status === "draft",
         touched: p.touched ?? attention[p.id] ?? null,
         weight: p.weight,
       });
     });
+  }
+
+  // Monuments are the forge's, and only the forge's (Critic round one, 3). They
+  // are placed BEFORE the room index is built, because round 2.1 also emits each
+  // one as a SceneObject: the Critic's deduction 6 was that the hint printed a
+  // LEDGER line and "press E" over a stone that neither dwell nor E could open,
+  // since `CosmosStage` returns early for any id that is not in `objects`. A
+  // monument is now an object with `type: "monument"`, no plate and no card (a
+  // stone is not a painting), and `/api/cosmos/body` serves its line as the body,
+  // so a stone unfolds exactly like a page does.
+  let monuments: Monument[] = [];
+  if (worldId === "forge") {
+    const room =
+      layout.rooms.find((r) => r.id === "monuments") ??
+      layout.rooms.find((r) => r.purpose === "reward") ??
+      layout.rooms[0];
+    monuments = placeMonuments(readMonuments(root, 400), room);
+    for (const m of monuments) {
+      objects.push({
+        id: m.id,
+        type: "monument",
+        title: m.date,
+        room: room.id,
+        at: m.at,
+        plate: null,
+        card: null,
+        // A LEDGER line is shipped, not drafted. It is the one thing in the
+        // cosmos that was never waiting on a "that one".
+        draft: false,
+        touched: attention[m.id] ?? null,
+        weight: 1,
+      });
+    }
   }
 
   // Room.objects is exactly the ids standing in that room, so nothing the scene
@@ -1221,23 +1267,18 @@ export function readWorldManifest(
     objects: Array.from(new Set([...(placed.get(r.id) ?? [])])),
   }));
 
-  // Monuments are the forge's, and only the forge's (Critic round one, 3).
-  let monuments: Monument[] = [];
-  if (worldId === "forge") {
-    const room =
-      rooms.find((r) => r.id === "monuments") ??
-      rooms.find((r) => r.purpose === "reward") ??
-      rooms[0];
-    monuments = placeMonuments(readMonuments(root, 400), room);
-  }
-
   const weatherRaw = readWeather(root) as Record<string, unknown>;
   const weather: Record<string, number | string | null> = {};
   for (const [k, v] of Object.entries(weatherRaw)) {
     weather[k] = typeof v === "number" || typeof v === "string" ? v : null;
   }
 
-  const heroPlateUrl = heroUrlFor(worldId, "a", world.heroPlate, root);
+  const heroPlateUrl = heroUrlFor(worldId, world.heroPlate, root);
+  const heroPlateAbs = fs.existsSync(path.join(root, "worlds", worldId, "plates", "hero.webp"))
+    ? path.join(root, "worlds", worldId, "plates", "hero.webp")
+    : world.heroPlate
+      ? (resolveVaultPath(root, world.heroPlate)?.abs ?? null)
+      : null;
 
   return {
     id: world.id,
@@ -1252,7 +1293,7 @@ export function readWorldManifest(
     weather,
     attention,
     hero: readHero(root),
-    backdrop: heroPlateUrl ? { url: heroPlateUrl, lqip: worldLqip ?? "" } : null,
+    backdrop: heroPlateUrl ? { url: heroPlateUrl, lqip: lqipFor(heroPlateAbs) } : null,
     bed: world.bed,
   };
 }

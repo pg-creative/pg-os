@@ -20,13 +20,16 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   cosmosRoot,
+  isProp,
   parsePage,
   parseWorldsYml,
+  PROPS,
   readAllManifests,
+  readLayoutBlock,
   readPages,
   readWorlds,
+  REGISTERS,
   resolveVaultPath,
-  sceneForRegister,
   VaultError,
 } from "../src/lib/cosmos/vault.ts";
 
@@ -70,9 +73,28 @@ try {
     fail(`world.yml phase is ${qp?.phase}, which is not one of ${PHASES.join(", ")}`);
   else ok(`phase is ${qp?.phase ?? "unset (follows the clock)"}`);
 
-  const preset = sceneForRegister(qp?.register ?? null);
-  if (!preset.sky.top) fail("register maps to no scene preset");
-  else ok(`register ${qp?.register} maps to a scene preset`);
+  // ONE register map, and it is `src/lib/cosmos/registers.ts` (the Critic's
+  // deduction 12: two maps of the four registers disagreed about the same hex).
+  // Every register any world declares must have a complete look in it.
+  const LOOK_KEYS = ["sky", "ground", "grass", "mist", "grain", "particles", "fog", "bed"];
+  let registerFailures = 0;
+  for (const w of merged) {
+    if (!w.register) continue;
+    const look = REGISTERS[w.register] as unknown as Record<string, unknown>;
+    if (!look) {
+      fail(`${w.id}: register ${w.register} has no look in registers.ts`);
+      registerFailures++;
+      continue;
+    }
+    for (const k of LOOK_KEYS) {
+      if (look[k] === undefined) {
+        fail(`${w.id}: register ${w.register} has no ${k} in registers.ts`);
+        registerFailures++;
+      }
+    }
+  }
+  if (registerFailures === 0)
+    ok(`every register in worlds.yml has a full look in registers.ts (${Object.keys(REGISTERS).length} registers)`);
 } catch (err) {
   fail(`worlds.yml: ${(err as Error).message}`);
 }
@@ -197,6 +219,65 @@ try {
     if (dates.join("|") !== sorted.join("|")) fail("forge monuments are not in date order");
     else ok(`${dates.length} monuments stand in the forge, in date order`);
   }
+
+  // Props: a closed vocabulary, so a typo is a refused commit and not a prop
+  // that silently never stands anywhere (the Critic's deduction 5: rooms were
+  // furnished from English words inside their ids).
+  let propFailures = 0;
+  let propCount = 0;
+  let roomsWithProps = 0;
+  for (const w of readWorlds(root)) {
+    const raw = readLayoutBlock(w.worldFile, root) as
+      | { rooms?: unknown }
+      | null;
+    const rooms = raw && typeof raw === "object" ? raw.rooms : null;
+    const entries = Array.isArray(rooms)
+      ? rooms
+      : rooms && typeof rooms === "object"
+        ? Object.values(rooms)
+        : [];
+    for (const r of entries as Record<string, unknown>[]) {
+      const props = Array.isArray(r?.props) ? r.props : [];
+      if (props.length) roomsWithProps++;
+      for (const prop of props) {
+        propCount++;
+        if (!isProp(prop))
+          {
+            fail(`${w.id}/${String(r?.id)}: prop "${String(prop)}" is not in the SCHEMA.md vocabulary`);
+            propFailures++;
+          }
+      }
+    }
+  }
+  if (propFailures === 0)
+    ok(`${propCount} props in ${roomsWithProps} rooms, all ${PROPS.length} words known`);
+
+  // Every room that is furnished at all must be furnished by the vault, not by
+  // the scene guessing from an id.
+  for (const m of manifests) {
+    const furnished = m.layout.rooms.filter((r) => r.props.length).length;
+    if (furnished === 0) fail(`${m.id}: no room names a single prop`);
+  }
+
+  // A monument must be openable: it is emitted in `objects` as well as in
+  // `monuments`, so dwell and E find it (deduction 6).
+  const forgeM = manifests.find((m) => m.id === "forge");
+  if (forgeM) {
+    const ids = new Set(forgeM.objects.filter((o) => o.type === "monument").map((o) => o.id));
+    const missing = forgeM.monuments.filter((m) => !ids.has(m.id));
+    if (missing.length) fail(`forge: ${missing.length} monuments are in no objects list`);
+    else ok(`${forgeM.monuments.length} monuments are also objects, so a stone unfolds`);
+  }
+
+  // Figures stand somewhere. PG: "Maygan and everyone else are party members."
+  const figures = manifests.flatMap((m) => m.objects.filter((o) => o.type === "figure"));
+  if (figures.length === 0) fail("no figure is placed in any world");
+  else ok(`${figures.length} figure(s) placed: ${figures.map((f) => f.id).join(", ")}`);
+
+  // Cards are a size fix, not a contract: report, never fail.
+  const withCard = manifests.flatMap((m) => m.objects).filter((o) => o.card).length;
+  const withPlate = manifests.flatMap((m) => m.objects).filter((o) => o.plate).length;
+  ok(`${withCard} of ${withPlate} plated objects have a 256 px card`);
 
   const thread = manifests[0]?.thread;
   if (!thread?.season) fail("the thread carries no season");
