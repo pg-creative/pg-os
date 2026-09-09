@@ -13,6 +13,13 @@
  * React 19 StrictMode double-mount without re-creating the player.
  *
  * Exposes usePlayer() hook for MiniPlayer / PlayerSheet / MusicLauncher.
+ *
+ * NOT mounted on /cosmos (2026-09-09). A world has its own ambient bed and no
+ * music chrome, and the YouTube iframe this provider loads emits a
+ * "Permissions policy violation: compute-pressure" console error on every load,
+ * which is the one thing standing between that route and a clean console. The
+ * context still exists there, so anything calling usePlayer() keeps working; only
+ * the iframe, the script and the <audio> element stay out.
  */
 
 import {
@@ -24,6 +31,7 @@ import {
   type ReactNode,
 } from "react";
 import Script from "next/script";
+import { usePathname } from "next/navigation";
 import { useMusicStore } from "@/lib/musicStore";
 import { getStation, type Station } from "@/lib/musicSources";
 
@@ -150,6 +158,8 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const silentRoute = pathname?.startsWith("/cosmos") ?? false;
   const radioRef = useRef<HTMLAudioElement | null>(null);
   // Wrapper React owns; YT API mutates an INNER div inside it without React
   // knowing. Prevents React from trying to reconcile/removeChild on the
@@ -413,6 +423,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   return (
     <PlayerContext.Provider value={contextValue}>
       {/* YouTube IFrame API — loaded lazily, fires onYouTubeIframeAPIReady when ready */}
+      {!silentRoute && (
       <Script
         src="https://www.youtube.com/iframe_api"
         strategy="afterInteractive"
@@ -422,11 +433,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           );
         }}
       />
+      )}
 
       {/* Hidden YouTube player WRAPPER. React owns this div only. The actual
           #pgos-yt-player mount div is created imperatively inside (see the
           useEffect above) so the YT API's iframe-swap doesn't make React's
           reconciliation throw NotFoundError. */}
+      {!silentRoute && (
       <div
         ref={ytWrapperRef}
         aria-hidden="true"
@@ -439,8 +452,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           pointerEvents: "none",
         }}
       />
+      )}
 
       {/* Radio <audio> element — single instance for all radio streams */}
+      {!silentRoute && (
       <audio
         ref={radioRef}
         preload="none"
@@ -450,6 +465,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }}
         style={{ display: "none" }}
       />
+      )}
 
       {children}
     </PlayerContext.Provider>

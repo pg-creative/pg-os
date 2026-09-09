@@ -55,26 +55,31 @@ const FRAG = /* glsl */ `
     // A standing marker: a tapered slab with a rounded cap, weathered by noise.
     float w = 0.19 - smoothstep(0.0, 0.55, vUv.y) * 0.045;
     float edge = fbm(vec2(vUv.y * 11.0 + vSeed * 30.0, vSeed)) * 0.022;
-    float body = 1.0 - smoothstep(w, w + 0.02, abs(p.x) + edge);
-    body *= 1.0 - smoothstep(0.40, 0.44, abs(p.y - 0.02));
-    float cap = 1.0 - smoothstep(0.11, 0.135, length(vec2(p.x, (p.y - 0.36) * 1.5)));
+    float body = 1.0 - smoothstep(w - 0.006, w, abs(p.x) + edge);
+    body *= 1.0 - smoothstep(0.415, 0.425, abs(p.y - 0.02));
+    float cap = 1.0 - smoothstep(0.118, 0.126, length(vec2(p.x, (p.y - 0.36) * 1.5)));
     body = max(body, cap);
     if (body <= 0.003) discard;
 
-    // Stone, mossed low and lit from the lantern side.
+    // Stone, mossed low and lit from the lantern side. It is DARK: a monument is
+    // something you notice on the ground, not a pale slab hung over the view. Two
+    // earlier passes lit it like paper and it washed the painting out.
     float moss = smoothstep(0.22, -0.3, vUv.y) * fbm(vUv * 8.0 + vSeed * 12.0);
-    vec3 col = mix(uStone, uStone * vec3(0.72, 0.95, 0.74), moss * 0.55);
-    col *= 0.66 + smoothstep(0.35, -0.35, p.x) * 0.5;
+    vec3 col = mix(uStone, uStone * vec3(0.78, 1.05, 0.82), moss * 0.6);
+    col *= 0.72 + smoothstep(0.35, -0.35, p.x) * 0.55;
 
-    // The save mark: one carved notch that catches the light. Not a badge.
-    float notch = 1.0 - smoothstep(0.0, 0.016, abs(p.y - 0.16) + abs(p.x) * 0.32);
-    col = mix(col, uLight, notch * 0.5);
+    // The save mark: one carved notch that catches the lantern. Not a badge, and
+    // never a count: twelve stones is not a score, it is twelve places.
+    float notch = 1.0 - smoothstep(0.0, 0.012, abs(p.y - 0.16) + abs(p.x) * 0.32);
+    col = mix(col, uLight, notch * 0.42);
 
     // Distance haze along the path: the oldest ships are furthest into weather.
-    float haze = clamp((vDepth - 2.0) / 8.0, 0.0, 1.0) * uMistDensity;
-    col = mix(col, uMistColor, haze * 0.78);
+    // Distance haze along the path. The oldest ships are furthest into weather,
+    // and they FADE rather than sitting flat on top of the valley.
+    float haze = clamp((vDepth - 4.0) / 9.0, 0.0, 1.0) * (0.55 + uMistDensity * 0.6);
+    col = mix(col, uMistColor * 0.42, haze * 0.85);
 
-    gl_FragColor = vec4(col, body * (1.0 - haze * 0.42));
+    gl_FragColor = vec4(col, body * (1.0 - haze * 0.62) * 0.9);
   }
 `;
 
@@ -110,7 +115,7 @@ export function Monuments({
     monuments.forEach((mo, i) => {
       dummy.position.set(mo.x, mo.y, mo.z);
       dummy.rotation.set(0, (seeds[i] - 0.5) * 0.5, (seeds[i] - 0.5) * 0.05);
-      dummy.scale.set(mo.scale * 3.4, mo.scale * 5.4, 1);
+      dummy.scale.set(mo.scale * 2.0, mo.scale * 3.3, 1);
       dummy.updateMatrix();
       m.setMatrixAt(i, dummy.matrix);
     });
@@ -159,15 +164,15 @@ export function Monuments({
       {labelled.map((mo) => (
         <Text
           key={mo.id}
-          position={[mo.x, mo.y - mo.scale * 3.2, mo.z + 0.02]}
-          fontSize={0.075}
+          position={[mo.x, mo.y - mo.scale * 2.1, mo.z + 0.02]}
+          fontSize={0.062}
           color={light}
           anchorX="center"
           anchorY="middle"
           outlineWidth={0.003}
           outlineColor="#120d04"
-          outlineOpacity={0.45}
-          fillOpacity={0.5}
+          outlineOpacity={0.7}
+          fillOpacity={0.42}
         >
           {mo.date}
         </Text>

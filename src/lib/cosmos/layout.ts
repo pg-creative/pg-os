@@ -54,10 +54,12 @@ export function placeObject(id: string, index: number, total: number): Placement
   const spread = Math.max(total - 1, 1);
   // Arc across x, biased by index so the set never clumps, jittered by the hash.
   const t = total === 1 ? 0.5 : index / spread;
-  const x = (t - 0.5) * 7.4 + (r() - 0.5) * 0.9;
-  const y = -0.35 + Math.sin(t * Math.PI) * 0.55 + (r() - 0.5) * 0.3;
-  const z = -1.6 - r() * 1.9;
-  return { x, y, z, scale: 0.42 + r() * 0.16, spin: (r() - 0.5) * 0.5 };
+  const x = (t - 0.5) * 6.6 + (r() - 0.5) * 0.7;
+  const y = 0.15 + Math.sin(t * Math.PI) * 0.5 + (r() - 0.5) * 0.28;
+  // Between the mid plate (-6.3) and the near plate (-1.6), so a tag hangs INSIDE
+  // the world rather than in front of the foreground it should be standing in.
+  const z = -3.3 - r() * 1.5;
+  return { x, y, z, scale: 0.5 + r() * 0.14, spin: (r() - 0.5) * 0.35 };
 }
 
 /**
@@ -65,12 +67,17 @@ export function placeObject(id: string, index: number, total: number): Placement
  * A LEDGER line is a monument, and the path is the ledger read as ground.
  */
 export function placeMonument(index: number, total: number): Placement {
+  // t = 0 is the OLDEST ship, furthest into the valley; t = 1 is the newest,
+  // nearest the step you are standing on.
   const t = total <= 1 ? 1 : index / (total - 1);
-  // Serpentine so the path reads as a path rather than a queue.
-  const x = Math.sin(t * Math.PI * 1.7) * 2.1 + 0.35;
-  const z = -9.5 + t * 7.6;
-  const y = -1.15 + t * 0.16;
-  return { x, y, z, scale: 0.2 + t * 0.16, spin: 0 };
+
+  // The path descends left into the mist and converges toward the horizon, so
+  // the stones read as distance rather than as a row of objects across the view.
+  // A gentle sine on top keeps it a path and not a ruler.
+  const x = -0.15 - Math.pow(t, 1.5) * 3.5 + Math.sin(t * Math.PI * 2.2) * 0.42;
+  const z = -13.5 + Math.pow(t, 1.25) * 9.0;
+  const y = -0.62 - Math.pow(t, 1.4) * 1.35;
+  return { x, y, z, scale: 0.14 + Math.pow(t, 1.3) * 0.2, spin: 0 };
 }
 
 /**

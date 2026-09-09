@@ -16,8 +16,10 @@
  *      deferred to round two (it pins three below 0.186), and a quad costs one
  *      draw call against an EffectComposer's extra render targets.
  *
- * Particles ride the same pass: sakura at twilight, motes otherwise, from the
- * register preset. They are drawn in the shader, so they cost no geometry.
+ * Particles do NOT ride this pass. They were a 46-iteration loop per pixel here,
+ * which is 46 tests across every pixel on screen for 46 things the size of a
+ * fingernail. They live in Particles.tsx as a Points cloud instead: same picture,
+ * 46 vertices, and the single biggest reason this scene holds its frame rate.
  */
 
 import { useMemo, useRef } from "react";
@@ -39,46 +41,9 @@ const FRAG = /* glsl */ `
   uniform float uGrain;
   uniform float uGrainScale;
   uniform float uScroll;
-  uniform float uCount;      // particle count from the register
-  uniform vec3  uP1;
-  uniform vec3  uP2;
-  uniform vec3  uP3;
-  uniform float uPetal;      // 1 = sakura ellipses, 0 = round motes
-  uniform float uDrift;      // -1 falls, +1 rises
-  uniform float uWind;
 
   ${NOISE}
   ${GRAIN}
-
-  // One drifting particle. Returns coverage 0..1 and writes its colour.
-  float particle(vec2 uv, float i, float aspect, out vec3 col) {
-    float seed = i * 17.31;
-    float sx = hash21(vec2(seed, 3.0));
-    float sy = hash21(vec2(seed, 7.0));
-    float sz = 0.45 + hash21(vec2(seed, 11.0)) * 0.9;   // depth: size and speed
-    float life = fract(sy + uTime * 0.021 * sz * uDrift * -1.0);
-
-    // Wind: a slow sine plus the scroll, so the air moves when the world does.
-    float sway = sin(uTime * 0.6 * sz + seed) * 0.045 * uWind;
-    vec2 p = vec2(fract(sx + sway + uScroll * 0.06 * sz), life);
-
-    vec2 d = uv - p;
-    d.x *= aspect;
-    // Petals are ellipses with a flutter; motes are round.
-    float rot = uTime * 0.9 * sz + seed;
-    if (uPetal > 0.5) {
-      float c = cos(rot), s = sin(rot);
-      d = mat2(c, -s, s, c) * d;
-      d.y *= 2.1 + sin(rot * 0.7) * 0.9;
-    }
-    float r = length(d);
-    float size = (0.0022 + sz * 0.0042);
-    float cov = smoothstep(size, size * 0.35, r);
-
-    float pick = hash21(vec2(seed, 23.0));
-    col = pick < 0.34 ? uP1 : (pick < 0.7 ? uP2 : uP3);
-    return cov * (0.35 + sz * 0.65);
-  }
 
   void main() {
     float aspect = uRes.x / max(uRes.y, 1.0);
@@ -88,27 +53,12 @@ const FRAG = /* glsl */ `
     vec2 q = vUv * uMistScale;
     q.x += uTime * uMistSpeed;
     q.y += uScroll * 0.35;
-    float n = fbm(q + fbm(q * 1.9) * 0.4);
+    float n = fbm4(q + (vnoise(q * 1.9) - 0.5) * 0.6);
     float band = smoothstep(0.72, 0.05, vUv.y);
     float fog = clamp(smoothstep(0.36, 0.95, n) * uMistDensity * band, 0.0, 0.72);
 
     vec3 col = uMistColor;
     float a = fog * 0.62;
-
-    // Particles on top of the fog.
-    float total = 0.0;
-    vec3 pc = vec3(0.0);
-    for (int i = 0; i < 64; i++) {
-      if (float(i) >= uCount) break;
-      vec3 c;
-      float cov = particle(vUv, float(i), aspect, c);
-      total += cov;
-      pc += c * cov;
-    }
-    if (total > 0.001) {
-      col = mix(col, pc / total, clamp(total, 0.0, 1.0));
-      a = clamp(a + total * 0.85, 0.0, 1.0);
-    }
 
     // Paper grain over the whole frame, the register's amount.
     float g = grain(vUv, uTime, uGrainScale);
@@ -147,13 +97,6 @@ export function Mist({
       uGrain: { value: preset.grain.amount },
       uGrainScale: { value: preset.grain.scale },
       uScroll: { value: 0 },
-      uCount: { value: Math.min(preset.particles.count, 64) },
-      uP1: { value: new THREE.Color(preset.particles.colors[0]) },
-      uP2: { value: new THREE.Color(preset.particles.colors[1]) },
-      uP3: { value: new THREE.Color(preset.particles.colors[2]) },
-      uPetal: { value: preset.particles.shape === "petal" ? 1 : 0 },
-      uDrift: { value: preset.particles.drift },
-      uWind: { value: preset.particles.wind },
     }),
     [preset, mistDensity],
   );

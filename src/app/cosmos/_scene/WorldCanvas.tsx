@@ -31,6 +31,7 @@ import type { SceneManifest } from "./types";
 import { Sky } from "./Sky";
 import { PlatePlane, type PlateLayer } from "./PlatePlane";
 import { Mist } from "./Mist";
+import { Particles } from "./Particles";
 import { VaultObjects } from "./VaultObject";
 import { Monuments } from "./Monument";
 import { AmbientBedToggle } from "./AmbientBed";
@@ -250,7 +251,10 @@ export function WorldCanvas({
         <Monuments
           monuments={manifest.monuments}
           preset={manifest.preset}
-          ink={tk.textMuted}
+          // Wet dark slate, not a text token: the earlier pass used PHASES
+          // textMuted, which at twilight is a pale lavender, and the stones read
+          // as fog panels standing in the valley.
+          ink="#2A2233"
           light={tk.goldBright}
           mistDensity={mistDensity}
         />
@@ -258,13 +262,16 @@ export function WorldCanvas({
         <VaultObjects
           objects={manifest.objects}
           preset={manifest.preset}
-          ink={tk.textPrimary}
-          edge={tk.gold}
+          paper="#EFE2C6"
+          ink={tk.panelInkBorder}
+          edge={tk.goldBright}
           hovered={hovered}
           onHover={setHovered}
           onDwellStart={startDwell}
           onDwellCancel={cancelDwell}
         />
+
+        <Particles preset={manifest.preset} progress={getProgress} />
 
         <Mist
           preset={manifest.preset}

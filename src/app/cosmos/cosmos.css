@@ -188,6 +188,21 @@
 }
 
 @media (max-width: 767px) {
+  /* On a phone the hint and the chips both want the bottom edge. The hint moves
+     up so it stops colliding with them, and it says less. */
+  .cosmos-hint {
+    bottom: 64px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .cosmos-chrome {
+    right: 10px;
+    bottom: 12px;
+    gap: 6px;
+  }
+  .cosmos-chip {
+    padding: 6px 9px;
+  }
   .cosmos-panel {
     bottom: 4vh;
     max-height: 52vh;

@@ -63,6 +63,16 @@ export const NOISE = /* glsl */ `
     return v;
   }
 
+  // Four octaves. The six-octave fbm above is flashpoint's, kept verbatim and
+  // used where detail earns its cost; at the scales the sky and the mist run at,
+  // octaves five and six are below a pixel and only cost fill rate.
+  float fbm4(vec2 p){
+    float v=0.0, a=0.5;
+    mat2 m=mat2(1.6,1.2,-1.2,1.6);
+    for(int i=0;i<4;i++){ v+=a*vnoise(p); p=m*p; a*=0.5; }
+    return v;
+  }
+
   float fbm3(vec3 p){
     float v=0.0, a=0.5;
     for(int i=0;i<5;i++){ v+=a*vnoise3(p); p*=2.02; a*=0.5; }
@@ -82,8 +92,11 @@ export const MIST = /* glsl */ `
   float mistAmount(vec2 uv, float t, float untouched, float focusDistance, float scale, float speed) {
     vec2 q = uv * scale;
     q.x += t * speed;
-    q.y += fbm(q * 1.7 + t * speed * 0.4) * 0.35;
-    float n = fbm(q);
+    // One cheap warp instead of a nested fbm: a single vnoise reads the same at
+    // this scale and costs four octaves less per pixel, on a pass that runs
+    // fullscreen three times over.
+    q.y += (vnoise(q * 1.7 + t * speed * 0.4) - 0.5) * 0.5;
+    float n = fbm4(q);
     // Untouched drives how much of the noise reads as cloud; focus distance
     // pushes a flat veil on top so the thing you are not looking at recedes.
     float veil = clamp(untouched * 0.72 + focusDistance * 0.34, 0.0, 1.0);

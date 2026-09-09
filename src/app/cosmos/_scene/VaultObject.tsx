@@ -46,6 +46,7 @@ const FRAG = /* glsl */ `
   varying vec3  vTint;
 
   uniform float uTime;
+  uniform vec3  uPaper;
   uniform vec3  uInk;
   uniform vec3  uEdge;
   uniform vec3  uMistColor;
@@ -59,30 +60,53 @@ const FRAG = /* glsl */ `
   ${GRAIN}
 
   void main() {
-    // A hanging paper slip: soft rounded rectangle, torn top and bottom edge.
     vec2 p = vUv - 0.5;
-    float tear = (fbm(vec2(vUv.x * 14.0, 0.0)) - 0.5) * 0.035;
-    float body = 1.0 - smoothstep(0.36, 0.46, abs(p.y) + tear);
-    body *= 1.0 - smoothstep(0.30, 0.42, abs(p.x));
-    if (body <= 0.002) discard;
 
-    // Washi: warm paper with the register's ink, brighter along one edge where
-    // the lantern is, which is what makes it read as lit rather than pasted on.
-    vec3 col = mix(uInk, vTint, 0.55);
-    float lit = smoothstep(0.5, -0.2, p.x) * 0.55 + 0.2;
-    col *= 0.72 + lit * 0.55;
+    // An ema tag: a small hanging plaque with a crisp deckle edge, not a blur.
+    // The edges are tight on purpose. A soft-edged rectangle at this size reads
+    // as fog on the lens, which is exactly what the first pass looked like.
+    float deckle = (vnoise(vec2(vUv.y * 26.0, 3.0)) - 0.5) * 0.016
+                 + (vnoise(vec2(vUv.x * 26.0, 9.0)) - 0.5) * 0.010;
+    float halfW = 0.30 + deckle;
+    float halfH = 0.40 + deckle;
+    float inX = 1.0 - smoothstep(halfW - 0.008, halfW, abs(p.x));
+    float inY = 1.0 - smoothstep(halfH - 0.008, halfH, abs(p.y));
+    float body = inX * inY;
+
+    // The cord it hangs from, one thin line up from the top edge.
+    float cord = (1.0 - smoothstep(0.0, 0.006, abs(p.x)))
+               * step(halfH, p.y) * (1.0 - smoothstep(halfH, 0.5, p.y));
+
+    if (body + cord <= 0.004) discard;
+
+    // Warm washi, tinted by page type, with the lantern side lit.
+    vec3 col = mix(uPaper, vTint, 0.34);
+    col *= 0.82 + smoothstep(0.42, -0.3, p.x) * 0.3;
+
+    // Fibres, so it is paper and not a card.
+    col += (vnoise(vec2(vUv.x * 90.0, vUv.y * 14.0)) - 0.5) * 0.055;
+
+    // One ink border just inside the edge, the way a plaque is bound.
+    float border = (1.0 - smoothstep(halfW - 0.030, halfW - 0.022, abs(p.x)))
+                 * (1.0 - smoothstep(halfH - 0.030, halfH - 0.022, abs(p.y)));
+    col = mix(uInk, col, clamp(border + 0.12, 0.0, 1.0));
 
     // Kintsugi: one gold seam down the paper, never two.
-    float seam = 1.0 - smoothstep(0.0, 0.012, abs(p.x - 0.09 + fbm(vec2(vUv.y * 9.0, 4.0)) * 0.05));
-    col = mix(col, uEdge, seam * 0.7);
+    float seam = 1.0 - smoothstep(0.0, 0.009,
+      abs(p.x + 0.085 + (vnoise(vec2(vUv.y * 7.0, 4.0)) - 0.5) * 0.06));
+    col = mix(col, uEdge, seam * body * 0.62);
+
+    col = mix(col, uEdge * 0.9, cord * 0.8);
 
     // The mist rule: untouched things fade INTO the weather, they never vanish.
+    // The alpha floor is what "never deletes" means in pixels: at full mist the
+    // tag is still a shape you can find, not an absence.
     float m = mistAmount(vUv, uTime, vUntouched, vFocus, uMistScale, uMistSpeed);
-    col = mix(col, uMistColor, m * 0.82);
+    col = mix(col, uMistColor, m * 0.55);
 
     col += grain(vUv, uTime, uGrainScale) * uGrain;
 
-    float a = body * (1.0 - m * 0.55);
+    float a = max(body, cord * 0.55) * (0.42 + (1.0 - m) * 0.58);
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -90,6 +114,7 @@ const FRAG = /* glsl */ `
 export function VaultObjects({
   objects,
   preset,
+  paper,
   ink,
   edge,
   hovered,
@@ -99,6 +124,7 @@ export function VaultObjects({
 }: {
   objects: ObjectSpec[];
   preset: ScenePreset;
+  paper: string;
   ink: string;
   edge: string;
   hovered: string | null;
@@ -116,7 +142,7 @@ export function VaultObjects({
     const u = new Float32Array(count);
     const f = new Float32Array(count);
     const t = new Float32Array(count * 3);
-    const warm = new THREE.Color(preset.sky.horizon);
+    const warm = new THREE.Color(preset.sky.glow);
     const cool = new THREE.Color(preset.mist.color);
     objects.forEach((o, i) => {
       u[i] = o.untouched;
@@ -140,7 +166,7 @@ export function VaultObjects({
     objects.forEach((o, i) => {
       dummy.position.set(o.x, o.y, o.z);
       dummy.rotation.set(0, o.spin * 0.4, o.spin * 0.12);
-      dummy.scale.setScalar(o.scale * 2.6);
+      dummy.scale.set(o.scale * 1.5, o.scale * 2.15, 1);
       dummy.updateMatrix();
       m.setMatrixAt(i, dummy.matrix);
     });
@@ -172,6 +198,7 @@ export function VaultObjects({
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
+      uPaper: { value: new THREE.Color(paper) },
       uInk: { value: new THREE.Color(ink) },
       uEdge: { value: new THREE.Color(edge) },
       uMistColor: { value: new THREE.Color(preset.mist.color) },
@@ -180,7 +207,7 @@ export function VaultObjects({
       uGrain: { value: preset.grain.amount },
       uGrainScale: { value: preset.grain.scale },
     }),
-    [ink, edge, preset],
+    [paper, ink, edge, preset],
   );
 
   if (objects.length === 0) return null;
@@ -226,16 +253,16 @@ export function VaultObjects({
       {objects.map((o) => (
         <Text
           key={o.id}
-          position={[o.x, o.y - o.scale * 1.55, o.z + 0.02]}
-          fontSize={0.13}
-          color={hovered === o.id ? edge : ink}
+          position={[o.x, o.y - o.scale * 1.18, o.z + 0.02]}
+          fontSize={0.112}
+          color={hovered === o.id ? "#FFFFFF" : "#F6E3C2"}
           anchorX="center"
           anchorY="middle"
           maxWidth={2.4}
-          outlineWidth={0.004}
-          outlineColor="#120d04"
-          outlineOpacity={0.5}
-          fillOpacity={0.42 + (1 - o.untouched) * 0.5}
+          outlineWidth={0.014}
+          outlineColor="#160a20"
+          outlineOpacity={0.92}
+          fillOpacity={0.82 + (1 - o.untouched) * 0.18}
         >
           {o.title}
         </Text>

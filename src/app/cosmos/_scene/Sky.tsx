@@ -50,7 +50,7 @@ const FRAG = /* glsl */ `
 
     // Slow cloud banding, the only motion in the sky. Weather thickens it.
     vec2 q = vec2(vUv.x * 2.6 + uTime * 0.006, y * 5.2);
-    float clouds = fbm(q) - 0.5;
+    float clouds = fbm4(q) - 0.5;
     col += clouds * 0.075 * (0.55 + uMistDensity);
 
     // Riso: quantize to ink steps and kill the gradient entirely.
