@@ -260,10 +260,15 @@ const Prop = memo(function Prop({
         tex={tex}
         height={def.height * pl.scale}
         at={[pl.x, 0, pl.z]}
-        face={false}
+        // A PAINTING FACES YOU. A cutout is one flat plane, so a fixed yaw
+        // shows it edge-on from half the world and the couch in the yard was a
+        // dark line on the grass. Foliage keeps a fixed bearing (a pine looks
+        // the same from anywhere and a swaying billboard that also turns reads
+        // as a flag); everything else turns to the camera around Y.
+        face={(def.wind ?? 0) === 0}
         yaw={pl.rot}
         wind={def.wind ?? 0}
-        flip={pl.v > 0.5}
+        flip={(def.wind ?? 0) > 0 && pl.v > 0.5}
       />
     );
   }

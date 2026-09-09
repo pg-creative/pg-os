@@ -580,7 +580,12 @@ export const WorldCanvas = memo(function WorldCanvas({
       <KeyLight rt={rt} p={palette} theme={theme} weather={weather} />
       <IsoCamera rt={rt} target={target} />
       <Ground worlds={worlds} target={target} horizon={sky.horizon} />
+      {/* THE VAULT SAYS WHAT THE FLOOR IS. `ground: ash` is the depths, and a
+          meadow through a crypt is the same bug as a dock beside a shrine: the
+          scene deciding something the vault already answered. Stone and grass
+          both grow it; ash and anything else the vault invents grow nothing. */}
       <GrassField
+        key={current?.layout.ground ?? "grass"}
         target={target}
         /* Root near the ground it grows out of, tip the register's own grass.
            Rooted in `foliageDark` the blades read as dark chips scattered on a
@@ -588,7 +593,7 @@ export const WorldCanvas = memo(function WorldCanvas({
         root={palette.foliage}
         tip={palette.grassTip}
         clearings={clearings}
-        count={3000}
+        count={/grass|stone|earth/i.test(current?.layout.ground ?? "grass") ? 3000 : 0}
         radius={22}
       />
 

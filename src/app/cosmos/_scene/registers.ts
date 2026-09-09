@@ -136,8 +136,13 @@ function derive(id: Register): Palette {
    * of distance; a sky that meets the ground in pure grey has no hour in it. The
    * SAME hex is used for the FogExp2, the ground's haze stop and the sky's
    * bottom stop, so the seam where the plane runs out cannot be seen.
+   *
+   * How MUCH light depends on the register's own sky: a cream riso day carries a
+   * lot of it, a paperback midnight almost none. At a flat 0.3 the depths came
+   * out as a warm brown dusk instead of the near-black the red moon needs.
    */
-  const fog = mixHex(L.fog, L.particles, 0.3);
+  const skyLum = (sr * 0.299 + sg * 0.587 + sb * 0.114) / 255;
+  const fog = mixHex(L.fog, L.particles, Math.min(0.34, Math.max(0.1, 0.1 + skyLum * 2.2)));
 
   return {
     ground: L.ground,

@@ -82,9 +82,11 @@ const FRAG = /* glsl */ `
     vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.075, y));
     col = mix(col, uTop, smoothstep(0.05, 0.30, y));
 
-    // One low sun where the register puts it. Never a lens flare.
+    // One low sun where the register puts it. Never a lens flare. And never at
+    // all where there is a moon: the depths get one red disc and nothing else,
+    // and a warm glow on the other side of the sky made them read as dusk.
     float d = bearing(dir, uGlowEl, uGlowAz);
-    col += uGlow * pow(max(0.0, 1.0 - d * 0.9), 4.0) * 0.9;
+    col += uGlow * pow(max(0.0, 1.0 - d * 0.9), 4.0) * 0.9 * (1.0 - uMoon);
 
     // The depths get one red moon and nothing else in the sky. It sits low, in
     // the band of sky this camera can see, and it is a disc with a halo.
