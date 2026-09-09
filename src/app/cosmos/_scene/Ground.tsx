@@ -139,7 +139,7 @@ export function Ground({
             float d = rectDist(wp, uBC[i], uBH[i]);
             float wgt = 1.0 - smoothstep(0.0, 7.0, max(d, 0.0));
             if (wgt <= 0.0) continue;
-            vec3 g = mix(uBCol[i], uBAlt[i], smoothstep(0.35, 0.68, broad));
+            vec3 g = mix(uBCol[i], uBAlt[i], smoothstep(0.30, 0.72, broad));
             acc += g * wgt;
             wsum += wgt;
             band += uBBand[i] * wgt;
@@ -147,11 +147,12 @@ export function Ground({
 
           vec3 ground = wsum > 0.001 ? acc / wsum : uMistColor;
           band = wsum > 0.001 ? band / wsum : 0.0;
-          // Out past every biome the floor IS the mist, at its own density.
           float outside = 1.0 - clamp(wsum, 0.0, 1.0);
-          ground = mix(ground, uMistColor, outside * 0.86);
+          // Out past every biome the floor is the mist, DARKENED: pale everywhere reads
+          // as a blown-out page, and the point of the border is depth, not paper.
+          ground = mix(ground, uMistColor * 0.62, outside * 0.9);
 
-          ground *= 0.94 + tooth * 0.12;
+          ground *= 0.86 + tooth * 0.26;
           // Riso posterizes the ground into flat ink steps, no gradient anywhere.
           if (band > 0.5) ground = floor(ground * 5.0 + 0.5) / 5.0;
 
@@ -170,7 +171,7 @@ export function Ground({
           float veil = uMistDensity * (0.22 + 0.78 * smoothstep(0.28, 0.94, n));
           veil = veil * (0.24 + 0.76 * far);
           veil *= (1.0 - lit * 0.90);
-          veil = clamp(veil * (1.0 - uFloor * 0.35), 0.0, 0.92);
+          veil = clamp(veil * (1.0 - uFloor * 0.58), 0.0, 0.88);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, uMistColor, veil);
         `,
         );

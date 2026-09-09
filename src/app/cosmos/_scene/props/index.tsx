@@ -26,12 +26,20 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Palette } from "../palette";
+import type { Runtime } from "../runtime";
 import { GEO, toon } from "../toon";
 
 export interface PropProps {
   p: Palette;
   /** Deterministic 0..1 from the placement seed. Same room, same world, forever. */
   v: number;
+  /**
+   * The walker, for the one thing geometry needs to know about him: whether he
+   * is underneath it. `build-game-camera-controls` asks for an occlusion policy
+   * that never hides the player and never makes geometry invisible globally, so
+   * the hall's roof fades and only the hall's roof, and only while he is in it.
+   */
+  rt?: React.RefObject<Runtime>;
 }
 
 export interface Blocker {
@@ -201,8 +209,32 @@ const StoneLantern = ({ p }: PropProps) => (
  * The shrine hall: home base. A plinth at ground level (no traversal elevation,
  * `author-game-levels` one-plane rule), six posts, three walls, a hip roof, an
  * opening in the back wall where the stair goes down.
+ *
+ * The roof is the one occluder in the world big enough to hide him, so it has
+ * its own material (not the shared cache, which every other roof in the cosmos
+ * would fade with it) and it thins to a quarter while he is inside. Fading, not
+ * hiding: the hall still reads as a room with a roof on it from every angle.
  */
-const ShrineHall = ({ p }: PropProps) => (
+const ShrineHall = ({ p, rt }: PropProps) => {
+  const roofMat = useMemo(() => {
+    const m = toon(p.roof).clone();
+    m.transparent = true;
+    m.opacity = 1;
+    m.depthWrite = true;
+    return m;
+  }, [p.roof]);
+
+  useFrame((_, dt) => {
+    const r = rt?.current;
+    if (!r) return;
+    // The footprint, in the hall's own local numbers, plus a step of margin.
+    const inside = Math.abs(r.pos.x) < 7.6 && r.pos.z > -5.2 && r.pos.z < 5.4;
+    const want = inside ? 0.22 : 1;
+    roofMat.opacity += (want - roofMat.opacity) * Math.min(1, dt * 4);
+    roofMat.depthWrite = roofMat.opacity > 0.92;
+  });
+
+  return (
   <group>
     {/* Floor, 1 cm of dressing, not a step. */}
     <Box at={[0, 0.03, 0]} size={[13, 0.06, 9]} color={p.wood} shadow={false} />
@@ -220,15 +252,16 @@ const ShrineHall = ({ p }: PropProps) => (
     {/* Side walls, half height, so the room reads open to the valley. */}
     <Box at={[-6.2, 0.8, 0]} size={[0.3, 1.6, 8.4]} color={p.woodDark} />
     <Box at={[6.2, 0.8, 0]} size={[0.3, 1.6, 8.4]} color={p.woodDark} />
-    {/* Roof: two slabs and a ridge. */}
-    <Box at={[0, 3.6, -2.4]} size={[14.4, 0.28, 6]} color={p.roof} rot={[-0.34, 0, 0]} />
-    <Box at={[0, 3.6, 2.4]} size={[14.4, 0.28, 6]} color={p.roof} rot={[0.34, 0, 0]} />
-    <Box at={[0, 4.5, 0]} size={[14.8, 0.3, 0.6]} color={p.woodDark} />
+    {/* Roof: two slabs and a ridge, on their own fading material. */}
+    <mesh geometry={GEO.box} material={roofMat} position={[0, 3.6, -2.4]} scale={[14.4, 0.28, 6]} rotation={[-0.34, 0, 0]} castShadow receiveShadow />
+    <mesh geometry={GEO.box} material={roofMat} position={[0, 3.6, 2.4]} scale={[14.4, 0.28, 6]} rotation={[0.34, 0, 0]} castShadow receiveShadow />
+    <mesh geometry={GEO.box} material={roofMat} position={[0, 4.5, 0]} scale={[14.8, 0.3, 0.6]} castShadow />
     {/* The steps up to the front, three flat slabs, all at ground height. */}
     <Box at={[0, 0.02, 5.1]} size={[7, 0.04, 1]} color={p.stone} shadow={false} />
     <Box at={[0, 0.02, 6.0]} size={[8, 0.04, 1]} color={p.stoneDark} shadow={false} />
   </group>
-);
+  );
+};
 
 /** The stair down. A dark mouth in the floor with three treads inside it. */
 const StairsDown = ({ p }: PropProps) => (
@@ -242,20 +275,21 @@ const StairsDown = ({ p }: PropProps) => (
   </group>
 );
 
-/** Flat slabs. Walkable, no blocker: a path that stops you is not a path. */
+/**
+ * One flat slab. Walkable, no blocker: a path that stops you is not a path.
+ *
+ * A slab per placement rather than four, because the dressing already lays a
+ * chain of them down a room's long axis. Four per placement, overlapping four
+ * more, read as scattered tiles instead of a way to walk.
+ */
 const StonePath = ({ p, v }: PropProps) => (
-  <group>
-    {[0, 1, 2, 3].map((i) => (
-      <Box
-        key={i}
-        at={[(((v * 7 + i) % 1) - 0.5) * 0.5, 0.02, i * 1.25 - 1.9]}
-        size={[1.5, 0.05, 1.05]}
-        color={i % 2 ? p.stone : p.stoneDark}
-        rot={[0, ((v * 13 + i) % 1) * 0.18 - 0.09, 0]}
-        shadow={false}
-      />
-    ))}
-  </group>
+  <Box
+    at={[(v - 0.5) * 0.22, 0.02, 0]}
+    size={[1.45, 0.05, 1.0]}
+    color={v > 0.5 ? p.stone : p.stoneDark}
+    rot={[0, (v - 0.5) * 0.14, 0]}
+    shadow={false}
+  />
 );
 
 const Pine = ({ p, v }: PropProps) => {
@@ -400,10 +434,11 @@ const Torch = ({ p }: PropProps) => (
   </group>
 );
 
-/** The hearth: a flat mat and a ring of stones. Walk onto it and you sit. */
+/** The hearth: a woven mat and a ring of stones. Walk onto it and you sit. */
 const Hearth = ({ p }: PropProps) => (
   <group>
-    <Box at={[0, 0.09, 0]} size={[3.4, 0.04, 3.0]} color={p.paper} shadow={false} />
+    <Box at={[0, 0.11, 0]} size={[2.3, 0.04, 2.0]} color={p.wood} shadow={false} />
+    <Box at={[0, 0.115, 0]} size={[2.0, 0.03, 1.72]} color={p.stoneDark} shadow={false} />
     {Array.from({ length: 8 }, (_, i) => {
       const a = (i / 8) * Math.PI * 2;
       return (

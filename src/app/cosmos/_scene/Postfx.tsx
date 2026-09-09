@@ -47,20 +47,20 @@ export function Postfx({
       {quality === "full" ? (
         <DepthOfField
           focusDistance={focusDistance}
-          focalLength={0.035}
-          bokehScale={3.4}
+          focalLength={0.24}
+          bokehScale={1.7}
           height={480}
         />
       ) : (
         <DepthOfField
           focusDistance={focusDistance}
-          focalLength={0.05}
-          bokehScale={1.8}
+          focalLength={0.3}
+          bokehScale={1.1}
           height={240}
         />
       )}
       <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={grain * 2.2} />
-      <Vignette eskil={false} offset={0.28} darkness={0.42} />
+      <Vignette eskil={false} offset={0.36} darkness={0.26} />
     </EffectComposer>
   );
 }

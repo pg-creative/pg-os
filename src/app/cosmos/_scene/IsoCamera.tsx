@@ -26,9 +26,9 @@ import type { Runtime } from "./runtime";
 
 /** Yaw of the camera around the target, in radians. 45 degrees. */
 export const CAM_YAW = Math.PI / 4;
-const PITCH = 0.74; // about 42 degrees down
-export const MIN_DIST = 17;
-export const MAX_DIST = 46;
+const PITCH = 0.86; // about 49 degrees down, the reference's read
+export const MIN_DIST = 28;
+export const MAX_DIST = 76;
 
 export function IsoCamera({
   rt,

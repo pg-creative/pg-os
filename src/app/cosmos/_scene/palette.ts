@@ -63,13 +63,15 @@ export const PALETTES: Record<Register, Palette> = {
    * a literal PHASES.twilight or PHASES.day value: plum, sakura, gold.
    */
   painted: {
-    ground: "#3E5A46", // day accent #1a5c3a lifted toward the plum air
-    groundAlt: "#4A6650",
-    stone: "#B9AEB6",
-    stoneDark: "#6E6270",
-    wood: "#8A6A52",
-    woodDark: "#5A4436",
-    roof: twilight.accentDim, // #A05888
+    ground: "#3A5B48", // day accent #1a5c3a lifted toward the plum air
+    groundAlt: "#4E6A54",
+    stone: "#B3AFAC",
+    stoneDark: "#76727A",
+    wood: "#9C7C5E",
+    woodDark: "#6B5340",
+    // Not twilight.accentDim (#A05888): at roof scale that hex is a hot magenta
+    // slab and it eats the frame. A slate carrying the same plum, half as loud.
+    roof: "#5E3F52",
     foliage: "#2E5540",
     foliageDark: "#1E3A2C",
     trunk: "#5A4436",
@@ -79,7 +81,10 @@ export const PALETTES: Record<Register, Palette> = {
     flameCore: "#FFE2B0",
     water: "#4A5E80",
     waterDeep: "#26324A",
-    mist: twilight.textSub, // #C8A8D8
+    // Not twilight.textSub (#C8A8D8): as a fullscreen air colour that pale lilac
+    // turns the whole frame to candy floss. The same plum with the chroma pulled
+    // out, so distance reads as distance.
+    mist: "#9C86A4",
     key: "#F0C8A0",
     fill: twilight.accent, // #E0A0D0
     ambient: "#6A5878",
@@ -89,7 +94,7 @@ export const PALETTES: Record<Register, Palette> = {
     skyGlow: twilight.goldBright,
     banding: 0,
     grain: 0.055,
-    mistDensity: 0.5,
+    mistDensity: 0.42,
   },
 
   /**

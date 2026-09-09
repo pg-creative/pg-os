@@ -120,7 +120,7 @@ const MIST_FN = /* glsl */ `
     float veil = uMistDensity * (0.22 + 0.78 * smoothstep(0.28, 0.94, n));
     veil = veil * (0.30 + 0.70 * far) + uUntouched * 0.34 * (1.0 - far * 0.4);
     veil *= (1.0 - lit * 0.88);
-    return clamp(veil * (1.0 - uFloor * 0.35), 0.0, 0.90);
+    return clamp(veil * (1.0 - uFloor * 0.58), 0.0, 0.86);
   }
 `;
 

@@ -243,7 +243,7 @@ export function World({
             rotation={[0, pl.rot, 0]}
             scale={pl.scale}
           >
-            <def.Component p={p} v={pl.v} />
+            <def.Component p={p} v={pl.v} rt={rt} />
           </group>
         );
       })}

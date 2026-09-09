@@ -41,7 +41,12 @@ import { SoundToggle, useAudioArm, useWorldSound, type BiomeVoice } from "./Ambi
 const PORTRAIT = "/agent-office/characters/wayfarer-0.png";
 /** A working name, and a draft until PG says "that one". */
 const HERO_NAME = "the Wayfarer";
-const STILL = "/cosmos/still-hall.webp";
+/**
+ * A real screenshot of this scene, taken by the harness with the HUD hidden and
+ * cropped inside any paper edge (the Critic's deduction 11: round one's still
+ * kept the plate's torn white border). Regenerate it whenever the hall changes.
+ */
+const STILL = "/cosmos/still-hall.jpg";
 
 export function CosmosStage({
   manifest,
@@ -244,7 +249,14 @@ export function CosmosStage({
   }
 
   return (
-    <div className="cosmos-stage" data-theme={theme} data-depth={hud.depth ? "true" : "false"}>
+    <div
+      className="cosmos-stage"
+      data-theme={theme}
+      data-depth={hud.depth ? "true" : "false"}
+      /* Where the SERVER put him on this load. The never-restart proof reads
+         this before and after a reload: walk, reload, and it has moved. */
+      data-hero={`${manifest.hero.world}:${manifest.hero.x.toFixed(1)},${manifest.hero.z.toFixed(1)}`}
+    >
       <WorldCanvas
         manifest={manifest}
         rt={rt}

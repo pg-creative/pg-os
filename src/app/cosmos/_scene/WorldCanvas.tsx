@@ -256,13 +256,13 @@ function KeyLight({
       <hemisphereLight
         color={p.key}
         groundColor={p.ambient}
-        intensity={theme === "light" ? 1.25 : 0.72}
+        intensity={theme === "light" ? 1.05 : 0.6}
       />
-      <ambientLight color={p.fill} intensity={theme === "light" ? 0.55 : 0.28} />
+      <ambientLight color={p.fill} intensity={theme === "light" ? 0.34 : 0.2} />
       <directionalLight
         ref={dir}
         color={p.key}
-        intensity={theme === "light" ? 1.5 : 1.05}
+        intensity={theme === "light" ? 2.1 : 1.5}
         castShadow
         shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-24}
@@ -446,7 +446,11 @@ export function WorldCanvas({
     <Canvas
       dpr={dpr}
       frameloop={idle && !reduced ? "demand" : "always"}
-      shadows
+      /* Not `shadows` bare: r3f's default is PCFSoftShadowMap, which three 0.185
+         deprecates and warns about on every shadow-casting light, 143 times in
+         one harness run. PCF is the supported successor and looks the same at
+         this map size. */
+      shadows={{ type: THREE.PCFShadowMap }}
       gl={{
         antialias: false,
         alpha: false,

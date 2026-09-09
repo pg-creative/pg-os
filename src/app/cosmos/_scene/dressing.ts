@@ -117,7 +117,7 @@ function dressRoom(world: WorldManifest, r: Room): Placement[] {
       // A path down the long axis, so the eye knows where the room leads.
       const along = r.size.d >= r.size.w;
       const span = along ? hd : hw;
-      const steps = Math.max(2, Math.floor(span / 2.6));
+      const steps = Math.max(3, Math.floor(span / 1.25));
       for (let i = 0; i < steps; i++) {
         const t = (i / Math.max(1, steps - 1)) * 2 - 1;
         put(
@@ -153,7 +153,7 @@ function dressRoom(world: WorldManifest, r: Room): Placement[] {
 
   // 5. Scatter. Small, cheap, and it is the difference between a floor plan and
   // a place. Never inside the middle third, where the walking happens.
-  const scatter = world.layout.ground === "ash" ? 4 : 9;
+  const scatter = world.layout.ground === "ash" ? 4 : 7;
   for (let i = 0; i < scatter; i++) {
     const ex = (rng() * 2 - 1) * hw;
     const ez = (rng() * 2 - 1) * hd;

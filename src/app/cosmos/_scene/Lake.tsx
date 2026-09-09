@@ -67,9 +67,12 @@ const FRAG = /* glsl */ `
     float stroke = smoothstep(0.54, 0.66, a) * 0.5 + smoothstep(0.58, 0.72, b) * 0.5;
     col = mix(col, uInk, stroke * 0.32);
 
-    // Foam at the shore: one hard step, because paper does not blur.
-    float foam = smoothstep(0.80, 0.94, edge + (a - 0.5) * 0.12);
-    col = mix(col, uInk, foam * 0.55);
+    // Foam at the shore: one hard step, because paper does not blur. Tight, and
+    // toward a lit version of the water rather than toward the page: a wide white
+    // rim turns a lake into a bathtub, which is exactly what it did on the first
+    // pass.
+    float foam = smoothstep(0.90, 0.995, edge + (a - 0.5) * 0.07);
+    col = mix(col, mix(uShallow, uInk, 0.45), foam * 0.6);
 
     if (uBanding > 0.5) col = floor(col * 5.0 + 0.5) / 5.0;
 
