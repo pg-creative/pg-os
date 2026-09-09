@@ -28,7 +28,7 @@
  * up and compiles nothing.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useIdleDetector } from "../../_components/useIdleDetector";
@@ -377,7 +377,17 @@ function Tone() {
 
 // ── The canvas ───────────────────────────────────────────────────────────────
 
-export function WorldCanvas({
+/**
+ * MEMOIZED, and it is worth four times the frame rate.
+ *
+ * The HUD hears about the world four times a second (which biome, what is in
+ * reach, how long he has stood there). That `setHud` re-renders the stage, and
+ * the stage renders this, and this renders five biomes of two hundred props
+ * each: React reconciled the entire scene tree every 250 ms, which is a 30 ms
+ * frame four times a second, which is a p1 of 32 under a p50 of 145. Every prop
+ * this takes is stable across a HUD tick, so the tick now stops at the boundary.
+ */
+export const WorldCanvas = memo(function WorldCanvas({
   manifest,
   rt,
   theme,
@@ -616,7 +626,7 @@ export function WorldCanvas({
       )}
     </Canvas>
   );
-}
+});
 
 export { createRuntime };
 export type { Runtime };

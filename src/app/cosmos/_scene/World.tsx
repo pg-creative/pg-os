@@ -27,7 +27,7 @@
  * label floating over every object is a diagram.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Monument, Room, SceneObject, WorldManifest } from "./contract";
@@ -67,7 +67,7 @@ const INTERIOR: Record<string, { url: string; u: number }> = {
  * card when the vault has cut one, so "no page without a plate" is visible on the
  * object and not only inside the panel.
  */
-function PageObject({
+const PageObject = memo(function PageObject({
   o,
   p,
   rt,
@@ -155,7 +155,7 @@ function PageObject({
       </group>
     </group>
   );
-}
+});
 
 // ── A LEDGER line, standing up ───────────────────────────────────────────────
 
@@ -225,7 +225,7 @@ function hashCode(s: string): number {
 
 // ── One prop: painted if the vault has it, procedural if not ─────────────────
 
-function Prop({
+const Prop = memo(function Prop({
   pl,
   worldId,
   p,
@@ -283,7 +283,7 @@ function Prop({
       />
     </group>
   );
-}
+});
 
 // ── The biome ────────────────────────────────────────────────────────────────
 
@@ -298,7 +298,7 @@ function Prop({
  * per mesh; `matrixAutoUpdate = false` stops it recomputing world matrices for
  * scenery that has not moved since it was placed and never will.
  */
-function RoomProps({
+const RoomProps = memo(function RoomProps({
   room,
   placements,
   worldId,
@@ -355,9 +355,10 @@ function RoomProps({
       ))}
     </group>
   );
-}
+});
 
-export function World({
+/** Memoized for the same reason `WorldCanvas` is: a HUD tick is not a world. */
+export const World = memo(function World({
   world,
   p,
   rt,
@@ -488,7 +489,7 @@ export function World({
       ))}
     </group>
   );
-}
+});
 
 /** Every collision circle in a set of worlds, in world coordinates. */
 export function worldBlockers(worlds: WorldManifest[]) {

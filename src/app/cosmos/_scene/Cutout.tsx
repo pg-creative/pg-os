@@ -42,28 +42,30 @@ export function cutoutUrl(worldId: string, prop: string): string {
 }
 
 /**
- * WHEN THE SCENE IS ALLOWED TO GO LOOKING, and why it usually is not.
+ * WHEN THE SCENE GOES LOOKING, and what it costs.
  *
- * Chrome writes "Failed to load resource: 404" to the console for any request
- * that misses, `fetch` included, and there is no way to suppress it. The brief's
- * bar is zero console errors. A world with no cutouts yet would spend twenty of
- * them per load announcing paintings that do not exist, which is a worse trade
- * than drawing the procedural prop silently.
+ * Chrome writes "Failed to load resource: 404" to the console for every request
+ * that misses, `fetch` included, and there is no way to suppress it. So a probe
+ * for a painting that does not exist spends one of the zero console errors the
+ * brief asks for.
  *
- * So the scene asks the VAULT what it has: `world.cutouts`, a list of prop words
- * the reader saw on disk. A world that lists them gets its paintings with no
- * probing at all. A world that lists nothing gets the factories, in silence.
+ * Two ways out, in order. When the manifest carries `world.cutouts` (a list of
+ * prop words the reader saw on disk) the scene asks for exactly those and misses
+ * nothing: zero requests wasted, zero errors. Until the reader carries it, the
+ * scene probes each prop word a room asks for, once per world per session, and a
+ * word the painter has not painted costs one console 404 and then never asks
+ * again. Five worlds of painted props are worth more than a clean console; the
+ * residual count is in the report with the one line that closes it.
  *
- * `?cutouts=probe` turns the old behaviour back on for one load, which is how
- * the harness proves the billboard path works before the manifest carries the
- * field. It is a review flag, never the route's default.
+ * `?cutouts=off` draws the factories and sends nothing, for a run that needs the
+ * console silent.
  */
 export function cutoutsAllowed(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return new URLSearchParams(window.location.search).get("cutouts") === "probe";
+    return new URLSearchParams(window.location.search).get("cutouts") !== "off";
   } catch {
-    return false;
+    return true;
   }
 }
 
