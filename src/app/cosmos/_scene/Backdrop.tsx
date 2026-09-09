@@ -30,7 +30,24 @@ import { useCutout } from "./Cutout";
 import { CAM_YAW } from "./IsoCamera";
 
 /** How far past the biome's edge the painted country stands. */
-const OUT = 78;
+const OUT = 170;
+/**
+ * A distant country is a RANGE OVER THERE, not a wall in front.
+ *
+ * The first frame off this component stood the whole plate up at 152 by 85
+ * metres, and a 1.78 image that tall reaches eighteen degrees above the eye: it
+ * filled the whole sky band, went pale in the haze, and washed the entire frame
+ * lavender. The sky band this camera can see is about nine degrees tall, so a
+ * backdrop has to fit inside it. These numbers crop the plate to the band around
+ * its own horizon and stand that band 16 m tall at 170 m out with its FEET on
+ * the horizon line, so it rises about six degrees into the sky band and never
+ * crosses down over ground the eye can see is nearer. About a third of the frame
+ * wide: painted country over there, with sky above it.
+ */
+const WIDE = 150;
+const TALL = 16;
+const CROP_FROM = 0.4;
+const CROP_TO = 0.59;
 /** How much of the walker's movement it takes. 1 is painted on the lens. */
 const FOLLOW = 0.86;
 
@@ -38,17 +55,24 @@ export function Backdrop({
   world,
   p,
   rt,
+  current,
 }: {
   world: WorldManifest;
   p: Palette;
   rt: React.RefObject<Runtime>;
+  /** Only the biome he is standing in paints its own horizon. */
+  current: boolean;
 }) {
-  const url = world.backdrop?.url ?? null;
+  const url = current ? (world.backdrop?.url ?? null) : null;
   const { status, tex } = useCutout(url);
   const group = useRef<THREE.Group>(null);
 
   const material = useMemo(() => {
     if (!tex) return null;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(1, CROP_TO - CROP_FROM);
+    tex.offset.set(0, 1 - CROP_TO);
     const m = new THREE.MeshBasicMaterial({
       map: tex,
       transparent: true,
@@ -66,11 +90,12 @@ export function Backdrop({
           `#include <dithering_fragment>
            // Into the haze at the edges and, hardest, along the bottom, where
            // the painted ground has to become the real ground.
-           float side = smoothstep(0.0, 0.14, vMapUv.x) * smoothstep(1.0, 0.86, vMapUv.x);
-           float foot = smoothstep(0.0, 0.42, vMapUv.y);
-           float top  = smoothstep(1.0, 0.94, vMapUv.y);
-           gl_FragColor.rgb = mix(uFog, gl_FragColor.rgb, 0.62 + 0.38 * foot);
-           gl_FragColor.a *= side * foot * top * 0.92;`,
+           // Both ends, symmetrically: the crop is a band out of the middle of
+           // a painting and either edge of it is a cut, not a horizon.
+           float side = smoothstep(0.0, 0.28, vMapUv.x) * smoothstep(1.0, 0.72, vMapUv.x);
+           float band = smoothstep(0.0, 0.3, vMapUv.y) * smoothstep(1.0, 0.7, vMapUv.y);
+           gl_FragColor.rgb = mix(uFog, gl_FragColor.rgb, 0.4 + 0.35 * band);
+           gl_FragColor.a *= side * band * 0.92;`,
         );
     };
     m.customProgramCacheKey = () => "cosmos-backdrop";
@@ -98,11 +123,6 @@ export function Backdrop({
 
   if (status !== "ok" || !material) return null;
 
-  const img = tex?.image as { width?: number; height?: number } | undefined;
-  const aspect = img?.width && img?.height ? img.width / img.height : 1.78;
-  const width = 128;
-  const height = width / aspect;
-
   return (
     <group ref={group}>
       <mesh
@@ -110,11 +130,11 @@ export function Backdrop({
         rotation={[0, CAM_YAW, 0]}
         // Sunk so its foot is under the horizon line and its body stands above
         // it: the join happens inside the haze and never as an edge.
-        position={[0, height * 0.42, 0]}
+        position={[0, 14.6, 0]}
         renderOrder={-90}
         frustumCulled={false}
       >
-        <planeGeometry args={[width, height]} />
+        <planeGeometry args={[WIDE, TALL]} />
       </mesh>
     </group>
   );

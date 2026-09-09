@@ -91,6 +91,12 @@ export interface WorldManifest {
   hero: { world: string; x: number; z: number } | null;
   backdrop: { url: string; lqip: string } | null;
   bed: string | null;
+  /**
+   * Prop words this world has a painted cutout for on disk, if the reader
+   * looked. Absent or empty means "draw the factories", and the scene sends no
+   * request at all rather than spending a console error per missing painting.
+   */
+  cutouts?: string[];
 }
 
 /** Everything the client half needs, in one object. */

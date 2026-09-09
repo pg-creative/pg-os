@@ -35,11 +35,11 @@ import { useIdleDetector } from "../../_components/useIdleDetector";
 import type { CosmosManifest, WorldManifest } from "./contract";
 import { nearestWorld, worldAt } from "./contract";
 import { neighbourPalette, paletteFor, type Palette } from "./registers";
-import { lightsFor, roomAt } from "./place";
+import { lightsFor, placeWorld, roomAt } from "./place";
 import { createRuntime, stepWalker, STRIDE, type Runtime } from "./runtime";
 import { CAM_YAW, IsoCamera } from "./IsoCamera";
 import { Ground } from "./Ground";
-import { GrassField } from "./Grass";
+import { GrassField, type Clearing } from "./Grass";
 import { Sky, skyFor, useHour, type SkyLook } from "./Sky";
 import { World, worldBlockers } from "./World";
 import { Hero } from "./Hero";
@@ -96,14 +96,18 @@ export function weatherLook(w: Record<string, number | string | null> | undefine
   // Nothing written yet is not bad weather. It is no weather.
   let mist = 0;
   let key = 0.5;
+  // Small numbers on purpose. The first pass let a quiet week add half again
+  // as much air as the register carries and the whole frame went lavender: a
+  // bad night should read as weather, and weather you cannot see through is a
+  // report card with extra steps.
   if (recovery !== null) {
     const r = Math.min(1, Math.max(0, recovery / 100));
-    mist += (1 - r) * 0.34;
+    mist += (1 - r) * 0.12;
     key = 0.3 + r * 0.6;
   }
-  if (pages !== null) mist += Math.min(0.26, pages * 0.05);
-  if (shipped !== null) mist += Math.min(0.2, Math.max(0, shipped - 3) * 0.03);
-  return { mist: Math.min(0.5, mist), key: Math.min(1, Math.max(0, key)) };
+  if (pages !== null) mist += Math.min(0.07, pages * 0.014);
+  if (shipped !== null) mist += Math.min(0.06, Math.max(0, shipped - 3) * 0.01);
+  return { mist: Math.min(0.16, mist), key: Math.min(1, Math.max(0, key)) };
 }
 
 // ── The per-frame conductor ──────────────────────────────────────────────────
@@ -319,12 +323,15 @@ function KeyLight({
 
   return (
     <>
-      <hemisphereLight color={p.key} groundColor={p.ambient} intensity={(day ? 1.05 : 0.6) * k} />
-      <ambientLight color={p.fill} intensity={(day ? 0.34 : 0.2) * k} />
+      {/* Three lights adding to about 3.2 of irradiance put every lit face of
+          the ground past white, and a painted world with blown highlights is a
+          grey one. About 1.6 total keeps the toon ramp inside its own colour. */}
+      <hemisphereLight color={p.key} groundColor={p.ambient} intensity={(day ? 0.62 : 0.4) * k} />
+      <ambientLight color={p.fill} intensity={(day ? 0.2 : 0.14) * k} />
       <directionalLight
         ref={dir}
         color={p.key}
-        intensity={(day ? 2.1 : 1.5) * k}
+        intensity={(day ? 1.28 : 0.95) * k}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-26}
@@ -416,7 +423,7 @@ export function WorldCanvas({
   );
 
   /** Register air plus what the weather adds. One number, two consumers. */
-  const air = Math.min(0.95, palette.mistDensity + weather.mist);
+  const air = Math.min(0.62, palette.mistDensity + weather.mist);
 
   // Which biomes are close enough to draw. Everything else is behind the mist
   // and costs nothing, which is what makes five worlds on one plane affordable.
@@ -429,6 +436,24 @@ export function WorldCanvas({
         return Math.hypot(dx, dz) < 62;
       }),
     [worlds, current],
+  );
+
+  /** Every floor in sight. Meadow grass growing through the shrine's boards
+      was the first thing wrong with the first frame off this camera. */
+  const clearings = useMemo<Clearing[]>(
+    () =>
+      visible.flatMap((w) =>
+        placeWorld(w)
+          .filter((pl) => pl.kind === "hall" || pl.kind === "smithy")
+          .map((pl) => ({
+            x: pl.x,
+            z: pl.z,
+            w: (pl.w ?? 10) + 2.6,
+            d: (pl.d ?? 8) + 2.6,
+            rot: pl.rot,
+          })),
+      ),
+    [visible],
   );
 
   // Blockers, once, for every world that can be walked into from here.
@@ -539,13 +564,23 @@ export function WorldCanvas({
       <color attach="background" args={[sky.horizon]} />
       {/* The fog IS the horizon: one hex, so a pine dissolving into the distance
           and the sky it dissolves into cannot disagree. */}
-      <fogExp2 attach="fog" args={[palette.fog, 0.0055 + air * 0.011]} />
+      <fogExp2 attach="fog" args={[palette.fog, 0.0035 + air * 0.008]} />
       <Tone />
       <Sky look={sky} banding={palette.banding} mistDensity={air} />
       <KeyLight rt={rt} p={palette} theme={theme} weather={weather} />
       <IsoCamera rt={rt} target={target} />
       <Ground worlds={worlds} target={target} horizon={sky.horizon} />
-      <GrassField target={target} root={palette.grass} tip={palette.grassTip} />
+      <GrassField
+        target={target}
+        /* Root near the ground it grows out of, tip the register's own grass.
+           Rooted in `foliageDark` the blades read as dark chips scattered on a
+           cream page rather than as a meadow. */
+        root={palette.foliage}
+        tip={palette.grassTip}
+        clearings={clearings}
+        count={3000}
+        radius={22}
+      />
 
       {visible.map((w) => {
         const isHere = w.id === current?.id;

@@ -74,12 +74,17 @@ const FRAG = /* glsl */ `
     // the plane runs out is invisible.
     float y = clamp(dir.y, 0.0, 1.0);
 
-    vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.34, y));
-    col = mix(col, uTop, smoothstep(0.26, 0.86, y));
+    // THE RAMP IS COMPRESSED ON PURPOSE. This camera can see about nine degrees
+    // of sky, which is 0.16 of elevation, so a ramp that spends its first third
+    // reaching the mid stop paints one flat murky band and nothing else. These
+    // stops put the whole gradient inside the band the frame actually holds:
+    // lit at the horizon, deep plum a hand's width above it.
+    vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.075, y));
+    col = mix(col, uTop, smoothstep(0.05, 0.30, y));
 
     // One low sun where the register puts it. Never a lens flare.
     float d = bearing(dir, uGlowEl, uGlowAz);
-    col += uGlow * pow(max(0.0, 1.0 - d * 1.1), 4.0) * 0.75;
+    col += uGlow * pow(max(0.0, 1.0 - d * 0.9), 4.0) * 0.9;
 
     // The depths get one red moon and nothing else in the sky. It sits low, in
     // the band of sky this camera can see, and it is a disc with a halo.

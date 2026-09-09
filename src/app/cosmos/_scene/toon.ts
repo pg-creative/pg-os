@@ -115,10 +115,10 @@ const MIST_FN = /* glsl */ `
 
     // Distance from the eye. This is the diorama: the near table sharp, the far
     // country soft, without a depth-of-field pass having to carry the colour.
-    float far = smoothstep(16.0, 46.0, distance(wp.xz, uFocus.xz));
+    float far = smoothstep(22.0, 68.0, distance(wp.xz, uFocus.xz));
 
     float veil = uMistDensity * (0.22 + 0.78 * smoothstep(0.28, 0.94, n));
-    veil = veil * (0.30 + 0.70 * far) + uUntouched * 0.34 * (1.0 - far * 0.4);
+    veil = veil * (0.10 + 0.90 * far) + uUntouched * 0.34 * (1.0 - far * 0.4);
     veil *= (1.0 - lit * 0.88);
     return clamp(veil * (1.0 - uFloor * 0.58), 0.0, 0.86);
   }

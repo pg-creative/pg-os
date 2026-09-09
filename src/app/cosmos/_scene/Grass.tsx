@@ -83,24 +83,37 @@ function merge(list: THREE.BufferGeometry[]) {
   return out;
 }
 
+/** A rotated rectangle grass does not grow inside. A floor is a floor. */
+export interface Clearing {
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+  rot: number;
+}
+
 export function GrassField({
   target,
   root,
   tip,
-  count = 1500,
-  radius = 26,
+  clearings,
+  count = 2400,
+  radius = 19,
 }: {
   target: React.RefObject<THREE.Vector3>;
   root: string;
   tip: string;
+  /** Building footprints. Meadow grass through the shrine floor is a bug. */
+  clearings?: Clearing[];
   count?: number;
   radius?: number;
 }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const at = useRef<[number, number]>([NaN, NaN]);
+  const lastLay = useRef<unknown>(null);
 
   const { geometry, material } = useMemo(() => {
-    const geometry = bladeGeometry(0.34, 0.62, root, tip);
+    const geometry = bladeGeometry(0.13, 0.42, root, tip);
     const material = new THREE.MeshLambertMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
@@ -123,6 +136,24 @@ export function GrassField({
 
   const lay = useMemo(() => {
     const o = new THREE.Object3D();
+    const list = clearings ?? [];
+    // A blade inside a building is scaled to nothing rather than skipped: the
+    // instance count is fixed, so the draw call never changes shape.
+    const inside = (x: number, z: number) => {
+      for (const c of list) {
+        const dx = x - c.x;
+        const dz = z - c.z;
+        const co = Math.cos(-c.rot);
+        const si = Math.sin(-c.rot);
+        if (
+          Math.abs(dx * co - dz * si) < c.w / 2 + 0.4 &&
+          Math.abs(dx * si + dz * co) < c.d / 2 + 0.4
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
     return (cx: number, cz: number, m: THREE.InstancedMesh) => {
       for (let i = 0; i < count; i++) {
         // Deterministic from the instance index and the patch cell: the same
@@ -133,7 +164,7 @@ export function GrassField({
         const rad = Math.sqrt(b) * radius;
         const x = cx + Math.cos(ang) * rad;
         const z = cz + Math.sin(ang) * rad;
-        const s = 0.7 + hash2(Math.round(x * 4), Math.round(z * 4)) * 0.75;
+        const s = inside(x, z) ? 0 : 0.62 + hash2(Math.round(x * 4), Math.round(z * 4)) * 0.7;
         o.position.set(x, 0, z);
         o.rotation.set(0, a * Math.PI * 3.1, 0);
         o.scale.set(s, s, s);
@@ -143,7 +174,7 @@ export function GrassField({
       m.instanceMatrix.needsUpdate = true;
       m.computeBoundingSphere();
     };
-  }, [count, radius]);
+  }, [count, radius, clearings]);
 
   useFrame(() => {
     const m = mesh.current;
@@ -151,8 +182,9 @@ export function GrassField({
     if (!m || !t) return;
     const cx = Math.round(t.x / CELL) * CELL;
     const cz = Math.round(t.z / CELL) * CELL;
-    if (at.current[0] === cx && at.current[1] === cz) return;
+    if (at.current[0] === cx && at.current[1] === cz && lastLay.current === lay) return;
     at.current = [cx, cz];
+    lastLay.current = lay;
     lay(cx, cz, m);
   });
 

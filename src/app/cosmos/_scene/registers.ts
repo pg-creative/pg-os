@@ -103,10 +103,10 @@ function warm(h: string, t: number): string {
  * how much weather the register carries before the weather file says anything.
  */
 const TECHNIQUE: Record<Register, { banding: number; air: number }> = {
-  painted: { banding: 0, air: 0.42 },
+  painted: { banding: 0, air: 0.26 },
   riso: { banding: 1, air: 0.16 },
   watercolor: { banding: 0, air: 0.36 },
-  paperback: { banding: 0, air: 0.8 },
+  paperback: { banding: 0, air: 0.66 },
 };
 
 // ── The derivation ───────────────────────────────────────────────────────────
@@ -123,12 +123,27 @@ function derive(id: Register): Palette {
   const stone = mixHex(desat(L.mist, 0.35), bright ? "#FFFFFF" : "#C8C4C0", 0.3);
   const wood = warm(shade(L.ground, bright ? 0.1 : 0.16), 0.62);
   const paper = bright ? shade(desat(L.fog, 0.45), 0.72) : shade(desat(L.mist, 0.55), 0.62);
+  /**
+   * A FLAME IS WARM, whatever colour the air is. `particles` is the register's
+   * drifting mote (sakura at twilight, foxfire at midnight, gold by day) and
+   * deriving the fire straight from it lit the shrine's hearth sakura pink in
+   * the first frame off this file. Every fire in every register is the particle
+   * hue pulled most of the way to lamplight; the motes keep their own colour.
+   */
+  const flame = mixHex(L.particles, "#EAA050", 0.62);
+  /**
+   * The horizon carries the register's own light in it. `fog` alone is the grey
+   * of distance; a sky that meets the ground in pure grey has no hour in it. The
+   * SAME hex is used for the FogExp2, the ground's haze stop and the sky's
+   * bottom stop, so the seam where the plane runs out cannot be seen.
+   */
+  const fog = mixHex(L.fog, L.particles, 0.3);
 
   return {
     ground: L.ground,
-    groundAlt: shade(L.ground, bright ? -0.08 : 0.12),
+    groundAlt: shade(L.ground, bright ? -0.08 : 0.07),
     grass: L.grass,
-    grassTip: shade(L.grass, bright ? 0.16 : 0.24),
+    grassTip: shade(L.grass, bright ? 0.14 : 0.22),
     stone,
     stoneDark: shade(stone, -0.38),
     wood,
@@ -140,21 +155,21 @@ function derive(id: Register): Palette {
     trunk: shade(wood, -0.28),
     paper,
     ink: shade(L.sky, bright ? -0.62 : 0.06),
-    flame: L.particles,
-    flameCore: shade(L.particles, 0.55),
+    flame,
+    flameCore: shade(flame, 0.55),
     water: mixHex(L.fog, L.sky, 0.42),
     waterDeep: shade(mixHex(L.fog, L.sky, 0.72), -0.24),
     mist: L.mist,
     // The key light is the particle colour taken almost to white: one warm sun,
     // whatever hour the register was painted at.
-    key: shade(L.particles, 0.62),
+    key: shade(mixHex(L.particles, "#FFF0D8", 0.4), 0.5),
     fill: shade(L.mist, 0.28),
     ambient: shade(desat(L.mist, 0.3), up * 0.18),
     skyTop: L.sky,
-    skyMid: mixHex(L.sky, L.fog, 0.55),
-    skyHorizon: L.fog,
+    skyMid: mixHex(L.sky, fog, 0.42),
+    skyHorizon: fog,
     skyGlow: L.particles,
-    fog: L.fog,
+    fog,
     banding: t.banding,
     grain: L.grain,
     mistDensity: t.air,

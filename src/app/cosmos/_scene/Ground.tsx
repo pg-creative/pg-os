@@ -224,11 +224,16 @@ export function Ground({
           // hollows, on a second, finer octave so the edge is a meadow edge and
           // not a contour line.
           float cov = smoothstep(0.40, 0.74, broad * 0.7 + vnoise(wp * 0.21) * 0.45);
-          ground = mix(ground, cover, cov * 0.62 * (1.0 - outside));
+          ground = mix(ground, cover, cov * 0.42 * (1.0 - outside));
 
-          // Out past every biome the floor is the mist, DARKENED: pale everywhere
-          // reads as a blown-out page, and the point of the border is depth.
-          ground = mix(ground, uMistColor * 0.62, outside * 0.9);
+          // OUT PAST EVERY BIOME THE FLOOR IS THE HORIZON. Round two painted the
+          // void a darkened mist hex, and at a camera that can see a hundred
+          // metres that is not a border, it is a lavender plain filling a third
+          // of the frame. Blending straight to the sky's own horizon stop makes
+          // the world end in atmosphere: mist between two biomes (where wsum
+          // never falls to zero) still reads as mist, and past all five the
+          // ground simply becomes distance.
+          ground = mix(ground, uSkyHorizon, outside * 0.92);
 
           // Riso wants a flatter ground than a painted one: less tooth, then
           // stepped, so it reads as paper with ink on it rather than as grass.
@@ -245,16 +250,16 @@ export function Ground({
           float n = gMottle;
           float lant = distance(vWorldPosC, uLantern);
           float lit = 1.0 - smoothstep(uLanternR * 0.30, uLanternR, lant);
-          float far = smoothstep(14.0, 44.0, distance(vWorldPosC.xz, uFocus.xz));
+          float far = smoothstep(22.0, 68.0, distance(vWorldPosC.xz, uFocus.xz));
           float veil = uMistDensity * (0.22 + 0.78 * smoothstep(0.28, 0.94, n));
-          veil = veil * (0.24 + 0.76 * far);
+          veil = veil * (0.10 + 0.90 * far);
           veil *= (1.0 - lit * 0.90);
           veil = clamp(veil * (1.0 - uFloor * 0.58), 0.0, 0.88);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, uMistColor, veil);
           // And then into the sky. Far enough out the ground IS the horizon, so
           // the plane has no edge and the world has no end you can point at. The
           // stop is past the hills, so the country rolls before it dissolves.
-          float haze = smoothstep(64.0, 168.0, distance(vWorldPosC.xz, uFocus.xz));
+          float haze = smoothstep(130.0, 320.0, distance(vWorldPosC.xz, uFocus.xz));
           gl_FragColor.rgb = mix(gl_FragColor.rgb, uSkyHorizon, haze);
         `,
           );

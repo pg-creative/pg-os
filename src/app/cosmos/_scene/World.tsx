@@ -34,7 +34,7 @@ import type { Monument, Room, SceneObject, WorldManifest } from "./contract";
 import { untouchedFor } from "./contract";
 import type { Palette } from "./registers";
 import { blockersFor, lightsFor, placeWorld, type Placement } from "./place";
-import { Cutout, cutoutUrl, useCutout } from "./Cutout";
+import { Cutout, cutoutUrl, cutoutsAllowed, useCutout } from "./Cutout";
 import { EMITTER_SOCKET, Flame, PROPS } from "./props";
 import { GEO, toon } from "./toon";
 import type { Runtime } from "./runtime";
@@ -231,17 +231,25 @@ function Prop({
   p,
   rt,
   interior,
+  painted,
 }: {
   pl: Placement;
   worldId: string;
   p: Palette;
   rt: React.RefObject<Runtime>;
   interior: { url: string; u: number } | null;
+  /** Prop words this world has paintings for. Empty means the factories draw. */
+  painted: Set<string>;
 }) {
   const def = PROPS[pl.kind];
   // A room, a path and a sheet of water are shaped by their room; a painting of
   // one would be a painting of somewhere else. Those stay procedural.
-  const paintable = def && def.height > 0 && pl.kind !== "hall" && pl.kind !== "smithy";
+  const paintable =
+    def &&
+    def.height > 0 &&
+    pl.kind !== "hall" &&
+    pl.kind !== "smithy" &&
+    (painted.has(pl.kind) || cutoutsAllowed());
   const { status, tex } = useCutout(paintable ? cutoutUrl(worldId, pl.kind) : null);
 
   if (!def) return null;
@@ -297,6 +305,7 @@ function RoomProps({
   p,
   rt,
   interior,
+  painted,
 }: {
   room: Room;
   placements: Placement[];
@@ -304,6 +313,7 @@ function RoomProps({
   p: Palette;
   rt: React.RefObject<Runtime>;
   interior: { url: string; u: number } | null;
+  painted: Set<string>;
 }) {
   const group = useRef<THREE.Group>(null);
   const acc = useRef(0);
@@ -333,7 +343,15 @@ function RoomProps({
   return (
     <group ref={group}>
       {placements.map((pl) => (
-        <Prop key={pl.key} pl={pl} worldId={worldId} p={p} rt={rt} interior={interior} />
+        <Prop
+          key={pl.key}
+          pl={pl}
+          worldId={worldId}
+          p={p}
+          rt={rt}
+          interior={interior}
+          painted={painted}
+        />
       ))}
     </group>
   );
@@ -372,6 +390,7 @@ export function World({
 
   const lights = useMemo(() => lightsFor(world), [world]);
   const interior = INTERIOR[world.id] ?? null;
+  const painted = useMemo(() => new Set(world.cutouts ?? []), [world.cutouts]);
 
   /**
    * The light budget, BY DISTANCE, not by room order.
@@ -411,7 +430,7 @@ export function World({
 
   return (
     <group>
-      <Backdrop world={world} p={p} rt={rt} />
+      <Backdrop world={world} p={p} rt={rt} current={current} />
 
       {world.layout.rooms.map((room) => {
         const pls = byRoom.get(room.id);
@@ -425,6 +444,7 @@ export function World({
             p={p}
             rt={rt}
             interior={interior}
+            painted={painted}
           />
         );
       })}

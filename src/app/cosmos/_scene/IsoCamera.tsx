@@ -34,8 +34,17 @@ import type { Runtime } from "./runtime";
 
 /** Yaw of the camera around the target, in radians. 45 degrees. */
 export const CAM_YAW = Math.PI / 4;
-/** 18 degrees down. Above this the sky leaves the frame. */
-export const PITCH = 0.3142;
+/**
+ * 15.5 degrees down. Above this the sky leaves the frame.
+ *
+ * The arithmetic that sets it: the top edge of the frame sits at (fov/2 - pitch)
+ * degrees of ELEVATION, so a 44 degree lens pitched 15.5 degrees down shows six
+ * and a half degrees of sky, and the horizon lands at 0.686 in clip space, about
+ * a sixth of the frame from the top. That is where the reference puts its own
+ * treeline. Every number that stands on the horizon (the backdrop's height, the
+ * ground's haze stop) is derived from this one.
+ */
+export const PITCH = 0.2705;
 /** The lens. Fixed across every device so the perspective read never changes. */
 export const FOV = 44;
 /** Where the horizon lands in clip space, given the two numbers above. */

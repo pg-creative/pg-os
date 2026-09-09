@@ -185,19 +185,22 @@ const ShrineBell = ({ p }: PropProps) => (
  * nothing. The panel is emissive, so it reads as the source of its own light.
  */
 const PaperWindow = ({ p }: PropProps) => {
+  // Emissive at 0.9 on a near-white core blew to a flat white slab under ACES,
+  // and three of them stood in the hall reading as headstones. A lit paper
+  // window is warm and DIM: the light it throws is the point, not the panel.
   const glow = useMemo(
-    () => toon(p.flameCore, { noMist: true, emissive: p.flameCore, emissiveIntensity: 0.9 }),
-    [p.flameCore],
+    () => toon(p.flame, { noMist: true, emissive: p.flame, emissiveIntensity: 0.34 }),
+    [p.flame],
   );
   return (
     <group>
-      <Box at={[0, 1.15, 0]} size={[1.9, 2.3, 0.16]} color={p.woodDark} />
-      <mesh geometry={GEO.box} material={glow} position={[0, 1.2, 0.1]} scale={[1.5, 1.8, 0.04]} />
-      {[-0.5, 0, 0.5].map((x) => (
-        <Box key={x} at={[x * 1.5, 1.2, 0.14]} size={[0.06, 1.8, 0.05]} color={p.woodDark} shadow={false} />
+      <Box at={[0, 0.95, 0]} size={[1.5, 1.9, 0.14]} color={p.woodDark} />
+      <mesh geometry={GEO.box} material={glow} position={[0, 1.0, 0.08]} scale={[1.16, 1.42, 0.04]} />
+      {[-0.34, 0.34].map((x) => (
+        <Box key={x} at={[x * 1.16, 1.0, 0.12]} size={[0.05, 1.42, 0.04]} color={p.woodDark} shadow={false} />
       ))}
-      {[-0.4, 0.3].map((y) => (
-        <Box key={y} at={[0, 1.2 + y * 1.8, 0.14]} size={[1.5, 0.06, 0.05]} color={p.woodDark} shadow={false} />
+      {[-0.28, 0.28].map((y) => (
+        <Box key={y} at={[0, 1.0 + y * 1.42, 0.12]} size={[1.16, 0.05, 0.04]} color={p.woodDark} shadow={false} />
       ))}
     </group>
   );
@@ -689,9 +692,9 @@ export const PROPS: Record<string, PropDef> = {
   "shrine-bell": { Component: ShrineBell, height: 2.8, blockers: [{ x: -0.85, z: 0, r: 0.3 }, { x: 0.85, z: 0, r: 0.3 }] },
   "paper-window": {
     Component: PaperWindow,
-    height: 2.3,
+    height: 1.9,
     blockers: [{ x: 0, z: 0, r: 0.5 }],
-    sockets: { flame: [0, 1.2, 0] },
+    sockets: { flame: [0, 1.0, 0] },
   },
   hall: {
     Component: ShrineHall,
@@ -785,5 +788,5 @@ export const EMITTER_SOCKET: Record<string, number> = {
   brazier: 0.86,
   altar: 1.16,
   fire: 0.24,
-  window: 1.2,
+  window: 1.0,
 };

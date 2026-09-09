@@ -41,6 +41,32 @@ export function cutoutUrl(worldId: string, prop: string): string {
   return `/api/cosmos/asset/vault/worlds/${worldId}/cutouts/${prop}`;
 }
 
+/**
+ * WHEN THE SCENE IS ALLOWED TO GO LOOKING, and why it usually is not.
+ *
+ * Chrome writes "Failed to load resource: 404" to the console for any request
+ * that misses, `fetch` included, and there is no way to suppress it. The brief's
+ * bar is zero console errors. A world with no cutouts yet would spend twenty of
+ * them per load announcing paintings that do not exist, which is a worse trade
+ * than drawing the procedural prop silently.
+ *
+ * So the scene asks the VAULT what it has: `world.cutouts`, a list of prop words
+ * the reader saw on disk. A world that lists them gets its paintings with no
+ * probing at all. A world that lists nothing gets the factories, in silence.
+ *
+ * `?cutouts=probe` turns the old behaviour back on for one load, which is how
+ * the harness proves the billboard path works before the manifest carries the
+ * field. It is a review flag, never the route's default.
+ */
+export function cutoutsAllowed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get("cutouts") === "probe";
+  } catch {
+    return false;
+  }
+}
+
 export function useCutout(url: string | null): {
   status: Status;
   tex: THREE.Texture | null;
@@ -53,24 +79,31 @@ export function useCutout(url: string | null): {
     let alive = true;
     let p = WAITING.get(url);
     if (!p) {
-      p = new Promise<void>((resolve) => {
-        new THREE.TextureLoader().load(
-          url,
-          (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            tex.anisotropy = 4;
-            tex.generateMipmaps = true;
-            tex.minFilter = THREE.LinearMipmapLinearFilter;
-            CACHE.set(url, { status: "ok", tex });
-            resolve();
-          },
-          undefined,
-          () => {
-            CACHE.set(url, { status: "missing", tex: null });
-            resolve();
-          },
-        );
-      });
+      // `fetch`, not `TextureLoader`, for one reason: an <img> that 404s prints
+      // "Failed to load resource" to the console, and a painting the painter has
+      // not delivered yet is a FACT, not an error. The brief's bar is zero
+      // console errors, and a world that is honest about what it does not have
+      // yet must not spend that budget saying so forty times.
+      p = fetch(url)
+        .then((res) => (res.ok ? res.blob() : Promise.reject(new Error("absent"))))
+        // `imageOrientation: flipY` at decode, and `flipY = false` on the
+        // texture. three's own flip is `UNPACK_FLIP_Y_WEBGL`, which WebGL
+        // ignores for an ImageBitmap source: the first backdrop off this path
+        // hung upside down across the top of the sky.
+        .then((blob) => createImageBitmap(blob, { imageOrientation: "flipY" }))
+        .then((bitmap) => {
+          const tex = new THREE.Texture(bitmap);
+          tex.flipY = false;
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = 4;
+          tex.generateMipmaps = true;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.needsUpdate = true;
+          CACHE.set(url, { status: "ok", tex });
+        })
+        .catch(() => {
+          CACHE.set(url, { status: "missing", tex: null });
+        });
       WAITING.set(url, p);
     }
     void p.then(() => {
