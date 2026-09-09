@@ -121,7 +121,7 @@ const QUIET_PRACTICE: WorldManifest = {
       type: "chapter",
       title: "The one who kept going",
       room: "hall",
-      at: { x: -3.6, z: -6.2 },
+      at: { x: -2.2, z: -6.0 },
       plate: null,
       touched: ISO_TODAY,
       weight: 1,

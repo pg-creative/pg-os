@@ -40,6 +40,7 @@ export function IsoCamera({
 }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const gl = useThree((s) => s.gl);
+  const size = useThree((s) => s.size);
   const dir = useMemo(
     () =>
       new THREE.Vector3(
@@ -68,9 +69,38 @@ export function IsoCamera({
     return () => el.removeEventListener("wheel", onWheel);
   }, [gl, rt]);
 
+  /**
+   * A phone is a keyhole if the camera keeps a fixed vertical field: at 390 by
+   * 844 a 26 degree vertical fov shows about six metres of ground across, and
+   * the shrine roof becomes the entire screen. So the camera holds a constant
+   * WIDTH instead. Where that would need a fov wide enough to break the
+   * isometric read, the fov stops at 34 degrees and the camera backs off by
+   * exactly the amount the fov did not give.
+   */
+  const frame = useMemo(() => {
+    const aspect = Math.max(0.35, size.width / Math.max(size.height, 1));
+    // A phone shows LESS of the world than a desktop, not the same amount at a
+    // sixth of the scale. 0.72 of the desktop width is about what a thumb can
+    // reach across and still see a room.
+    const narrow = aspect < 1 ? 0.72 : 1;
+    const halfW = Math.tan((26 * Math.PI) / 180 / 2) * (1440 / 900) * narrow;
+    let fov = (2 * Math.atan(halfW / aspect) * 180) / Math.PI;
+    let pull = 1;
+    if (fov > 34) {
+      pull = Math.tan((fov * Math.PI) / 180 / 2) / Math.tan((34 * Math.PI) / 180 / 2);
+      fov = 34;
+    }
+    return { fov, pull };
+  }, [size.width, size.height]);
+
   useFrame((_, dt) => {
     const r = rt.current;
     if (!r) return;
+
+    if (Math.abs(camera.fov - frame.fov) > 0.01) {
+      camera.fov = frame.fov;
+      camera.updateProjectionMatrix();
+    }
 
     // Look-at leads the walker very slightly, so the frame opens in the
     // direction he is going rather than dragging behind him.
@@ -86,10 +116,11 @@ export function IsoCamera({
     r.target.copy(look.current);
     if (target.current) target.current.copy(look.current);
 
+    const d = r.dist * frame.pull;
     camera.position.set(
-      look.current.x + dir.x * r.dist,
-      look.current.y + dir.y * r.dist,
-      look.current.z + dir.z * r.dist,
+      look.current.x + dir.x * d,
+      look.current.y + dir.y * d,
+      look.current.z + dir.z * d,
     );
     camera.lookAt(look.current);
   });

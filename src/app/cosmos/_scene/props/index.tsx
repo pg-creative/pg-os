@@ -216,6 +216,8 @@ const StoneLantern = ({ p }: PropProps) => (
  * hiding: the hall still reads as a room with a roof on it from every angle.
  */
 const ShrineHall = ({ p, rt }: PropProps) => {
+  const self = useRef<THREE.Group>(null);
+  const here = useMemo(() => new THREE.Vector3(), []);
   const roofMat = useMemo(() => {
     const m = toon(p.roof).clone();
     m.transparent = true;
@@ -226,16 +228,22 @@ const ShrineHall = ({ p, rt }: PropProps) => {
 
   useFrame((_, dt) => {
     const r = rt?.current;
-    if (!r) return;
+    if (!r || !self.current) return;
     // The footprint, in the hall's own local numbers, plus a step of margin.
-    const inside = Math.abs(r.pos.x) < 7.6 && r.pos.z > -5.2 && r.pos.z < 5.4;
+    // Read from the group's world position rather than assumed at the origin:
+    // the hall stands wherever its room's anchor puts it, and a footprint test
+    // in world coordinates would fade the roof in the wrong place forever.
+    self.current.getWorldPosition(here);
+    const lx = r.pos.x - here.x;
+    const lz = r.pos.z - here.z;
+    const inside = Math.abs(lx) < 7.6 && lz > -5.2 && lz < 5.6;
     const want = inside ? 0.22 : 1;
     roofMat.opacity += (want - roofMat.opacity) * Math.min(1, dt * 4);
     roofMat.depthWrite = roofMat.opacity > 0.92;
   });
 
   return (
-  <group>
+  <group ref={self}>
     {/* Floor, 1 cm of dressing, not a step. */}
     <Box at={[0, 0.03, 0]} size={[13, 0.06, 9]} color={p.wood} shadow={false} />
     <Box at={[0, 0.08, 0]} size={[12.2, 0.04, 8.2]} color={p.woodDark} shadow={false} />
@@ -311,7 +319,6 @@ const Rock = ({ p, v }: PropProps) => (
     position={[0, 0.22 + v * 0.14, 0]}
     scale={[0.7 + v * 0.5, 0.5 + v * 0.3, 0.62 + v * 0.4]}
     rotation={[v * 1.2, v * 3.1, v * 0.6]}
-    castShadow
     receiveShadow
   />
 );
@@ -319,13 +326,13 @@ const Rock = ({ p, v }: PropProps) => (
 const GrassTuft = ({ p, v }: PropProps) => (
   <group>
     {[0, 1, 2].map((i) => (
-      <Cone
+      <mesh
         key={i}
-        at={[(i - 1) * 0.14, 0.2, ((v * 11 + i) % 1) * 0.2 - 0.1]}
-        r={0.07}
-        h={0.42 + v * 0.2}
-        color={i % 2 ? p.foliage : p.foliageDark}
-        rot={[((v * 7 + i) % 1) * 0.5 - 0.25, 0, ((v * 5 + i) % 1) * 0.5 - 0.25]}
+        geometry={GEO.cone}
+        material={toon(i % 2 ? p.foliage : p.foliageDark)}
+        position={[(i - 1) * 0.14, 0.2, ((v * 11 + i) % 1) * 0.2 - 0.1]}
+        scale={[0.14, 0.42 + v * 0.2, 0.14]}
+        rotation={[((v * 7 + i) % 1) * 0.5 - 0.25, 0, ((v * 5 + i) % 1) * 0.5 - 0.25]}
       />
     ))}
   </group>

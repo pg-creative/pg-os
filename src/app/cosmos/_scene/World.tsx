@@ -16,13 +16,13 @@
  * the compass and one hint.
  */
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { Monument, SceneObject, WorldManifest } from "./contract";
+import type { Monument, Room, SceneObject, WorldManifest } from "./contract";
 import { untouchedFor } from "./contract";
 import type { Palette } from "./palette";
-import { blockersFor, dressWorld, lightsFor } from "./dressing";
+import { blockersFor, dressWorld, lightsFor, type Placement } from "./dressing";
 import { Flame, PROPS } from "./props";
 import { GEO, toon } from "./toon";
 import type { Runtime } from "./runtime";
@@ -203,6 +203,80 @@ function hashCode(s: string): number {
 
 // ── The biome ────────────────────────────────────────────────────────────────
 
+/**
+ * One room's props, in a group that switches itself off when he is nowhere near
+ * it.
+ *
+ * This is the single biggest performance decision in the scene, and it was made
+ * with a measurement (`optimize-threejs-games`: measure first). Four biomes of
+ * procedural dressing is about two thousand small meshes; three walks every one
+ * of them twice a frame, once for the shadow map and once for the colour pass,
+ * and the first probe came back at four frames a second with a 570 ms worst
+ * frame. Culling by room takes the traversal to the handful of rooms he can
+ * actually see.
+ *
+ * Two mechanisms, both cheap. `visible = false` on a group makes three skip the
+ * whole subtree in one test rather than per mesh. `matrixAutoUpdate = false`
+ * stops it recomputing world matrices for scenery that has not moved since it
+ * was placed and never will.
+ */
+function RoomProps({
+  room,
+  placements,
+  p,
+  rt,
+}: {
+  room: Room;
+  placements: Placement[];
+  p: Palette;
+  rt: React.RefObject<Runtime>;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const acc = useRef(0);
+  // The room's own reach: its half diagonal plus the distance he can see past it.
+  const radius = useMemo(
+    () => Math.hypot(room.size.w, room.size.d) / 2 + 34,
+    [room.size.w, room.size.d],
+  );
+
+  useEffect(() => {
+    if (group.current) {
+      group.current.updateMatrixWorld(true);
+      group.current.matrixAutoUpdate = false;
+    }
+  }, [placements]);
+
+  useFrame((_, dt) => {
+    const g = group.current;
+    const r = rt.current;
+    if (!g || !r) return;
+    acc.current += dt;
+    if (acc.current < 0.25) return;
+    acc.current = 0;
+    const d = Math.hypot(room.anchor.x - r.pos.x, room.anchor.z - r.pos.z);
+    g.visible = d < radius;
+  });
+
+  return (
+    <group ref={group}>
+      {placements.map((pl) => {
+        const def = PROPS[pl.kind];
+        if (!def) return null;
+        return (
+          <group
+            key={pl.key}
+            position={[pl.x, 0, pl.z]}
+            rotation={[0, pl.rot, 0]}
+            scale={pl.scale}
+          >
+            <def.Component p={p} v={pl.v} rt={rt} />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 export function World({
   world,
   p,
@@ -219,7 +293,17 @@ export function World({
   /** How many local lights this biome may mount right now. Distance decides. */
   lightBudget: number;
 }) {
-  const placements = useMemo(() => dressWorld(world), [world]);
+  const byRoom = useMemo(() => {
+    const all = dressWorld(world);
+    const map = new Map<string, Placement[]>();
+    for (const pl of all) {
+      const roomId = pl.key.split(":")[0];
+      const list = map.get(roomId);
+      if (list) list.push(pl);
+      else map.set(roomId, [pl]);
+    }
+    return map;
+  }, [world]);
   const lights = useMemo(() => lightsFor(world), [world]);
 
   // Water rooms carry a lake. The room is the authority on where the shore is.
@@ -233,18 +317,11 @@ export function World({
 
   return (
     <group>
-      {placements.map((pl) => {
-        const def = PROPS[pl.kind];
-        if (!def) return null;
+      {world.layout.rooms.map((room) => {
+        const pls = byRoom.get(room.id);
+        if (!pls) return null;
         return (
-          <group
-            key={pl.key}
-            position={[pl.x, 0, pl.z]}
-            rotation={[0, pl.rot, 0]}
-            scale={pl.scale}
-          >
-            <def.Component p={p} v={pl.v} rt={rt} />
-          </group>
+          <RoomProps key={room.id} room={room} placements={pls} p={p} rt={rt} />
         );
       })}
 

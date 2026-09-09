@@ -364,7 +364,7 @@ export function WorldCanvas({
       if (!current) return true;
       const dx = w.layout.origin.x - current.layout.origin.x;
       const dz = w.layout.origin.z - current.layout.origin.z;
-      return Math.hypot(dx, dz) < 74;
+      return Math.hypot(dx, dz) < 62;
     });
   }, [worlds, current, manifest.hero]);
 
@@ -440,7 +440,7 @@ export function WorldCanvas({
     return () => cancelAnimationFrame(raf);
   }, [reduced]);
 
-  const dpr = useMemo<[number, number]>(() => [1, reduced ? 1 : 1.75], [reduced]);
+  const dpr = useMemo<[number, number]>(() => [1, reduced ? 1 : 1.5], [reduced]);
 
   return (
     <Canvas
@@ -464,7 +464,7 @@ export function WorldCanvas({
       <Sky look={sky} banding={palette.banding} mistDensity={palette.mistDensity} />
       <KeyLight rt={rt} p={palette} theme={theme} />
       <IsoCamera rt={rt} target={target} />
-      <Ground worlds={worlds} target={target} />
+      <Ground worlds={worlds} target={target} horizon={sky.horizon} />
 
       {visible.map((w) => {
         const p = w.id === current?.id ? palette : mixPalettes(paletteFor(w.register), palette, 0.18);

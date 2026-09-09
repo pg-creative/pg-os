@@ -20,7 +20,7 @@
  * boards is most of what makes the scene read as a room.
  */
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { WorldManifest } from "./contract";
@@ -29,19 +29,28 @@ import { gradientMap, MIST } from "./toon";
 import { NOISE } from "./glsl";
 
 const MAX_BIOMES = 6;
-const SIZE = 180;
+/**
+ * 420, not 180. At 180 the plane's own edge was inside the frame on a phone and
+ * the world ended in a hard line against the sky. It is two triangles either
+ * way; what costs is the fill, and the fill is the same because the extra
+ * ground is beyond the haze.
+ */
+const SIZE = 420;
 
 export function Ground({
   worlds,
   target,
+  horizon,
 }: {
   worlds: WorldManifest[];
   /** The camera's look-at, so the plane never ends inside the frame. */
   target: React.RefObject<THREE.Vector3>;
+  /** The sky's horizon hex. The ground dissolves into it, which IS the horizon. */
+  horizon: string;
 }) {
   const mesh = useRef<THREE.Mesh>(null);
 
-  const { material, uCenter } = useMemo(() => {
+  const { material, uCenter, uHorizon } = useMemo(() => {
     const centers: THREE.Vector2[] = [];
     const halves: THREE.Vector2[] = [];
     const cols: THREE.Color[] = [];
@@ -67,6 +76,7 @@ export function Ground({
     }
 
     const uCenterU = { value: new THREE.Vector3() };
+    const uHorizonU = { value: new THREE.Color(horizon) };
 
     const mat = new THREE.MeshToonMaterial({
       color: new THREE.Color("#ffffff"),
@@ -82,6 +92,7 @@ export function Ground({
       shader.uniforms.uBAlt = { value: alts };
       shader.uniforms.uBBand = { value: bands };
       shader.uniforms.uPlaneAt = uCenterU;
+      shader.uniforms.uSkyHorizon = uHorizonU;
 
       shader.vertexShader =
         "varying vec3 vWorldPosC;\n" +
@@ -107,9 +118,13 @@ export function Ground({
         uniform vec3  uBCol[${MAX_BIOMES}];
         uniform vec3  uBAlt[${MAX_BIOMES}];
         uniform float uBBand[${MAX_BIOMES}];
+        uniform vec3  uSkyHorizon;
         varying vec3 vWorldPosC;
 
         ${NOISE}
+
+        /** The plane's noise, computed once in the map stage and reused after. */
+        float gMottle = 0.0;
 
         /** Distance from a point to the edge of an axis-aligned rectangle. */
         float rectDist(vec2 p, vec2 c, vec2 h) {
@@ -124,9 +139,12 @@ export function Ground({
 
           vec2 wp = vWorldPosC.xz;
 
-          // Two scales of mottling: broad patches, then a fine tooth, so the
-          // ground is painted rather than filled.
-          float broad = fbm4(wp * 0.055);
+          // ONE fbm for the whole plane, read twice. The first pass ran a
+          // four-octave fbm here and a second one again in the mist stage, which
+          // is eight octaves of value noise on every pixel of a fullscreen
+          // plane; the mist reads this one instead.
+          gMottle = fbm4(wp * 0.055);
+          float broad = gMottle;
           float tooth = vnoise(wp * 1.6);
 
           vec3 acc = vec3(0.0);
@@ -162,9 +180,7 @@ export function Ground({
           "#include <dithering_fragment>",
           /* glsl */ `
           #include <dithering_fragment>
-          vec2 q = vWorldPosC.xz * (uMistScale * 0.055);
-          q.x += uTime * uMistSpeed;
-          float n = fbm4(q + (vnoise(q * 1.6) - 0.5) * 0.6);
+          float n = gMottle;
           float lant = distance(vWorldPosC, uLantern);
           float lit = 1.0 - smoothstep(uLanternR * 0.30, uLanternR, lant);
           float far = smoothstep(14.0, 44.0, distance(vWorldPosC.xz, uFocus.xz));
@@ -173,13 +189,21 @@ export function Ground({
           veil *= (1.0 - lit * 0.90);
           veil = clamp(veil * (1.0 - uFloor * 0.58), 0.0, 0.88);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, uMistColor, veil);
+          // And then into the sky. Far enough out the ground IS the horizon, so
+          // the plane has no edge and the world has no end you can point at.
+          float haze = smoothstep(46.0, 108.0, distance(vWorldPosC.xz, uFocus.xz));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, uSkyHorizon, haze);
         `,
         );
     };
     mat.customProgramCacheKey = () => "cosmos-ground";
 
-    return { material: mat, uCenter: uCenterU };
-  }, [worlds]);
+    return { material: mat, uCenter: uCenterU, uHorizon: uHorizonU };
+  }, [worlds, horizon]);
+
+  useEffect(() => {
+    uHorizon.value.set(horizon);
+  }, [horizon, uHorizon]);
 
   useFrame(() => {
     if (!mesh.current || !target.current) return;

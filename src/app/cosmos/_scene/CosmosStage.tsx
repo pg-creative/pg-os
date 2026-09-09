@@ -83,6 +83,8 @@ export function CosmosStage({
   const [satchel, setSatchel] = useState<string[]>(manifest.satchel);
   const [satchelOpen, setSatchelOpen] = useState(false);
   const [moved, setMoved] = useState(false);
+  const savedAt = useRef({ x: manifest.hero.x, z: manifest.hero.z });
+  const restTimer = useRef<number | null>(null);
 
   const { enabled } = useSound();
   const armed = useAudioArm(enabled);
@@ -117,6 +119,11 @@ export function CosmosStage({
       if (!objects.has(id)) return;
       setOpen(id);
       setSatchel((s) => (s.includes(id) ? s : [...s, id]));
+      // A fixture is a review state, not a place he has been. Writing attention
+      // for an id that exists only in the harness would grow `attention.json`
+      // with pages the vault has never heard of, and the touch route rightly
+      // 404s them; that 404 was the last console error in the run.
+      if (manifest.fixture) return;
       const r = rt.current;
       void fetch("/api/cosmos/touch", {
         method: "POST",
@@ -130,7 +137,7 @@ export function CosmosStage({
         keepalive: true,
       }).catch(() => {});
     },
-    [objects, manifest.hero.world],
+    [objects, manifest.hero.world, manifest.fixture],
   );
 
   const closePage = useCallback(() => setOpen(null), []);
@@ -201,17 +208,22 @@ export function CosmosStage({
   }, [hud.sitting, sound]);
 
   // ── Where he stood. The never-restart proof: reload and he is still there. ──
+  const saveHero = useCallback(() => {
+    const r = rt.current;
+    if (!r || !r.world) return;
+    // Same rule: a fixture never moves the real Wayfarer.
+    if (manifest.fixture) return;
+    savedAt.current = { x: r.pos.x, z: r.pos.z };
+    void fetch("/api/cosmos/touch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hero: { world: r.world, x: r.pos.x, z: r.pos.z } }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [manifest.fixture]);
+
   useEffect(() => {
-    const save = () => {
-      const r = rt.current;
-      if (!r || !r.world) return;
-      void fetch("/api/cosmos/touch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hero: { world: r.world, x: r.pos.x, z: r.pos.z } }),
-        keepalive: true,
-      }).catch(() => {});
-    };
+    const save = saveHero;
     const every = window.setInterval(save, 15_000);
     window.addEventListener("pagehide", save);
     document.addEventListener("visibilitychange", () => {
@@ -222,12 +234,28 @@ export function CosmosStage({
       window.removeEventListener("pagehide", save);
       save();
     };
-  }, []);
+  }, [saveHero]);
 
-  const onTick = useCallback((s: HudState) => {
-    setHud(s);
-    if (!s.nearId && (Math.abs(s.x) > 0.4 || Math.abs(s.z) > 0.4)) setMoved(true);
-  }, []);
+  /**
+   * And once he stops. A fifteen second interval plus `pagehide` looks like it
+   * covers everything until a reload lands inside the window: he walks, he
+   * reloads, and the world puts him back where he was fourteen seconds ago. A
+   * save a second after he comes to rest is what makes the never-restart proof
+   * true of a real session rather than of a patient one.
+   */
+  const onTick = useCallback(
+    (s: HudState) => {
+      setHud(s);
+      if (!s.nearId && (Math.abs(s.x) > 0.4 || Math.abs(s.z) > 0.4)) setMoved(true);
+      const r = rt.current;
+      if (!r || r.moving) return;
+      const last = savedAt.current;
+      if (Math.hypot(s.x - last.x, s.z - last.z) < 1) return;
+      if (restTimer.current !== null) window.clearTimeout(restTimer.current);
+      restTimer.current = window.setTimeout(() => saveHero(), 900);
+    },
+    [saveHero],
+  );
 
   const openObject = open ? (objects.get(open) ?? null) : null;
   const satchelItems = useMemo(
@@ -253,6 +281,7 @@ export function CosmosStage({
       className="cosmos-stage"
       data-theme={theme}
       data-depth={hud.depth ? "true" : "false"}
+      data-near={hud.nearId ?? ""}
       /* Where the SERVER put him on this load. The never-restart proof reads
          this before and after a reload: walk, reload, and it has moved. */
       data-hero={`${manifest.hero.world}:${manifest.hero.x.toFixed(1)},${manifest.hero.z.toFixed(1)}`}
