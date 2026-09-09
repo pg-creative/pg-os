@@ -283,6 +283,53 @@ try {
       `${all.filter((o) => o.card).length} carry a 256 px card, of ${all.length}`,
   );
 
+  // BACKDROP IS NOT THE IDENTITY PLATE (round 2.1). Every world names one, every
+  // one of them resolves to a file on disk, and the quiet practice's is not the
+  // flute plate: as the horizon behind the walker that was a second traveller.
+  const registry = readWorlds(root);
+  for (const w of registry) {
+    if (!w.backdrop) {
+      fail(`${w.id}: no backdrop: in world.yml`);
+      continue;
+    }
+    const abs = resolveVaultPath(root, w.backdrop)?.abs;
+    if (!abs || !fs.existsSync(abs)) fail(`${w.id}: backdrop ${w.backdrop} is not on disk`);
+  }
+  const practice = registry.find((w) => w.id === "quiet-practice");
+  if (practice && practice.backdrop === practice.heroPlate) {
+    fail("quiet-practice: backdrop and hero_plate are the same picture");
+  } else if (registry.every((w) => w.backdrop)) {
+    ok(`${registry.length} worlds name a backdrop, all on disk, none the flute plate`);
+  }
+  for (const m of manifests) {
+    if (!m.backdrop?.url) fail(`${m.id}: the manifest carries no backdrop url`);
+  }
+
+  // CUTOUTS ARE LISTED, NOT PROBED. Every word the reader emits is a known prop
+  // with a file on disk, so the scene asks for exactly these and spends no
+  // console 404 finding out what the painter has not painted yet.
+  let cutoutWords = 0;
+  for (const m of manifests) {
+    for (const word of m.cutouts) {
+      cutoutWords++;
+      if (!isProp(word)) fail(`${m.id}: cutout "${word}" is not in the props vocabulary`);
+      if (!fs.existsSync(path.join(root, "worlds", m.id, "cutouts", `${word}.png`)))
+        fail(`${m.id}: cutout "${word}" is listed and is not on disk`);
+    }
+  }
+  if (cutoutWords === 0) fail("no world lists a single cutout; the scene will probe with 404s");
+  else ok(`${cutoutWords} cutouts listed across ${manifests.filter((m) => m.cutouts.length).length} worlds`);
+
+  // The hall's interior painting is vault data now, not a map in the renderer.
+  const hall = manifests
+    .flatMap((m) => m.layout.rooms)
+    .find((r) => r.id === "shrine-hall");
+  if (!hall) fail("no shrine-hall room in any manifest");
+  else if (!hall.interior) fail("shrine-hall carries no interior:");
+  else if (!hall.interior.startsWith("/api/cosmos/asset/"))
+    fail(`shrine-hall interior is not an asset url: ${hall.interior}`);
+  else ok("shrine-hall names its interior painting, as an asset url");
+
   const thread = manifests[0]?.thread;
   if (!thread?.season) fail("the thread carries no season");
   else ok(`the thread reads season ${thread.season}, chapter ${thread.chapter?.id ?? "(none)"}`);

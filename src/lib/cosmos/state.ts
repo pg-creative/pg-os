@@ -12,12 +12,24 @@
  * to main." So the commit lands on the cosmos repo's CURRENT branch with a fixed
  * message and it is NEVER pushed from the app. Pushing is a hand's job.
  *
- * Two debounces, because a walk is not a dwell:
- *   - the WRITE coalesces 900 ms of hero movement into one file write, and a page
- *     touch flushes immediately (a dwell is a decision, and it should land even if
- *     the tab closes a second later)
- *   - the COMMIT trails 25 s behind the last write, so a ten-minute walk is one
- *     commit and not four hundred
+ * ONE DEBOUNCE, AND IT IS THE COMMIT. The COMMIT trails 25 s behind the last
+ * write, so a ten-minute walk is one commit and not four hundred. Git is the
+ * expensive half; the file is 2 KB and a write costs microseconds.
+ *
+ * THE WRITE IS NOT DEBOUNCED, and round 2.1 is why. It used to coalesce 900 ms of
+ * hero movement into one write, so `POST /api/cosmos/touch` answered 200 with the
+ * new position still in memory. The scene saves on `pagehide`, the browser then
+ * loads the next page, and the server renders it inside those 900 ms: the reload
+ * read the PREVIOUS position off disk and put him back where he started. That is
+ * the never-restart proof failing, and it failed as a read-after-write race, not
+ * as a lost write. Measured on this branch, `next start`, before the fix: POST
+ * 200, GET /api/cosmos/manifest immediately -> the old hero; the same GET 2 s
+ * later -> the new one.
+ *
+ * So 200 now MEANS on disk. `setHero` and `touchPage` both await a real write,
+ * writes are serialised (two overlapping `writeFile`s to one path interleave),
+ * and each one lands through a temp file and a rename, because `readAttentionRaw`
+ * parses JSON and a reader that catches a truncated file loses the hero entirely.
  *
  * Failures are swallowed on purpose. The cartographer and PG both commit in this
  * checkout while the server is up; an index.lock collision must cost a walk
@@ -32,7 +44,6 @@ import { cosmosRoot, HERO_KEY, type HeroState } from "./vault";
 
 const exec = promisify(execFile);
 
-const WRITE_DEBOUNCE_MS = 900;
 const COMMIT_DEBOUNCE_MS = 25_000;
 const COMMIT_MESSAGE = "state: touch";
 
@@ -40,20 +51,21 @@ type Snapshot = Record<string, unknown>;
 
 interface Pending {
   snapshot: Snapshot;
-  writeTimer: ReturnType<typeof setTimeout> | null;
   commitTimer: ReturnType<typeof setTimeout> | null;
-  writing: Promise<void> | null;
+  /** The write in flight, so the next one queues behind it instead of racing it. */
+  writing: Promise<void>;
 }
 
 /**
  * Module state, one per server process. `next start` is a single process per
- * port, so this is the whole story on the mini.
+ * port, so this is the whole story on the mini. It holds NO position of its own:
+ * the file is the state, and this is only a write queue. An in-memory hero would
+ * be a second source of truth that a second route bundle could not see.
  */
 const pending: Pending = {
   snapshot: {},
-  writeTimer: null,
   commitTimer: null,
-  writing: null,
+  writing: Promise.resolve(),
 };
 
 function stateFile(root: string): string {
@@ -84,26 +96,28 @@ async function flushWrite(root: string): Promise<void> {
   // while a walk was in flight, and attention NEVER deletes.
   const merged = { ...readSnapshot(root), ...pending.snapshot };
   pending.snapshot = {};
-  await fs.promises.writeFile(stateFile(root), serialize(merged));
+  // Temp file plus rename, so a manifest read that lands mid-write parses the
+  // old file or the new one and never half of either. `rename` within one
+  // directory is atomic on APFS.
+  const file = stateFile(root);
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.promises.writeFile(tmp, serialize(merged));
+  await fs.promises.rename(tmp, file);
   scheduleCommit(root);
 }
 
-function scheduleWrite(root: string, immediate: boolean): Promise<void> {
-  if (pending.writeTimer) {
-    clearTimeout(pending.writeTimer);
-    pending.writeTimer = null;
-  }
-  if (immediate) {
-    pending.writing = flushWrite(root);
-    return pending.writing;
-  }
-  pending.writeTimer = setTimeout(() => {
-    pending.writeTimer = null;
-    void flushWrite(root).catch(() => {});
-  }, WRITE_DEBOUNCE_MS);
-  // `unref` so a pending write never holds a process open.
-  pending.writeTimer.unref?.();
-  return Promise.resolve();
+/**
+ * Write now, and resolve when it is on disk. Serialised behind whatever write is
+ * already in flight: two overlapping writes to one path interleave, and a
+ * rejected one must not stall the queue, so both settle paths continue.
+ */
+function writeNow(root: string): Promise<void> {
+  const next = pending.writing.then(
+    () => flushWrite(root),
+    () => flushWrite(root),
+  );
+  pending.writing = next.catch(() => {});
+  return next;
 }
 
 function scheduleCommit(root: string): void {
@@ -171,13 +185,16 @@ export async function writeWeather(
 export async function touchPage(id: string, root = cosmosRoot()): Promise<string> {
   const now = new Date().toISOString();
   pending.snapshot[id] = now;
-  await scheduleWrite(root, true);
+  await writeNow(root);
   return now;
 }
 
 /**
- * Where PG stands. Coalesced: the scene may post this every second of a walk and
- * the disk sees one write per 900 ms.
+ * Where PG stands. Lands on disk before the route answers, because the very next
+ * thing that happens after a `pagehide` save is a page load that reads this file.
+ * The scene posts on rest, every fifteen seconds, and on the way out, so this is
+ * a handful of 2 KB writes a session and not the four hundred the old debounce
+ * was written to prevent.
  */
 export async function setHero(hero: HeroState, root = cosmosRoot()): Promise<void> {
   pending.snapshot[HERO_KEY] = {
@@ -186,5 +203,5 @@ export async function setHero(hero: HeroState, root = cosmosRoot()): Promise<voi
     x: Math.round(hero.x * 100) / 100,
     z: Math.round(hero.z * 100) / 100,
   };
-  await scheduleWrite(root, false);
+  await writeNow(root);
 }

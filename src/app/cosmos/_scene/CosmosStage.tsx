@@ -80,7 +80,9 @@ export function CosmosStage({
   /** The season name. A pure function of the date, computed on the server. */
   season: string;
 }) {
-  const rt = useRef<Runtime>(createRuntime(manifest.hero.x, manifest.hero.z));
+  const rt = useRef<Runtime>(
+    createRuntime(manifest.hero.x, manifest.hero.z, manifest.focus ?? manifest.hero.world),
+  );
   const [theme, setTheme] = useCosmosTheme();
   const keyboard = useKeyboard();
   const [reduced, setReduced] = useState(false);
@@ -92,7 +94,13 @@ export function CosmosStage({
     nearId: null,
     dwell: 0,
     sitting: false,
-    depth: false,
+    // DESCENDED FROM THE FIRST FRAME, not from the first slow tick. `/cosmos/depths`
+    // puts him at the depths' own origin (z -488.8, five hundred metres south of
+    // everything else), and the canvas only learns that a quarter of a second in,
+    // so the first paint of a deep link was the lit surface and the descent
+    // arrived as a flash. The manifest already knows: `hero.world` is where he
+    // stands and `focus` is what the URL asked for.
+    depth: manifest.hero.world === "depths" || manifest.focus === "depths",
     x: manifest.hero.x,
     z: manifest.hero.z,
     room: null,

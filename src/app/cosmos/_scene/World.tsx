@@ -238,18 +238,27 @@ const Prop = memo(function Prop({
   p: Palette;
   rt: React.RefObject<Runtime>;
   interior: { url: string; u: number } | null;
-  /** Prop words this world has paintings for. Empty means the factories draw. */
-  painted: Set<string>;
+  /**
+   * Prop words this world has paintings for, from the manifest. Null means the
+   * reader sent no list and the scene may probe; an empty set means it sent one
+   * and this world has nothing painted, so nothing is requested.
+   */
+  painted: Set<string> | null;
 }) {
   const def = PROPS[pl.kind];
   // A room, a path and a sheet of water are shaped by their room; a painting of
   // one would be a painting of somewhere else. Those stay procedural.
+  // THE LIST WINS WHEN THERE IS A LIST. `painted.has(kind) || cutoutsAllowed()`
+  // read as "prefer the manifest" and behaved as "always probe": the OR is true
+  // for every prop the moment `?cutouts=off` is absent, so the reader's list
+  // changed nothing and nine console 404s survived it. Round 2.1 measured them.
+  // A null set means the manifest carried no list and the scene may still guess.
   const paintable =
     def &&
     def.height > 0 &&
     pl.kind !== "hall" &&
     pl.kind !== "smithy" &&
-    (painted.has(pl.kind) || cutoutsAllowed());
+    (painted ? painted.has(pl.kind) : cutoutsAllowed());
   const { status, tex } = useCutout(paintable ? cutoutUrl(worldId, pl.kind) : null);
 
   if (!def) return null;
@@ -318,7 +327,8 @@ const RoomProps = memo(function RoomProps({
   p: Palette;
   rt: React.RefObject<Runtime>;
   interior: { url: string; u: number } | null;
-  painted: Set<string>;
+  /** See `Prop`: null means no list came, an empty set means one did. */
+  painted: Set<string> | null;
 }) {
   const group = useRef<THREE.Group>(null);
   const acc = useRef(0);
@@ -396,7 +406,10 @@ export const World = memo(function World({
 
   const lights = useMemo(() => lightsFor(world), [world]);
   const interior = INTERIOR[world.id] ?? null;
-  const painted = useMemo(() => new Set(world.cutouts ?? []), [world.cutouts]);
+  const painted = useMemo(
+    () => (world.cutouts ? new Set(world.cutouts) : null),
+    [world.cutouts],
+  );
 
   /**
    * The light budget, BY DISTANCE, not by room order.

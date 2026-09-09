@@ -70,9 +70,22 @@ export interface WorldEntry {
   register: Register | null;
   phase: string | null;
   private: boolean;
+  /**
+   * The world's IDENTITY plate: the one picture that is this world. It is what a
+   * card, a share sheet or a page about the world would show.
+   */
   heroPlate: string | null;
   /** Same subject, same register, a second source. Live-switchable in the scene. */
   heroPlateAlt: string | null;
+  /**
+   * The picture that hangs on the far plane BEHIND the world, and a different job
+   * from `heroPlate`. Round 2.1 conflated the two and the quiet practice ended up
+   * with its own identity plate as its horizon: a hooded figure playing a flute on
+   * a shrine step, painted at full size behind a scene whose whole subject is one
+   * traveller. PG, on the four candidates: "every single one has the damn
+   * ocarina." A backdrop has no figure in it, because the figure is the walker.
+   */
+  backdrop: string | null;
   loop: string | null;
   bed: string | null;
   worldFile: string | null;
@@ -124,6 +137,7 @@ export function parseWorldsYml(text: string): WorldEntry[] {
     private: w.private === true,
     heroPlate: typeof w.hero_plate === "string" ? w.hero_plate : null,
     heroPlateAlt: typeof w.hero_plate_alt === "string" ? w.hero_plate_alt : null,
+    backdrop: typeof w.backdrop === "string" ? w.backdrop : null,
     loop: typeof w.loop === "string" ? w.loop : null,
     bed: typeof w.bed === "string" ? w.bed : null,
     worldFile: typeof w.world_file === "string" ? w.world_file : null,
@@ -147,6 +161,7 @@ export function parseWorldFile(text: string, fallback: WorldEntry): WorldEntry {
       typeof raw.hero_plate_alt === "string"
         ? raw.hero_plate_alt
         : fallback.heroPlateAlt,
+    backdrop: typeof raw.backdrop === "string" ? raw.backdrop : fallback.backdrop,
     loop: typeof raw.loop === "string" ? raw.loop : fallback.loop,
     bed: typeof raw.bed === "string" ? raw.bed : fallback.bed,
   };
@@ -487,26 +502,84 @@ export function readMonuments(root = cosmosRoot(), limit = 24): LedgerLine[] {
  *                       and their reader are superseded, and superseded gets
  *                       deleted. The recipe survives in `cosmos/scripts/cut-frames.sh`.
  *   `heroUrlFor`'s `b`  the live-switchable second source. One backdrop per world.
+ *   `heroUrlFor`       itself, in round 2.1: superseded by `backdropUrlFor`, which
+ *                       is the same three lines plus the `backdrop:` field. The
+ *                       identity plate is no longer the horizon by default.
  *   `heroLqipDataUri`   the WORLD-level blur-up, which existed for `WorldSlot`
  *                       (also deleted). An LQIP is now a sibling of its own image,
  *                       never a fallback borrowed from another picture.
  */
 
 /**
- * The world's backdrop URL. Prefers the generated webp in the vault
- * (`plates/hero.webp`), which is sized and compressed for the plane; falls back to
- * the raw plate `world.yml` names, so a world that has never been through the
- * frame cut still has a horizon.
+ * The world's backdrop: the picture on the far plane, behind everything.
+ *
+ * Three sources, in order, and the order is the point:
+ *   1. `backdrop:` in world.yml. The cartographer's explicit choice, and the only
+ *      one of the three that can say "not the identity plate."
+ *   2. `worlds/<id>/plates/hero.webp`, the cut `scripts/cut-frames.sh` writes:
+ *      sized and compressed for the plane, with an LQIP sibling.
+ *   3. `hero_plate:`, so a world that has neither still has a horizon.
+ *
+ * Round 2.1 added the first rung. Before it, a world's identity plate WAS its
+ * backdrop, which put the flute player of the quiet practice on the horizon
+ * behind the walker. `heroUrlFor` is deleted rather than kept alongside; this is
+ * its whole job plus one source.
  */
-export function heroUrlFor(
+export function backdropUrlFor(
   worldId: string,
+  backdropPath: string | null,
   platePath: string | null,
   root = cosmosRoot(),
 ): string | null {
+  if (backdropPath) return assetUrl(root, backdropPath);
   if (fs.existsSync(path.join(root, "worlds", worldId, "plates", "hero.webp"))) {
     return `/api/cosmos/asset/vault/worlds/${worldId}/plates/hero`;
   }
   return platePath ? assetUrl(root, platePath) : null;
+}
+
+/** The same three sources, as absolute paths, so the LQIP sibling can be found. */
+function backdropAbsFor(
+  worldId: string,
+  backdropPath: string | null,
+  platePath: string | null,
+  root: string,
+): string | null {
+  if (backdropPath) return resolveVaultPath(root, backdropPath)?.abs ?? null;
+  const cut = path.join(root, "worlds", worldId, "plates", "hero.webp");
+  if (fs.existsSync(cut)) return cut;
+  return platePath ? (resolveVaultPath(root, platePath)?.abs ?? null) : null;
+}
+
+/**
+ * Which prop words this world has a painted cutout for, sorted.
+ *
+ * The scene draws a painted billboard where one exists and a procedural factory
+ * where one does not, and until this list existed it found out by ASKING: one
+ * request per prop word per world, and Chrome writes "Failed to load resource:
+ * 404" for every miss, `fetch` included, with no way to suppress it. So a word
+ * the painter has not painted cost one of the zero console errors the round asks
+ * for. The reader can see the folder; the browser should not have to guess.
+ *
+ * Filtered to the closed vocabulary, so the field means exactly what its name
+ * says. Two paintings the painter delivered are NOT in it because no prop word
+ * names them yet: `party/cutouts/lantern-pole.png` (the vocabulary says
+ * `stone-lantern`) and `depths/cutouts/red-moon.png` (a sky asset, not a prop).
+ * Each is one line of `PROPS` plus one factory away.
+ */
+export function readCutouts(worldId: string, root = cosmosRoot()): string[] {
+  const dir = path.join(root, "worlds", worldId, "cutouts");
+  if (!fs.existsSync(dir)) return [];
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".png"))
+      .map((f) => f.replace(/\.png$/, ""))
+      .filter(isProp)
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -639,6 +712,18 @@ export type Room = {
   /** The scenery standing in this room. Vocabulary above, order is dressing order. */
   props: Prop[];
   doors: Door[];
+  /**
+   * The painting this room's back wall wears, as an asset URL, or null.
+   *
+   * A room is four walls and a floor; an interior is what you see when you are
+   * inside one. `01-hall-interior-q2.jpg` was painted this round and referenced by
+   * no page and no world file, so the scene carried a one-entry map from world id
+   * to that plate (`_scene/World.tsx:56-60`). That map is art direction living in
+   * code. The vault says WHICH painting now; the scene still owns where it hangs
+   * and how the painted hearth lines up with the real one, and it still uses its
+   * own map tonight. This field is here so the next pass can delete that map.
+   */
+  interior: string | null;
 };
 
 export type SceneObject = {
@@ -693,6 +778,8 @@ export type WorldManifest = {
   hero: { world: string; x: number; z: number } | null;
   backdrop: { url: string; lqip: string } | null;
   bed: string | null;
+  /** Prop words with a painting on disk. See `readCutouts`: it saves the 404s. */
+  cutouts: string[];
 };
 
 const PURPOSES: RoomPurpose[] = [
@@ -786,7 +873,17 @@ export function parseDoor(raw: unknown, roomAnchor: { x: number; z: number }): D
   };
 }
 
-export function parseRoom(id: string, raw: unknown): Room {
+/**
+ * How a vault-relative path in a room block becomes what crosses to the client.
+ * The default is the identity, so the parser stays pure and unit-testable;
+ * `readWorldManifest` passes the asset-URL resolver, because a raw filesystem
+ * path must never reach a browser.
+ */
+export type AssetFor = (rel: string) => string | null;
+
+const IDENTITY_ASSET: AssetFor = (rel) => rel;
+
+export function parseRoom(id: string, raw: unknown, assetFor: AssetFor = IDENTITY_ASSET): Room {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const anchor = asPoint(o.anchor) ?? { x: 0, z: 0 };
   return {
@@ -804,6 +901,7 @@ export function parseRoom(id: string, raw: unknown): Room {
     doors: Array.isArray(o.doors)
       ? o.doors.map((d) => parseDoor(d, anchor)).filter((d): d is Door => d !== null)
       : [],
+    interior: typeof o.interior === "string" ? assetFor(o.interior) : null,
   };
 }
 
@@ -855,6 +953,7 @@ export function defaultLayout(register: Register, index = 0): WorldLayout {
         // One lantern needs one lamp, or the light has no source (plan 7i, 6).
         props: ["stone-lantern"],
         doors: [],
+        interior: null,
       },
     ],
   };
@@ -865,7 +964,12 @@ export function defaultLayout(register: Register, index = 0): WorldLayout {
  * list of rooms each carrying its own `id:`. Both shapes read the same here, so
  * the cartographer can write whichever is clearer per world.
  */
-export function parseLayout(raw: unknown, register: Register, index = 0): WorldLayout {
+export function parseLayout(
+  raw: unknown,
+  register: Register,
+  index = 0,
+  assetFor: AssetFor = IDENTITY_ASSET,
+): WorldLayout {
   const fallback = defaultLayout(register, index);
   if (!raw || typeof raw !== "object") return fallback;
   const o = raw as Record<string, unknown>;
@@ -875,12 +979,12 @@ export function parseLayout(raw: unknown, register: Register, index = 0): WorldL
     rooms = o.rooms
       .map((r) => {
         const rr = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
-        return typeof rr.id === "string" ? parseRoom(rr.id, rr) : null;
+        return typeof rr.id === "string" ? parseRoom(rr.id, rr, assetFor) : null;
       })
       .filter((r): r is Room => r !== null);
   } else if (o.rooms && typeof o.rooms === "object") {
     rooms = Object.entries(o.rooms as Record<string, unknown>).map(([id, r]) =>
-      parseRoom(id, r),
+      parseRoom(id, r, assetFor),
     );
   }
 
@@ -1171,7 +1275,12 @@ export function readWorldManifest(
   const world = registry[index];
 
   const register: Register = world.register ?? "painted";
-  const layout = parseLayout(readLayoutBlock(world.worldFile, root), register, index);
+  const layout = parseLayout(
+    readLayoutBlock(world.worldFile, root),
+    register,
+    index,
+    (rel) => assetUrl(root, rel),
+  );
   const roomById = new Map(layout.rooms.map((r) => [r.id, r]));
   const firstRoom =
     layout.rooms.find((r) => r.purpose === "orientation") ?? layout.rooms[0];
@@ -1273,12 +1382,8 @@ export function readWorldManifest(
     weather[k] = typeof v === "number" || typeof v === "string" ? v : null;
   }
 
-  const heroPlateUrl = heroUrlFor(worldId, world.heroPlate, root);
-  const heroPlateAbs = fs.existsSync(path.join(root, "worlds", worldId, "plates", "hero.webp"))
-    ? path.join(root, "worlds", worldId, "plates", "hero.webp")
-    : world.heroPlate
-      ? (resolveVaultPath(root, world.heroPlate)?.abs ?? null)
-      : null;
+  const backdropUrl = backdropUrlFor(worldId, world.backdrop, world.heroPlate, root);
+  const backdropAbs = backdropAbsFor(worldId, world.backdrop, world.heroPlate, root);
 
   return {
     id: world.id,
@@ -1293,8 +1398,9 @@ export function readWorldManifest(
     weather,
     attention,
     hero: readHero(root),
-    backdrop: heroPlateUrl ? { url: heroPlateUrl, lqip: lqipFor(heroPlateAbs) } : null,
+    backdrop: backdropUrl ? { url: backdropUrl, lqip: lqipFor(backdropAbs) } : null,
     bed: world.bed,
+    cutouts: readCutouts(worldId, root),
   };
 }
 

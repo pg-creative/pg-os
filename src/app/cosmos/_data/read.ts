@@ -64,9 +64,22 @@ function reader(): Reader {
  *
  * `?fixture=<name>` drives five review states the Critic screenshots. They are
  * real test infrastructure and they are also invented canon in a public repo, so
- * they answer in development and under `COSMOS_FIXTURES=1`, and nowhere else. The
- * harness sets that variable; a production `next start` on the mini does not, and
- * there the parameter is simply ignored.
+ * they answer in development and under `COSMOS_FIXTURES=1`, and nowhere else.
+ *
+ * HOW TO ACTUALLY GET ONE, because "it is inert under `next start`" was round
+ * 2.1's finding and the answer is one word long: the variable goes in the SERVER
+ * process's environment, not the request.
+ *
+ *     COSMOS_FIXTURES=1 pnpm exec next start -p 3051
+ *
+ * Next reads it at request time (only `NODE_ENV` and `NEXT_PUBLIC_*` are inlined
+ * at build time), and Next's own `.env.local` loading never overwrites a variable
+ * the shell already set, so this works against a build made without it. Verified
+ * on this branch: with it set, `/cosmos?fixture=hall` serves the harness's hall;
+ * without it, the same URL serves the real vault and the parameter is ignored.
+ *
+ * `scripts/cosmos-start.sh`, which is what launchd runs on the mini, UNSETS it.
+ * The service can never serve invented canon, whatever lands in `.env.local`.
  */
 export function fixturesEnabled(): boolean {
   return process.env.NODE_ENV !== "production" || process.env.COSMOS_FIXTURES === "1";
@@ -115,6 +128,47 @@ export function seasonLabel(manifest: CosmosManifest): string {
   return manifest.thread.season || "between seasons";
 }
 
+/**
+ * How far a deep link must land from a door. Two metres is the scene's reach, at
+ * which a door offers itself and 1.2 s of standing still takes it, so anything
+ * inside that is a trapdoor. Four is reach plus a step plus room to turn round.
+ */
+const DOOR_CLEARANCE_M = 4;
+
+/**
+ * Where `/cosmos/<world>` puts the Wayfarer: the near edge of that biome, facing
+ * in, so he walks into it rather than materialising in the middle of it.
+ *
+ * AND NEVER ON A DOOR. Round 2.1: `/cosmos/depths` computed origin.z + 0.28 of
+ * the depth, which for the depths is z -488.8, and the depths' stair back up to
+ * the hall stands at z -489. Twenty centimetres. He landed inside reach of it,
+ * stood still because nothing had told him to move, and the dwell took the stair
+ * at 1.2 s: the descended state came up correctly on the first frame and was
+ * gone by the second tick, which is why "the deep link lands him in the practice"
+ * looked like a reader bug and was really a spawn point on a trapdoor.
+ *
+ * So: take the edge spot, and while it is within a door's clearance, walk it back
+ * toward the world's own centre, which is always inside the biome. Eight steps of
+ * 35 percent covers the whole rectangle; the loop is bounded rather than `while`
+ * because a world could in principle ring itself in doors.
+ */
+export function deepLinkSpot(w: WorldManifest): { x: number; z: number } {
+  const { origin, size, rooms } = w.layout;
+  const doors = rooms.flatMap((r) => r.doors);
+  let spot = { x: origin.x, z: origin.z + size.d * 0.28 };
+  for (let i = 0; i < 8; i++) {
+    const onADoor = doors.some(
+      (d) => Math.hypot(d.at.x - spot.x, d.at.z - spot.z) < DOOR_CLEARANCE_M,
+    );
+    if (!onADoor) break;
+    spot = {
+      x: spot.x + (origin.x - spot.x) * 0.35,
+      z: spot.z + (origin.z - spot.z) * 0.35,
+    };
+  }
+  return { x: Math.round(spot.x * 100) / 100, z: Math.round(spot.z * 100) / 100 };
+}
+
 export function readCosmos(opts: {
   fixture?: string | null;
   world?: string | null;
@@ -141,11 +195,7 @@ export function readCosmos(opts: {
     : undefined;
 
   const hero = focusWorld
-    ? {
-        world: focusWorld.id,
-        x: focusWorld.layout.origin.x,
-        z: focusWorld.layout.origin.z + focusWorld.layout.size.d * 0.28,
-      }
+    ? { world: focusWorld.id, ...deepLinkSpot(focusWorld) }
     : (stored ?? {
         world: home?.id ?? "quiet-practice",
         x: home?.layout.origin.x ?? 0,

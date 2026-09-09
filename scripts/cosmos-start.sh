@@ -35,6 +35,15 @@ if [ -z "${PGOS_SHARED_SECRET:-}" ]; then
   echo "cosmos-start: PGOS_SHARED_SECRET is unset; /cosmos and /api/cosmos will 404" >&2
 fi
 
+# THE SERVICE NEVER SERVES FIXTURES. `?fixture=<name>` reaches the harness's
+# invented canon (invented names, invented LEDGER-shaped lines, in a public repo)
+# and answers only under COSMOS_FIXTURES=1. This is the mini's always-on server,
+# so the variable is unset here rather than trusted to be absent: `set -a` above
+# exports everything in .env.local, and a line added there one evening must not
+# quietly turn the real cosmos into a test double. A harness that wants a fixture
+# starts its OWN server with COSMOS_FIXTURES=1.
+unset COSMOS_FIXTURES
+
 echo "cosmos-start: $(date '+%Y-%m-%d %H:%M:%S') next start -p $PORT in $ROOT"
 
 # `.next` must already exist. A build under launchd would rebuild on every crash

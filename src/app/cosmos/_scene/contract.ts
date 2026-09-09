@@ -44,6 +44,17 @@ export interface Room {
   lights: Light[];
   objects: string[];
   doors: Door[];
+  /**
+   * The painting this room's back wall wears, as an asset URL, when the vault
+   * names one (`interior:` on the room in world.yml).
+   *
+   * AVAILABLE, NOT YET USED. `World.tsx` still carries its own one-entry map from
+   * world id to the hall plate, because the map also holds `u`, where the painted
+   * hearth sits across the image, and that is art direction rather than vault
+   * data. Reading this field and keeping `u` beside it is the next pass; the
+   * plate's own name no longer has to live in the scene for it.
+   */
+  interior?: string | null;
 }
 
 export interface SceneObject {
@@ -92,9 +103,10 @@ export interface WorldManifest {
   backdrop: { url: string; lqip: string } | null;
   bed: string | null;
   /**
-   * Prop words this world has a painted cutout for on disk, if the reader
-   * looked. Absent or empty means "draw the factories", and the scene sends no
-   * request at all rather than spending a console error per missing painting.
+   * Prop words this world has a painted cutout for on disk. The reader looks now
+   * (`vault.ts:readCutouts`), so the scene asks for exactly these and misses
+   * nothing: zero wasted requests, zero console 404s. Empty means "draw the
+   * factories", and the scene sends no request at all.
    */
   cutouts?: string[];
 }

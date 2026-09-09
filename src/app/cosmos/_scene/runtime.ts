@@ -56,7 +56,13 @@ export interface Runtime {
   paused: boolean;
 }
 
-export function createRuntime(x: number, z: number): Runtime {
+/**
+ * `world` is where the manifest says he is standing on this load. It used to be
+ * "" until the canvas's first slow tick a quarter of a second later, which meant
+ * a deep link into the depths spent that quarter second on the surface and a
+ * save inside it returned early with no world to name.
+ */
+export function createRuntime(x: number, z: number, world = ""): Runtime {
   return {
     pos: new THREE.Vector3(x, 0, z),
     vel: new THREE.Vector3(),
@@ -69,13 +75,13 @@ export function createRuntime(x: number, z: number): Runtime {
     zoom: 1,
     blockers: [],
     keys: new Set(),
-    world: "",
+    world,
     border: 0,
     near: null,
     hovered: null,
     dwell: 0,
     sitting: false,
-    depth: false,
+    depth: world === "depths",
     stepAccum: 0,
     reduced: false,
     paused: false,
