@@ -488,3 +488,106 @@ export function heroLqipDataUri(worldId: string, root = cosmosRoot()): string | 
   if (!fs.existsSync(file)) return null;
   return `data:image/webp;base64,${fs.readFileSync(file).toString("base64")}`;
 }
+
+// ── Round two: the scene contract ────────────────────────────────────────────
+//
+// The scene half (`src/app/cosmos/**`) consumes these and nothing else. The
+// keeper's reader emits them; until it does, the scene runs off its own
+// fixtures under `_scene/fixtures/` and picks the reader up the moment it
+// exists. The handshake is one optional export from this module:
+//
+//     export function readCosmosManifest(
+//       opts?: { drafts?: boolean },
+//       root?: string,
+//     ): WorldManifest[]
+//
+// One entry per world, ordered as `worlds.yml` orders them, laid out on one
+// shared ground plane by each world's `layout.origin`. The scene looks the
+// export up dynamically, so a build never breaks on its absence.
+//
+// Prose still never crosses: titles, ids, geometry and asset URLs only. A page
+// body reaches the client as server-rendered nodes, exactly as in round one.
+
+export type SceneRoomPurpose =
+  | "traversal"
+  | "orientation"
+  | "recovery"
+  | "reward"
+  | "transition"
+  | "objective";
+
+export interface SceneLight {
+  emitter: "lantern" | "torch" | "brazier" | "altar" | "fire" | "window";
+  at: { x: number; z: number };
+  range: number;
+  color: string;
+  intensity: number;
+}
+
+export interface SceneDoor {
+  to: string;
+  kind: "mist" | "stairs";
+  at: { x: number; z: number };
+}
+
+export interface SceneRoom {
+  id: string;
+  anchor: { x: number; z: number };
+  size: { w: number; d: number };
+  purpose: SceneRoomPurpose;
+  lights: SceneLight[];
+  objects: string[];
+  doors: SceneDoor[];
+}
+
+export interface SceneObjectSpec {
+  id: string;
+  /** Drives which procedural prop carries the page: object, creed, chapter, lore. */
+  type: string;
+  title: string;
+  room: string;
+  at: { x: number; z: number };
+  plate: { url: string; lqip: string } | null;
+  /** ISO date the witness or a dwell last recorded. Null means never touched. */
+  touched: string | null;
+  weight: number;
+}
+
+export interface SceneMonument {
+  id: string;
+  date: string;
+  line: string;
+  at: { x: number; z: number };
+}
+
+export interface SceneThread {
+  season: string;
+  chapter: { id: string; title: string; line: string } | null;
+}
+
+export interface WorldLayout {
+  origin: { x: number; z: number };
+  size: { w: number; d: number };
+  /** Ground material key: grass, stone, sand, water, ash. */
+  ground: string;
+  rooms: SceneRoom[];
+}
+
+export interface WorldManifest {
+  id: string;
+  title: string;
+  register: Register;
+  phase: "day" | "twilight" | "midnight" | "clock";
+  private: boolean;
+  layout: WorldLayout;
+  objects: SceneObjectSpec[];
+  /** LEDGER lines. Forge world only; every other world sends an empty array. */
+  monuments: SceneMonument[];
+  thread: SceneThread;
+  weather: Record<string, number | string | null>;
+  attention: Record<string, string>;
+  /** Where the Wayfarer last stood. The touch route writes it, the scene reads it. */
+  hero: { world: string; x: number; z: number } | null;
+  backdrop: { url: string; lqip: string } | null;
+  bed: string | null;
+}
