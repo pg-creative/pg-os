@@ -102,8 +102,8 @@ export const PALETTES: Record<Register, Palette> = {
    * by day. Banding 1 posterizes the sky and the ramp into flat steps.
    */
   riso: {
-    ground: "#D8C9A6",
-    groundAlt: "#C8B88C",
+    ground: "#E0D3B2",
+    groundAlt: "#D2C29C",
     stone: "#E2D8C2",
     stoneDark: "#A89878",
     wood: day.gold, // #8c5c08
@@ -164,8 +164,8 @@ export const PALETTES: Record<Register, Palette> = {
 
   /** Dark paperback: one red moon, heavy grain, midnight only. The depths. */
   paperback: {
-    ground: "#241A1E",
-    groundAlt: "#2C2024",
+    ground: "#31262B",
+    groundAlt: "#3A2C31",
     stone: "#4A3E42",
     stoneDark: "#241C20",
     wood: "#4A3428",
@@ -183,7 +183,7 @@ export const PALETTES: Record<Register, Palette> = {
     mist: "#3a2028",
     key: "#C08050",
     fill: "#A02028",
-    ambient: "#241820",
+    ambient: "#3A2830",
     skyTop: "#07060a",
     skyMid: "#150a10",
     skyHorizon: "#2a1016",

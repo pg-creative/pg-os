@@ -51,6 +51,12 @@ const FRAG = /* glsl */ `
 
   ${NOISE}
 
+  vec3 posterize(vec3 c, float steps) {
+    float l = dot(c, vec3(0.299, 0.587, 0.114));
+    float q = floor(l * steps + 0.5) / steps;
+    return c * (q / max(l, 0.0001));
+  }
+
   void main() {
     vec2 wp = vWorldPosC.xz;
 
@@ -74,7 +80,7 @@ const FRAG = /* glsl */ `
     float foam = smoothstep(0.90, 0.995, edge + (a - 0.5) * 0.07);
     col = mix(col, mix(uShallow, uInk, 0.45), foam * 0.6);
 
-    if (uBanding > 0.5) col = floor(col * 5.0 + 0.5) / 5.0;
+    if (uBanding > 0.5) col = posterize(col, 6.0);
 
     // The same mist rule as every other surface, so the lake recedes with the
     // land instead of staying a bright rectangle in the fog.

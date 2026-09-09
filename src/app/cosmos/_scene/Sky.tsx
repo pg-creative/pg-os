@@ -44,6 +44,12 @@ const FRAG = /* glsl */ `
 
   ${NOISE}
 
+  vec3 posterize(vec3 c, float steps) {
+    float l = dot(c, vec3(0.299, 0.587, 0.114));
+    float q = floor(l * steps + 0.5) / steps;
+    return c * (q / max(l, 0.0001));
+  }
+
   void main() {
     float y = vUv.y;
 
@@ -66,7 +72,7 @@ const FRAG = /* glsl */ `
     col += (fbm4(q) - 0.5) * 0.07 * (0.55 + uMistDensity);
 
     // Riso: quantize to ink steps and kill the gradient entirely.
-    if (uBanding > 0.5) col = floor(col * 5.0 + 0.5) / 5.0;
+    if (uBanding > 0.5) col = posterize(col, 6.0);
 
     gl_FragColor = vec4(col, 1.0);
   }

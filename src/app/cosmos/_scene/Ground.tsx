@@ -123,6 +123,19 @@ export function Ground({
 
         ${NOISE}
 
+
+        /**
+         * Riso posterizes the VALUE and keeps the hue. Quantizing each channel
+         * on its own snaps red, green and blue into different buckets and a
+         * cream ground comes out orange, pink and yellow in blotches, which is
+         * what the first border screenshot showed.
+         */
+        vec3 posterize(vec3 c, float steps) {
+          float l = dot(c, vec3(0.299, 0.587, 0.114));
+          float q = floor(l * steps + 0.5) / steps;
+          return c * (q / max(l, 0.0001));
+        }
+
         /** The plane's noise, computed once in the map stage and reused after. */
         float gMottle = 0.0;
 
@@ -170,9 +183,10 @@ export function Ground({
           // as a blown-out page, and the point of the border is depth, not paper.
           ground = mix(ground, uMistColor * 0.62, outside * 0.9);
 
-          ground *= 0.86 + tooth * 0.26;
-          // Riso posterizes the ground into flat ink steps, no gradient anywhere.
-          if (band > 0.5) ground = floor(ground * 5.0 + 0.5) / 5.0;
+          // Riso wants a flatter ground than a painted one: less tooth, then
+          // stepped, so it reads as paper with ink on it rather than as grass.
+          ground *= mix(0.86 + tooth * 0.26, 0.95 + tooth * 0.09, band);
+          if (band > 0.5) ground = posterize(ground, 6.0);
 
           diffuseColor.rgb *= ground;
         `,
