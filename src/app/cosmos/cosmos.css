@@ -1,0 +1,199 @@
+/*
+ * The whole stylesheet for /cosmos. Deliberately tiny.
+ *
+ * KNOWN COST, stated plainly rather than hidden: Next's App Router allows one
+ * root layout per app unless every route moves into its own route group, so
+ * /cosmos nests INSIDE src/app/layout.tsx and still inherits globals.css and the
+ * webfont link. Escaping that means moving eleven shipped surfaces into an (os)
+ * group, which is a refactor of the whole app for one route, so round one takes
+ * the inheritance and keeps its OWN styles to this file. The Critic's D10
+ * deduction on inherited CSS stands until the route group happens.
+ *
+ * Everything below is scoped under .cosmos-root so nothing here can leak back
+ * into the OS.
+ */
+
+.cosmos-root {
+  position: relative;
+  margin: 0;
+  /* Cream, never a dark chrome. The world inside the canvas is twilight; the
+     page around it stays light, per the standing light-mode rule. */
+  background: #ece2ce;
+  color: #120d04;
+}
+
+/* The scroll track. The scene is fixed; this is what gives it something to
+   measure against, and its height is what a full scrub of the loop costs. */
+.cosmos-scroll {
+  position: relative;
+  height: 420vh;
+  pointer-events: none;
+}
+
+.cosmos-chrome {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cosmos-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 100, 30, 0.42);
+  background: rgba(250, 244, 232, 0.92);
+  color: #2e2008;
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 12px; /* the 12px floor */
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.cosmos-chip:hover {
+  background: rgba(255, 250, 240, 0.98);
+  border-color: rgba(140, 100, 30, 0.7);
+}
+
+.cosmos-chip[aria-pressed="false"] {
+  color: #4a3410;
+}
+
+/* z3: the dwell panel. DOM, not a texture, so PG's own words stay selectable. */
+.cosmos-panel {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: 7vh;
+  transform: translateX(-50%) translateY(14px);
+  width: min(560px, calc(100vw - 40px));
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 22px 26px 24px;
+  border-radius: 3px;
+  /* Washi in the world's register: warm paper, one ink border, one gold seam. */
+  background: rgba(250, 244, 232, 0.955);
+  border: 1px solid rgba(110, 72, 12, 0.55);
+  box-shadow: 0 18px 48px rgba(20, 8, 30, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 320ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cosmos-panel[data-open="true"] {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.cosmos-panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(200, 152, 28, 0.75) 32%,
+    rgba(240, 192, 64, 0.9) 52%,
+    rgba(200, 152, 28, 0.75) 70%,
+    transparent 100%
+  );
+}
+
+.cosmos-panel-eyebrow {
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8c5c08;
+  margin: 0 0 6px;
+}
+
+.cosmos-panel-title {
+  font-family: var(--serif, "Playfair Display", Georgia, serif);
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.15;
+  margin: 0 0 12px;
+  color: #120d04;
+}
+
+.cosmos-panel-body {
+  font-family: var(--body, Inter, system-ui, sans-serif);
+  font-size: 15px;
+  line-height: 1.62;
+  color: #2e2008;
+}
+
+.cosmos-panel-body blockquote {
+  margin: 0 0 12px;
+  padding-left: 14px;
+  border-left: 2px solid rgba(140, 92, 12, 0.45);
+  font-family: var(--serif, "Playfair Display", Georgia, serif);
+  font-style: italic;
+  font-size: 17px;
+  color: #1a1206;
+}
+
+.cosmos-panel-body p {
+  margin: 0 0 10px;
+}
+
+.cosmos-panel-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* The one line of copy on the surface, and it is an instruction, not a label. */
+.cosmos-hint {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: rgba(250, 244, 232, 0.72);
+  text-shadow: 0 1px 6px rgba(14, 8, 22, 0.9);
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.cosmos-hint[data-hidden="true"] {
+  opacity: 0;
+}
+
+/* Nothing moves for anyone who asked for nothing to move. */
+@media (prefers-reduced-motion: reduce) {
+  .cosmos-panel {
+    transition: none;
+  }
+  .cosmos-scroll {
+    height: 100vh;
+  }
+}
+
+@media (max-width: 767px) {
+  .cosmos-panel {
+    bottom: 4vh;
+    max-height: 52vh;
+    padding: 18px 20px 20px;
+  }
+  .cosmos-panel-title {
+    font-size: 22px;
+  }
+}

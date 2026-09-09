@@ -35,12 +35,16 @@ const config: NextConfig = {
       ".claude/**",
       ".next/cache/**",
       "node_modules/@next/swc-*/**",
-      // Cosmos plates. They live outside the repo and are streamed by
-      // /api/cosmos/asset at request time, so the tracer must never sweep a
-      // world's frame sequence into a function bundle the way public/art once
-      // ballooned api/briefing to ~745MB.
-      "../cosmos/**",
-      "../self/wall/plates/**",
+      // Cosmos plates, so a world's 96-frame sequence can never be swept into a
+      // function bundle the way public/art once ballooned api/briefing to ~745MB.
+      //
+      // Only in-project globs are listed: Turbopack rejects any pattern that
+      // navigates out of the project root ("glob '../cosmos/**' is invalid"), so
+      // ../cosmos and ../self/wall/plates cannot be named here. They do not need
+      // to be. The tracer follows static imports, and /api/cosmos/asset reads its
+      // files through a path computed at request time from COSMOS_ROOT, so there
+      // is no static edge into those trees for it to follow. public/cosmos is
+      // listed to keep it that way if a plate is ever staged inside the repo.
       "public/cosmos/**",
     ],
   },

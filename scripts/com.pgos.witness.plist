@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The witness. Drafted 2026-09-09, NOT INSTALLED.
+
+  EXTENDS com.pgos.kitsu-sweep.plist exactly: same curl, same local server, same
+  RunAtLoad false, same "silently no-ops if the server is not running", log under
+  ~/.pg-os/. One difference: 03:10 daily rather than every 30 minutes, which is
+  StartCalendarInterval instead of StartInterval.
+
+  Round one deliberately stops here. The route it calls
+  (/api/cosmos/witness) computes weather and RETURNS it; it writes nothing. The
+  plan puts the real witness inside Kitsu as its 03:10 job (one agent, one memory,
+  one port), so this plist exists to be reviewed, not to be a second scheduler.
+
+  Install (needs PG's yes, and the route needs to actually write first):
+      bash scripts/install-witness.sh
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.pgos.witness.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pgos.witness</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/curl</string>
+    <string>-fsS</string>
+    <string>-m</string>
+    <string>600</string>
+    <string>-X</string>
+    <string>POST</string>
+    <string>http://127.0.0.1:3030/api/cosmos/witness</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/Users/pg/.pg-os/witness/witness.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/pg/.pg-os/witness/witness.log</string>
+</dict>
+</plist>

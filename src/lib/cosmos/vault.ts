@@ -21,6 +21,18 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 
+/**
+ * gray-matter bundles js-yaml and exposes it as `matter.engines.yaml`, which its
+ * shipped types omit. Using it keeps world.yml and worlds.yml on the same parser
+ * as every page's frontmatter, and adds no dependency: js-yaml is only a
+ * transitive package here, so importing it directly would not resolve.
+ */
+const yamlEngine = (
+  matter as unknown as {
+    engines: { yaml: { parse: (s: string) => unknown } };
+  }
+).engines.yaml;
+
 // ── Roots ────────────────────────────────────────────────────────────────────
 
 /** The vault. Everything the cosmos owns lives under here. */
@@ -50,6 +62,8 @@ export interface WorldEntry {
   phase: string | null;
   private: boolean;
   heroPlate: string | null;
+  /** Same subject, same register, a second source. Live-switchable in the scene. */
+  heroPlateAlt: string | null;
   loop: string | null;
   bed: string | null;
   worldFile: string | null;
@@ -201,7 +215,7 @@ function asRegister(v: unknown): Register | null {
 
 /** Parse `worlds.yml` text into ordered world entries. Pure, unit-testable. */
 export function parseWorldsYml(text: string): WorldEntry[] {
-  const raw = matter.engines.yaml.parse(text) as Record<
+  const raw = yamlEngine.parse(text) as Record<
     string,
     Record<string, unknown>
   > | null;
@@ -215,6 +229,7 @@ export function parseWorldsYml(text: string): WorldEntry[] {
     phase: typeof w.phase === "string" ? w.phase : null,
     private: w.private === true,
     heroPlate: typeof w.hero_plate === "string" ? w.hero_plate : null,
+    heroPlateAlt: typeof w.hero_plate_alt === "string" ? w.hero_plate_alt : null,
     loop: typeof w.loop === "string" ? w.loop : null,
     bed: typeof w.bed === "string" ? w.bed : null,
     worldFile: typeof w.world_file === "string" ? w.world_file : null,
@@ -223,7 +238,7 @@ export function parseWorldsYml(text: string): WorldEntry[] {
 
 /** Parse one world.yml. Its fields override the registry entry where present. */
 export function parseWorldFile(text: string, fallback: WorldEntry): WorldEntry {
-  const raw = matter.engines.yaml.parse(text) as Record<string, unknown> | null;
+  const raw = yamlEngine.parse(text) as Record<string, unknown> | null;
   if (!raw || typeof raw !== "object") return fallback;
   return {
     ...fallback,
@@ -234,6 +249,10 @@ export function parseWorldFile(text: string, fallback: WorldEntry): WorldEntry {
     private: raw.private === true ? true : fallback.private,
     heroPlate:
       typeof raw.hero_plate === "string" ? raw.hero_plate : fallback.heroPlate,
+    heroPlateAlt:
+      typeof raw.hero_plate_alt === "string"
+        ? raw.hero_plate_alt
+        : fallback.heroPlateAlt,
     loop: typeof raw.loop === "string" ? raw.loop : fallback.loop,
     bed: typeof raw.bed === "string" ? raw.bed : fallback.bed,
   };
@@ -442,6 +461,25 @@ export function loopFrames(worldId: string, root = cosmosRoot()): string[] {
     .filter((f) => /^frame-\d+\.webp$/.test(f))
     .sort()
     .map((f) => `/api/cosmos/asset/vault/worlds/${worldId}/plates/loop/${f.replace(/\.webp$/, "")}`);
+}
+
+/**
+ * The scene's hero URL for one source. Prefers the generated webp in the vault
+ * (`plates/hero.webp`, `plates/hero-b.webp`), which is sized and compressed for
+ * the plane; falls back to the raw plate the manifest names, so a world that has
+ * not been through the frame cut still renders.
+ */
+export function heroUrlFor(
+  worldId: string,
+  which: "a" | "b",
+  platePath: string | null,
+  root = cosmosRoot(),
+): string | null {
+  const name = which === "a" ? "hero" : "hero-b";
+  if (fs.existsSync(path.join(root, "worlds", worldId, "plates", `${name}.webp`))) {
+    return `/api/cosmos/asset/vault/worlds/${worldId}/plates/${name}`;
+  }
+  return platePath ? assetUrl(root, platePath) : null;
 }
 
 /** The inline 32 px blur-up, as a data URI so first paint costs no round trip. */
