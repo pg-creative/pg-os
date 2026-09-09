@@ -274,10 +274,14 @@ try {
   if (figures.length === 0) fail("no figure is placed in any world");
   else ok(`${figures.length} figure(s) placed: ${figures.map((f) => f.id).join(", ")}`);
 
-  // Cards are a size fix, not a contract: report, never fail.
-  const withCard = manifests.flatMap((m) => m.objects).filter((o) => o.card).length;
-  const withPlate = manifests.flatMap((m) => m.objects).filter((o) => o.plate).length;
-  ok(`${withCard} of ${withPlate} plated objects have a 256 px card`);
+  // Cards are a size fix, not a contract: report, never fail. Counted separately
+  // rather than as a ratio, because a page can lose its plate and keep the card
+  // that was cut from it, and "14 of 13" is a line that helps nobody.
+  const all = manifests.flatMap((m) => m.objects).filter((o) => o.type !== "monument");
+  ok(
+    `${all.filter((o) => o.plate).length} objects carry a full plate, ` +
+      `${all.filter((o) => o.card).length} carry a 256 px card, of ${all.length}`,
+  );
 
   const thread = manifests[0]?.thread;
   if (!thread?.season) fail("the thread carries no season");
