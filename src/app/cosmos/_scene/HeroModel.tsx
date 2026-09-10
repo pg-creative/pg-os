@@ -38,8 +38,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
+import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
-import type { Palette } from "./registers";
 import { gradientMap } from "./toon";
 import type { Runtime } from "./runtime";
 import { WALK_SPEED } from "./runtime";
@@ -59,13 +59,11 @@ const HAND = [/lantern/i, /hand/i, /wrist/i, /forearm/i, /arm/i];
 export function HeroModel({
   rt,
   spec,
-  p,
   lanternColor,
   lanternRange,
 }: {
   rt: React.RefObject<Runtime>;
   spec: HeroModelSpec;
-  p: Palette;
   lanternColor: string;
   lanternRange: number;
 }) {
@@ -78,9 +76,20 @@ export function HeroModel({
    * One instance, toon-shaded, scaled to his declared height with his feet on
    * the plane. Measured from the model's own bounds rather than trusted: a
    * second model from a different tool will not share Meshy's.
+   *
+   * CLONED, and this is not tidiness. `useGLTF` hands back a CACHED scene, and
+   * the first pass scaled that object in place: every time this memo re-ran (a
+   * border changes the palette, which was in its deps) it measured a model it
+   * had already shrunk and shrank it again by the same factor. He walked into
+   * the practice at 1.6 m and out of it at 60 cm. `SkeletonUtils.clone` keeps
+   * the rig and the skinning and leaves the cache alone, and the deps are now
+   * the three things that actually describe the model.
    */
-  const { root, mixer, action, hand, sway } = useMemo(() => {
-    const root = gltf.scene as THREE.Group;
+  const { mixer, action, hand, sway } = useMemo(() => {
+    const root = clone(gltf.scene) as THREE.Group;
+    root.scale.setScalar(1);
+    root.position.set(0, 0, 0);
+    root.updateMatrixWorld(true);
     const ramp = gradientMap();
 
     root.traverse((o) => {
@@ -95,7 +104,7 @@ export function HeroModel({
         if (map) map.colorSpace = THREE.SRGBColorSpace;
         const toon = new THREE.MeshToonMaterial({
           map,
-          color: map ? 0xffffff : new THREE.Color(p.paper),
+          color: 0xffffff,
           gradientMap: ramp,
           transparent: mat.transparent,
           alphaTest: mat.alphaTest,
@@ -144,14 +153,21 @@ export function HeroModel({
     const sway = new THREE.Group();
     sway.add(root);
 
-    return { root, mixer, action, hand, sway };
-  }, [gltf, spec.height, spec.clip, p.paper]);
+    return { mixer, action, hand, sway };
+  }, [gltf, spec.height, spec.clip]);
 
   useEffect(
     () => () => {
       mixer.stopAllAction();
+      sway.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const mat = m.material;
+        if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+        else mat?.dispose();
+      });
     },
-    [mixer],
+    [mixer, sway],
   );
 
   const heading = useRef(0);

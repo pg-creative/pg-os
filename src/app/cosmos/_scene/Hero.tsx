@@ -288,7 +288,6 @@ export function Hero({
           <RiggedHero
             rt={rt}
             spec={model}
-            p={p}
             lanternColor={lanternColor}
             lanternRange={lanternRange}
           />

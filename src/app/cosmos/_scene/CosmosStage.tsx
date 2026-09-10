@@ -346,9 +346,13 @@ export function CosmosStage({
     const r = rt.current;
     if (!r || !r.world) return;
     if (manifest.fixture) return;
-    // A man who has not moved has nothing to save. Round 2.1 posted his position
-    // every fifteen seconds forever, which is a write to the vault for standing
-    // still: the same bug as the dwell storm, one interval slower.
+    // WHERE HE STOOD IS HIS TOO. A page nobody has touched has nothing new to
+    // remember: the position it would write is the one the server just served
+    // it, plus whatever the steering nudged him by while the tab sat open. Round
+    // 2.1 posted every fifteen seconds forever, which is the dwell storm one
+    // interval slower, and it survived the first fix because a man being pushed
+    // off a blocker counts as having moved.
+    if (!r.armed) return;
     const last = savedAt.current;
     if (Math.hypot(r.pos.x - last.x, r.pos.z - last.z) < 0.4) return;
     savedAt.current = { x: r.pos.x, z: r.pos.z };
