@@ -37,12 +37,13 @@ import {
 } from "react";
 import { useSound } from "../../_components/SoundProvider";
 import type { CosmosManifest, SceneObject } from "./contract";
-import { createRuntime, type Runtime } from "./runtime";
+import { createRuntime, recentre, type Runtime } from "./runtime";
 import { WorldCanvas, type HudState } from "./WorldCanvas";
 import {
   Compass,
   Hint,
   KeyHints,
+  RecentreChip,
   ThemeToggle,
   ThreadPanel,
   Title,
@@ -50,6 +51,7 @@ import {
   YouAreHere,
   useCosmosTheme,
   useKeyboard,
+  useTouch,
 } from "../_hud/Hud";
 import { Satchel, SatchelButton } from "../_hud/Satchel";
 import { Unfolded } from "../_hud/Unfolded";
@@ -85,6 +87,7 @@ export function CosmosStage({
   );
   const [theme, setTheme] = useCosmosTheme();
   const keyboard = useKeyboard();
+  const touch = useTouch();
   const [reduced, setReduced] = useState(false);
   const [hud, setHud] = useState<HudState>({
     world: manifest.hero.world,
@@ -424,6 +427,12 @@ export function CosmosStage({
       data-depth={hud.depth ? "true" : "false"}
       data-near={hud.nearId ?? ""}
       data-chrome={chrome ? "true" : "false"}
+      /* Whether a page is unfolded, on the stage, because the CSS needs to know
+         and the panel is a LATER sibling of the HUD than the dock is: there is
+         no selector that looks backwards up the tree. On a phone held sideways
+         the sheet comes in from the right and lands over half the dock, which
+         reads as a clipping bug rather than as a modal. */
+      data-open={open ? "true" : "false"}
       /* Where the SERVER put him on this load. The never-restart proof reads
          this before and after a reload: walk, reload, and it has moved. */
       data-hero={`${manifest.hero.world}:${manifest.hero.x.toFixed(1)},${manifest.hero.z.toFixed(1)}`}
@@ -467,6 +476,13 @@ export function CosmosStage({
           <SatchelButton count={satchel.length} onClick={() => setSatchelOpen((s) => !s)} />
           <SoundToggle />
           <ThemeToggle theme={theme} setTheme={setTheme} />
+          {touch && (
+            <RecentreChip
+              onPress={() => {
+                if (rt.current) recentre(rt.current);
+              }}
+            />
+          )}
         </div>
 
         <div className="cosmos-br">

@@ -420,10 +420,17 @@ export function useAudioArm(enabled: boolean): boolean {
       void unlockAudio();
       setArmed(true);
     };
+    // TOUCHSTART IS NAMED, not assumed. iOS unlocks an AudioContext only inside
+    // a real user gesture, and while Safari has fired `pointerdown` for a finger
+    // since iOS 13, a page that only ever listens for pointer events is one
+    // `touch-action` quirk away from a silent world with no way to tell. Both
+    // are here, both are `once`, and whichever arrives first does the unlocking.
     window.addEventListener("pointerdown", arm, { once: true, passive: true });
+    window.addEventListener("touchstart", arm, { once: true, passive: true });
     window.addEventListener("keydown", arm, { once: true });
     return () => {
       window.removeEventListener("pointerdown", arm);
+      window.removeEventListener("touchstart", arm);
       window.removeEventListener("keydown", arm);
     };
   }, [enabled, armed]);

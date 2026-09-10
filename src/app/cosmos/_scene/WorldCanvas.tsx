@@ -36,7 +36,15 @@ import type { CosmosManifest, WorldManifest } from "./contract";
 import { nearestWorld, worldAt } from "./contract";
 import { neighbourPalette, paletteFor, type Palette } from "./registers";
 import { lightsFor, placeWorld, roomAt } from "./place";
-import { createRuntime, HERO_RADIUS, stepWalker, STEER_MARGIN, STRIDE, type Runtime } from "./runtime";
+import {
+  createRuntime,
+  HERO_RADIUS,
+  recentre,
+  stepWalker,
+  STEER_MARGIN,
+  STRIDE,
+  type Runtime,
+} from "./runtime";
 import { EMITTER_SOCKET, PROPS } from "./props";
 import { CAM_YAW, IsoCamera } from "./IsoCamera";
 import { Ground } from "./Ground";
@@ -123,6 +131,30 @@ export function weatherLook(w: Record<string, number | string | null> | undefine
   return { mist: Math.min(0.16, mist), key: Math.min(1, Math.max(0, key)) };
 }
 
+/**
+ * A handset, by the only measure that survives being turned on its side.
+ *
+ * 700 CSS pixels on the SHORT edge. It re-reads on resize and on
+ * `orientationchange`, because the answer has to change while the page is open:
+ * r3f takes `dpr` as a prop and will resize the drawing buffer when it changes,
+ * so rotating a phone re-caps the render rather than keeping whatever the first
+ * paint decided.
+ */
+export function usePhone(): boolean {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const read = () => setPhone(Math.min(window.innerWidth, window.innerHeight) < 700);
+    read();
+    window.addEventListener("resize", read, { passive: true });
+    window.addEventListener("orientationchange", read, { passive: true });
+    return () => {
+      window.removeEventListener("resize", read);
+      window.removeEventListener("orientationchange", read);
+    };
+  }, []);
+  return phone;
+}
+
 // ── The per-frame conductor ──────────────────────────────────────────────────
 
 function Conductor({
@@ -174,20 +206,52 @@ function Conductor({
     return out;
   }, [worlds]);
 
-  // Click to move, or click to go and look at a thing.
+  /**
+   * Click to move, or click to go and look at a thing. On a thumb, TAP to move.
+   *
+   * A MOUSE DECIDES ON THE WAY DOWN AND A THUMB ON THE WAY UP, and the two are
+   * not the same gesture. A finger that presses is not yet asking for anything:
+   * it might be the first of two about to pinch (`IsoCamera`), or it might be a
+   * hold on a card, which is the open gesture and must not also walk him at the
+   * thing it just opened. So a touch is a walk order only if it lifts inside
+   * two thirds of a second, within twelve pixels of where it landed, and alone.
+   * Everything a mouse does is exactly what it did before.
+   */
   useEffect(() => {
     const el = gl.domElement;
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const ray = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
     const hit = new THREE.Vector3();
+    const v = new THREE.Vector3();
 
-    const onDown = (e: PointerEvent) => {
+    /** Where the Wayfarer is on the glass, in client pixels, or null. */
+    const heroOnGlass = (): { x: number; y: number } | null => {
+      const r = rt.current;
+      const cam = (el as HTMLCanvasElement & { __cam?: THREE.Camera }).__cam;
+      if (!r || !cam) return null;
+      const rect = el.getBoundingClientRect();
+      v.set(r.pos.x, 0.9, r.pos.z).project(cam);
+      if (v.z > 1) return null;
+      return {
+        x: rect.left + ((v.x + 1) / 2) * rect.width,
+        y: rect.top + ((1 - v.y) / 2) * rect.height,
+      };
+    };
+
+    /** A finger within this of him is on him. Never smaller than a tap target. */
+    const ON_HERO_PX = 44;
+    const onHero = (x: number, y: number) => {
+      const h = heroOnGlass();
+      return !!h && Math.hypot(h.x - x, h.y - y) <= ON_HERO_PX;
+    };
+
+    const act = (clientX: number, clientY: number) => {
       const r = rt.current;
       if (!r || r.paused) return;
       const rect = el.getBoundingClientRect();
-      ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       const cam = (el as HTMLCanvasElement & { __cam?: THREE.Camera }).__cam;
       if (!cam) return;
       ray.setFromCamera(ndc, cam);
@@ -228,8 +292,74 @@ function Conductor({
         r.dest.y = 0;
       }
     };
+
+    const touches = new Set<number>();
+    let tap: { x: number; y: number; at: number } | null = null;
+    let lastHeroTap = 0;
+
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") {
+        act(e.clientX, e.clientY);
+        return;
+      }
+      touches.add(e.pointerId);
+      // A second finger is the camera's, and it cancels the first one's tap.
+      if (touches.size > 1) tap = null;
+      else tap = { x: e.clientX, y: e.clientY, at: performance.now() };
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "touch" || !tap) return;
+      if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 12) tap = null;
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      touches.delete(e.pointerId);
+      const t = tap;
+      tap = null;
+      const r = rt.current;
+      if (!t || touches.size || !r) return;
+      // A hold is the OPEN gesture (`press` in this file, 400 ms). It is not a
+      // walk order, and firing both is how a held thumb ends up walking him into
+      // the thing it just unfolded.
+      if (performance.now() - t.at > 650) return;
+      // TWO TAPS ON HIM PUT THE CAMERA BACK, and one tap on him is still a tap
+      // on the ground.
+      //
+      // The first version of this swallowed any tap inside his 44 px target so
+      // that a double tap would not also walk him, and the phone leg found what
+      // that costs: at 43 units back, a point seven metres in front of him lands
+      // 28 px from his middle, so "tap the ground to walk" stopped working for
+      // the whole of the near field. The frame is the thing that got bigger, so
+      // the dead zone had to go. A single tap near him walks like any other; the
+      // second one inside a third of a second recentres AND cancels the walk
+      // order the first one just placed, which is the only part that needed to
+      // be special.
+      if (onHero(t.x, t.y)) {
+        const now = performance.now();
+        if (now - lastHeroTap < 340) {
+          lastHeroTap = 0;
+          recentre(r);
+          r.dest = null;
+          r.intent = null;
+          return;
+        }
+        lastHeroTap = now;
+      }
+      act(t.x, t.y);
+    };
+
     el.addEventListener("pointerdown", onDown);
-    return () => el.removeEventListener("pointerdown", onDown);
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", onUp, { passive: true });
+    window.addEventListener("pointercancel", onUp, { passive: true });
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
   }, [gl, rt, aims]);
 
   /**
@@ -749,24 +879,60 @@ export const WorldCanvas = memo(function WorldCanvas({
   );
 
   const pressTimer = useRef<number | null>(null);
+  const pressFrom = useRef<{ x: number; y: number } | null>(null);
+  /** Where the pointer that is about to reach a card came down. Capture phase,
+      so it is already written by the time r3f hands the mesh its event. */
+  const lastDown = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const press = useCallback(
     (id: string) => {
       const r = rt.current;
       if (!r) return;
       r.hovered = id;
       r.intent = null;
+      pressFrom.current = { ...lastDown.current };
       // A held finger opens it; a tap that lifts inside 400 ms only walks there.
       pressTimer.current = window.setTimeout(() => onOpen(id), 400);
     },
     [onOpen, rt],
   );
   const release = useCallback(() => {
+    pressFrom.current = null;
     if (pressTimer.current !== null) {
       window.clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
   }, []);
   useEffect(() => () => release(), [release]);
+
+  /**
+   * A HOLD THAT MOVES IS NOT A HOLD.
+   *
+   * A card's own `onPointerUp` cancels the timer, but a thumb that lands on a
+   * card and then drags (the start of a pinch, or a finger sliding off) never
+   * fires one on that mesh, so the four hundred milliseconds ran out and a page
+   * unfolded in the middle of a camera gesture. Movement past twelve pixels, a
+   * second finger, or the pointer being cancelled by the browser all release it.
+   */
+  useEffect(() => {
+    const moved = (e: PointerEvent) => {
+      const from = pressFrom.current;
+      if (!from) return;
+      if (Math.hypot(e.clientX - from.x, e.clientY - from.y) > 12) release();
+    };
+    const down = (e: PointerEvent) => {
+      lastDown.current = { x: e.clientX, y: e.clientY };
+      if (e.isPrimary === false) release();
+    };
+    const opts = { capture: true, passive: true } as const;
+    window.addEventListener("pointermove", moved, { passive: true });
+    window.addEventListener("pointerdown", down, opts);
+    window.addEventListener("pointercancel", release, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", moved);
+      window.removeEventListener("pointerdown", down, opts);
+      window.removeEventListener("pointercancel", release);
+    };
+  }, [release]);
 
   /**
    * The pass budget, measured rather than assumed (`optimize-threejs-games`:
@@ -810,12 +976,19 @@ export const WorldCanvas = memo(function WorldCanvas({
    * 1.5, which on a 1440 by 900 window is 2160 by 1350: enough that the grain
    * and the tilt-shift still read, and 44 percent of the pixels DPR 2 was
    * asking for.
+   *
+   * THE SHORT EDGE DECIDES, not the width. `innerWidth < 700` called a phone a
+   * phone until it was turned on its side, and then an 844 by 390 iPhone asked
+   * for 1.5 device pixels per CSS pixel on the hardest frame in the build: the
+   * landscape leg is a 2.16 aspect, which is more full-screen shader than the
+   * desktop draws, on a tenth of the fill rate. The short edge is 390 either way
+   * up, and it is the honest test for "this is a handset".
    */
+  const phone = usePhone();
   const dpr = useMemo<[number, number]>(() => {
     if (reduced) return [1, 1];
-    const phone = typeof window !== "undefined" && window.innerWidth < 700;
     return phone ? [1, 1] : [1, 1.5];
-  }, [reduced]);
+  }, [reduced, phone]);
 
   return (
     <Canvas

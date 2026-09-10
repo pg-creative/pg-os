@@ -9,9 +9,37 @@
  * persists (PG, 2026-08-25). And there are no numbers anywhere: no bar, no
  * counter, no percentage, no level. A thing is either in the satchel or it is
  * not, and the world is either remembered or it is mist.
+ *
+ * ROUND THREE, THE PHONE. Four things, and each is a rule rather than a tweak.
+ *
+ *   `100dvh`, because `position: fixed; inset: 0` in iOS Safari is the LARGE
+ *   viewport: the page is laid out as though the address bar were not there, so
+ *   the bottom of the HUD sat under it until you scrolled, and this world has no
+ *   scroll to give. The dynamic unit tracks the bars as they come and go.
+ *
+ *   SAFE AREAS. `viewport-fit=cover` is already set by the OS's root layout, so
+ *   the canvas runs under the notch and the home indicator, which is right, and
+ *   the HUD must not. Every corner is `calc(x + var(--safe-*))`, and the four
+ *   variables default to `env()` so a Home Screen launch (no browser chrome, the
+ *   status bar straight over the top of the frame) clears itself.
+ *
+ *   NO `backdrop-filter`, which is the OS's own iOS hardening rule and here it
+ *   is also arithmetic: blurring the backdrop of three floating pills means
+ *   three more full-screen-ish reads of a frame this scene has already spent its
+ *   fill rate on. The pills carry their own opacity instead.
+ *
+ *   NO HOVER-ONLY ANYTHING. Every `:hover` is inside `@media (hover: hover)`,
+ *   because iOS keeps the hover state on the last thing you tapped until you tap
+ *   something else, and a chip that stays lit is a chip that looks pressed.
  */
 
 .cosmos-root {
+  /* The frame the HUD may use. Zero everywhere that has no notch. */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
   --paper: #f6efdf;
   --paper-deep: #ece0c6;
   --ink: #2a241c;
@@ -28,6 +56,10 @@
 
   position: fixed;
   inset: 0;
+  /* The dynamic viewport, with the static one as the fallback for anything that
+     has never heard of it. Height wins over `bottom: 0` on a fixed box. */
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #ece2ce;
 }
@@ -109,8 +141,8 @@
 
 .cosmos-tl {
   position: absolute;
-  top: 22px;
-  left: 26px;
+  top: calc(22px + var(--safe-t));
+  left: calc(26px + var(--safe-l));
   display: flex;
   align-items: center;
   gap: 12px;
@@ -163,8 +195,8 @@
 
 .cosmos-weather {
   position: absolute;
-  top: 24px;
-  right: 26px;
+  top: calc(24px + var(--safe-t));
+  right: calc(26px + var(--safe-r));
   max-width: min(360px, 42vw);
   text-align: right;
 }
@@ -200,8 +232,8 @@
 
 .cosmos-here {
   position: absolute;
-  left: 26px;
-  bottom: 26px;
+  left: calc(26px + var(--safe-l));
+  bottom: calc(26px + var(--safe-b));
   transition: opacity 320ms ease;
 }
 
@@ -243,15 +275,17 @@
 .cosmos-dock {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: calc(24px + var(--safe-b));
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 6px;
   border-radius: 999px;
-  background: rgba(24, 17, 28, 0.5);
-  backdrop-filter: blur(14px) saturate(1.1);
+  /* Was `backdrop-filter: blur(14px) saturate(1.1)` over 0.5 of ink. The blur is
+     gone (the OS's iOS rule, and a full-screen read this scene cannot spare) and
+     the opacity carries the contrast on its own. */
+  background: rgba(24, 17, 28, 0.72);
   border: 1px solid rgba(247, 241, 228, 0.16);
 }
 
@@ -282,7 +316,14 @@
   color: var(--chrome-soft);
 }
 
-.cosmos-chip:hover,
+/* HOVER ONLY WHERE THERE IS A CURSOR. iOS leaves the state on the last thing
+   tapped, so on a phone this rule would light a chip and keep it lit. */
+@media (hover: hover) {
+  .cosmos-chip:hover {
+    background: rgba(247, 241, 228, 0.14);
+  }
+}
+
 .cosmos-chip:focus-visible {
   background: rgba(247, 241, 228, 0.14);
 }
@@ -295,8 +336,8 @@
 
 .cosmos-br {
   position: absolute;
-  right: 26px;
-  bottom: 24px;
+  right: calc(26px + var(--safe-r));
+  bottom: calc(24px + var(--safe-b));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -308,8 +349,7 @@
   height: 92px;
   border-radius: 50%;
   overflow: hidden;
-  background: rgba(24, 17, 28, 0.34);
-  backdrop-filter: blur(8px);
+  background: rgba(24, 17, 28, 0.46);
 }
 
 .cosmos-keys {
@@ -348,7 +388,7 @@
 .cosmos-thread {
   position: absolute;
   left: 50%;
-  bottom: 78px;
+  bottom: calc(78px + var(--safe-b));
   transform: translate(-50%, 10px);
   width: min(420px, 84vw);
   padding: 16px 20px 18px;
@@ -405,13 +445,12 @@
 .cosmos-hint {
   position: absolute;
   left: 50%;
-  bottom: 78px;
+  bottom: calc(78px + var(--safe-b));
   transform: translateX(-50%);
   margin: 0;
   padding: 7px 15px;
   border-radius: 999px;
-  background: rgba(24, 17, 28, 0.5);
-  backdrop-filter: blur(10px);
+  background: rgba(24, 17, 28, 0.72);
   border: 1px solid rgba(247, 241, 228, 0.16);
   font-family: var(--mono);
   font-size: 10px;
@@ -473,8 +512,10 @@
   border-radius: 50%;
 }
 
-.cosmos-page-close:hover {
-  color: var(--ink);
+@media (hover: hover) {
+  .cosmos-page-close:hover {
+    color: var(--ink);
+  }
 }
 
 .cosmos-page-plate {
@@ -618,7 +659,7 @@
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: 62px;
+  bottom: calc(62px + var(--safe-b));
   transform: translateX(-50%) translateY(10px);
   width: min(94vw, 560px);
   max-height: 46vh;
@@ -757,12 +798,51 @@
   }
 }
 
-/* ── Phone ─────────────────────────────────────────────────────────────── */
+/* ── A thumb, at any size ──────────────────────────────────────────────────
+ *
+ * FORTY-FOUR PIXELS, which is the OS's own accessibility floor and Apple's, and
+ * it is keyed to the POINTER rather than to the viewport: a small tablet and a
+ * touchscreen laptop have thumbs too, and the chips were 34 px tall on both. The
+ * chip is also the double-tap-on-the-Wayfarer's twin, so it has to be hittable
+ * without aiming.
+ */
 
-@media (max-width: 560px) {
+@media (pointer: coarse) {
+  .cosmos-chip {
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
+  }
+  .cosmos-page-close,
+  .cosmos-satchel-close {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+  }
+  .cosmos-page-close {
+    top: 6px;
+    right: 6px;
+  }
+  .cosmos-satchel-slot {
+    min-height: 44px;
+  }
+}
+
+/* ── Phone ─────────────────────────────────────────────────────────────────
+ *
+ * WIDTH OR HEIGHT. `max-width: 560px` alone stopped being true the moment the
+ * phone was turned on its side: an 844 by 390 iPhone got the desktop HUD, so a
+ * 92 px compass and a 40 px portrait were laid out inside 390 px of height with
+ * 168 px of scrim over each end of it. A handset is a handset whichever way up
+ * it is, and the short edge is what says so.
+ */
+
+@media (max-width: 560px), (max-height: 560px) {
   .cosmos-tl {
-    top: 12px;
-    left: 14px;
+    top: calc(12px + var(--safe-t));
+    left: calc(14px + var(--safe-l));
     gap: 9px;
   }
   .cosmos-portrait {
@@ -774,8 +854,8 @@
     font-size: 21px;
   }
   .cosmos-weather {
-    top: 14px;
-    right: 14px;
+    top: calc(14px + var(--safe-t));
+    right: calc(14px + var(--safe-r));
     max-width: 52vw;
   }
   .cosmos-weather-line {
@@ -794,19 +874,19 @@
     display: none;
   }
   .cosmos-here {
-    left: 14px;
-    bottom: 78px;
+    left: calc(14px + var(--safe-l));
+    bottom: calc(78px + var(--safe-b));
   }
   .cosmos-here-name {
     font-size: 17px;
   }
   .cosmos-dock {
-    bottom: 14px;
+    bottom: calc(14px + var(--safe-b));
     gap: 2px;
     padding: 4px;
   }
   .cosmos-chip {
-    min-height: 40px;
+    min-height: 44px;
     padding: 0 9px;
   }
   /* No compass and no key hints on a thumb: one is a luxury and the other
@@ -815,14 +895,14 @@
     display: none;
   }
   .cosmos-thread {
-    bottom: 68px;
+    bottom: calc(68px + var(--safe-b));
   }
   /* The hint sat across the open panel in round one. It goes up out of the
      way instead, and the panel owns the bottom of the screen. */
   /* Clear of the weather line above it, and clear of the panel below. */
   .cosmos-hint {
     bottom: auto;
-    top: 112px;
+    top: calc(112px + var(--safe-t));
     font-size: 10px;
     max-width: 84vw;
     white-space: normal;
@@ -842,7 +922,85 @@
     transform: none;
   }
   .cosmos-satchel {
-    bottom: 62px;
+    bottom: calc(62px + var(--safe-b));
     max-height: 52vh;
+  }
+}
+
+/* ── The phone on its side ────────────────────────────────────────────────
+ *
+ * 390 px of height, two thirds of which the scrims already own, and the world
+ * is in the middle of it. So the chrome gets out of the way rather than being
+ * shrunk: the scrims halve, the title loses its season line, and the page slides
+ * in from the side instead of covering the frame from the bottom, because a
+ * bottom sheet at 78vh on a 390 px screen IS the screen.
+ */
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .cosmos-hud::before,
+  .cosmos-hud::after {
+    height: 92px;
+  }
+  .cosmos-tl {
+    top: calc(8px + var(--safe-t));
+  }
+  .cosmos-season {
+    display: none;
+  }
+  .cosmos-worldname {
+    font-size: 18px;
+  }
+  .cosmos-here {
+    bottom: calc(8px + var(--safe-b));
+  }
+  .cosmos-here-name {
+    font-size: 15px;
+  }
+  .cosmos-dock {
+    bottom: calc(8px + var(--safe-b));
+  }
+  .cosmos-hint {
+    top: calc(10px + var(--safe-t));
+    left: auto;
+    right: calc(14px + var(--safe-r));
+    transform: none;
+    max-width: 44vw;
+  }
+  /* The weather is under the hint on a frame this short; the thread keeps it. */
+  .cosmos-weather {
+    display: none;
+  }
+  .cosmos-thread {
+    bottom: calc(58px + var(--safe-b));
+    padding: 10px 16px 12px;
+  }
+  .cosmos-thread-chapter {
+    font-size: 16px;
+  }
+  /* A side sheet: the world stays visible beside the words. */
+  .cosmos-page {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    width: min(62vw, 460px);
+    max-height: 100%;
+    border-radius: 0;
+    padding: 16px calc(18px + var(--safe-r)) 18px 18px;
+    transform: translateX(16px);
+  }
+  .cosmos-page[data-open="true"] {
+    transform: none;
+  }
+  .cosmos-satchel {
+    bottom: calc(58px + var(--safe-b));
+    max-height: 62vh;
+  }
+  /* The sheet is modal while it is open, so the dock steps out from under it
+     rather than being sliced in half by it. The page carries its own close. */
+  .cosmos-stage[data-open="true"] .cosmos-dock,
+  .cosmos-stage[data-open="true"] .cosmos-hint {
+    opacity: 0;
+    pointer-events: none;
   }
 }

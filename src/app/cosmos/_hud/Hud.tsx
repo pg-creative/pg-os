@@ -285,6 +285,47 @@ export function useKeyboard(): boolean {
   return has;
 }
 
+/**
+ * Whether this person is using a thumb. The mirror of `useKeyboard`, and it is
+ * asked separately because the two are not opposites: a laptop with a
+ * touchscreen has both, and a phone with a paired keyboard is still a phone.
+ */
+export function useTouch(): boolean {
+  const [touch, setTouch] = useState(false);
+  useEffect(() => {
+    const coarse =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
+    if (coarse || (navigator.maxTouchPoints ?? 0) > 0) setTouch(true);
+    const onTouch = () => setTouch(true);
+    window.addEventListener("touchstart", onTouch, { once: true, passive: true });
+    return () => window.removeEventListener("touchstart", onTouch);
+  }, []);
+  return touch;
+}
+
+/**
+ * PUT IT BACK. The reset framing, as a thing you can press.
+ *
+ * `build-game-camera-controls`: a touch camera needs a way home, because two
+ * fingers can carry the frame somewhere the walker is not and a person who has
+ * done that by accident has no idea what happened. Two taps on the Wayfarer do
+ * the same thing; this is the half of it that is visible. It is on the dock only
+ * where there is a thumb, because a mouse has a wheel and never loses him.
+ */
+export function RecentreChip({ onPress }: { onPress: () => void }) {
+  return (
+    <button
+      type="button"
+      className="cosmos-chip"
+      aria-label="Recentre the view on the Wayfarer"
+      onClick={onPress}
+    >
+      <span aria-hidden>◎</span>
+    </button>
+  );
+}
+
 export function KeyHints({ keyboard }: { keyboard: boolean }) {
   if (!keyboard) return null;
   return (

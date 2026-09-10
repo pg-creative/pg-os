@@ -35,6 +35,18 @@ export interface Runtime {
   dist: number;
   /** How much world the wheel is asking for. 1 is the framing the viewport wants. */
   zoom: number;
+  /**
+   * How far two fingers have carried the look-at off him, on the ground.
+   *
+   * Written by the pinch-and-pan gesture in `IsoCamera`, eased back to zero the
+   * moment both fingers leave, and zeroed by `recentre`. It is the only thing in
+   * the build that is allowed to move the camera off the Wayfarer, and it cannot
+   * hold it there: `build-game-camera-controls` asks for one authoritative
+   * target and a reset framing, and this is both.
+   */
+  pan: THREE.Vector3;
+  /** True while two fingers are down. The pan holds instead of easing home. */
+  panning: boolean;
   blockers: Blocker[];
   keys: Set<string>;
   /** Which world he is standing in right now. */
@@ -105,6 +117,8 @@ export function createRuntime(x: number, z: number, world = ""): Runtime {
     target: new THREE.Vector3(x, 0.9, z),
     dist: 19,
     zoom: 1,
+    pan: new THREE.Vector3(),
+    panning: false,
     blockers: [],
     keys: new Set(),
     world,
@@ -122,6 +136,21 @@ export function createRuntime(x: number, z: number, world = ""): Runtime {
     reduced: false,
     paused: false,
   };
+}
+
+/**
+ * PUT THE CAMERA BACK ON HIM.
+ *
+ * The reset framing `build-game-camera-controls` asks for, and it is two lines
+ * because the camera never leaves him for any other reason: the zoom goes back
+ * to what the viewport wants and the two-finger pan goes back to nothing. A
+ * double tap on the Wayfarer and the "recentre" chip both call this, so the
+ * gesture and the button cannot drift into meaning different things.
+ */
+export function recentre(rt: Runtime): void {
+  rt.zoom = 1;
+  rt.pan.set(0, 0, 0);
+  rt.panning = false;
 }
 
 export const HERO_RADIUS = 0.42;
