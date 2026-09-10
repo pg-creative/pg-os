@@ -56,11 +56,36 @@ const OUT = 130;
  * whose subject is not in the middle says so in the vault: `crop: { from, to }`.
  */
 const WIDE = 200;
+/**
+ * The default height, and where it comes from. A 1456 by 816 plate cut to the
+ * default band below is 1456 by 132, which is 11.03 to one; 200 divided by that
+ * is 18.1. So TALL was never an independent number, it was the DEFAULT CROP'S
+ * OWN ASPECT, and a crop that changes the window has to change it too or the
+ * country gets stretched. `tallFor` below does that and returns this when the
+ * plate has not measured itself yet.
+ */
 const TALL = 18.2;
 /** Where its feet stand, in world y. The eye rides at about 6.6 m at zoom 1. */
 const FOOT = 2.04;
 const CROP_FROM = 0.414;
 const CROP_TO = 0.576;
+const CROP_LEFT = 0;
+const CROP_RIGHT = 1;
+
+/** The plane's height, so the crop's own aspect survives the trip to 200 m. */
+function tallFor(
+  tex: THREE.Texture | null,
+  from: number,
+  to: number,
+  left: number,
+  right: number,
+): number {
+  const img = tex?.image as { width?: number; height?: number } | undefined;
+  const w = (img?.width ?? 0) * Math.max(0.01, right - left);
+  const h = (img?.height ?? 0) * Math.max(0.01, to - from);
+  if (!(w > 0) || !(h > 0)) return TALL;
+  return Math.min(64, Math.max(6, (WIDE * h) / w));
+}
 /** How much of the walker's movement it takes. 1 is painted on the lens. */
 const FOLLOW = 0.86;
 
@@ -95,13 +120,27 @@ export function Backdrop({
   const crop = world.backdrop?.crop ?? null;
   const from = crop ? Math.min(crop.from, crop.to) : CROP_FROM;
   const to = crop ? Math.max(crop.from, crop.to) : CROP_TO;
+  /**
+   * AND THE SIDES, which round three had no way to say and needed in two places.
+   *
+   * The practice's plate is the valley seen THROUGH the hall's doorway, so its
+   * two weathered door jambs stand at the extreme left and right of the image.
+   * At two hundred metres they were the Critic's deduction 1, "two headless tree
+   * trunks hang in the sky", in the first frame, on every device. No vertical
+   * band can cut a vertical post; only a horizontal window can.
+   */
+  const left = crop && typeof crop.left === "number" ? crop.left : CROP_LEFT;
+  const right = crop && typeof crop.right === "number" ? crop.right : CROP_RIGHT;
+  const tall = tallFor(tex, from, to, left, right);
 
   const material = useMemo(() => {
     if (!tex) return null;
     tex.wrapS = THREE.ClampToEdgeWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
-    tex.repeat.set(1, to - from);
-    tex.offset.set(0, 1 - to);
+    // `from`/`to`/`left`/`right` are read off the plate from its TOP and LEFT.
+    // Texture uv counts up from the BOTTOM, so only y is flipped.
+    tex.repeat.set(right - left, to - from);
+    tex.offset.set(left, 1 - to);
     const m = new THREE.MeshBasicMaterial({
       map: tex,
       transparent: true,
@@ -147,7 +186,7 @@ export function Backdrop({
     };
     m.customProgramCacheKey = () => "cosmos-backdrop";
     return m;
-  }, [tex, p.fog, from, to]);
+  }, [tex, p.fog, from, to, left, right]);
 
   // The bearing: away from the camera, so the painting is always the far side of
   // the biome rather than the side he came in from.
@@ -178,11 +217,11 @@ export function Backdrop({
         rotation={[0, CAM_YAW, 0]}
         // Sunk so its foot is under the horizon line and its body stands above
         // it: the join happens inside the haze and never as an edge.
-        position={[0, FOOT + TALL / 2, 0]}
+        position={[0, FOOT + tall / 2, 0]}
         renderOrder={-90}
         frustumCulled={false}
       >
-        <planeGeometry args={[WIDE, TALL]} />
+        <planeGeometry args={[WIDE, tall]} />
       </mesh>
     </group>
   );

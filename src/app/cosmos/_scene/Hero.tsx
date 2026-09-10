@@ -23,7 +23,7 @@
  * takes its position every frame and everything inside its radius de-mists.
  */
 
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Palette } from "./registers";
@@ -217,6 +217,13 @@ export function Hero({
   model: HeroModelSpec | null;
 }) {
   const asModel = useMemo(() => wantsModel(), []);
+  /**
+   * A rig that measures wrong is not drawn, and the sprite takes it back. The
+   * brief's rule, made mechanical: do not ship a stump. `RiggedHero` samples the
+   * clip before its first frame and calls this with the measurement that failed.
+   */
+  const [modelFault, setModelFault] = useState<string | null>(null);
+  const refuse = useCallback((why: string) => setModelFault(why), []);
   const group = useRef<THREE.Group>(null);
   const billboard = useRef<THREE.Mesh>(null);
   const figure = useRef<THREE.Group>(null);
@@ -282,7 +289,7 @@ export function Hero({
     void dt;
   });
 
-  if (asModel && model) {
+  if (asModel && model && !modelFault) {
     return (
       <>
         <Suspense fallback={null}>
@@ -291,6 +298,7 @@ export function Hero({
             spec={model}
             lanternColor={lanternColor}
             lanternRange={lanternRange}
+            onRefuse={refuse}
           />
         </Suspense>
         <Dust rt={rt} color={p.paper} />

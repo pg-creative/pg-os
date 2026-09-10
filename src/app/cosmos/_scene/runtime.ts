@@ -96,6 +96,21 @@ export interface Runtime {
    * hall stalled at (-3.15, 1)" was this, with a grove in the way.
    */
   stuck: number;
+  /**
+   * WHERE THE WORLD SAID NO, and how long ago.
+   *
+   * The give-up above was round three's fix and it worked: a walk order into a
+   * wall now ends instead of grinding. What it did not do was SAY anything, so
+   * the Critic tapped six times toward the hall's north wall, moved fifteen
+   * centimetres, and had nothing at all to read from it: "the interface is alive
+   * and the world is not passable". A refusal a person cannot see is a bug
+   * whatever the code does.
+   *
+   * `at` is the point on the blocker's own edge where he was stopped, `age` is
+   * seconds since (large means never). The scene draws a bump there and the
+   * hint says it in words. Written once per refusal, never per frame.
+   */
+  blocked: { at: THREE.Vector3; age: number };
   reduced: boolean;
   paused: boolean;
   /**
@@ -148,6 +163,7 @@ export function createRuntime(x: number, z: number, world = ""): Runtime {
     depth: world === "depths",
     stepAccum: 0,
     stuck: 0,
+    blocked: { at: new THREE.Vector3(), age: 999 },
     reduced: false,
     paused: false,
     entry: 1,
@@ -259,6 +275,38 @@ export function stepWalker(rt: Runtime, dt: number, camYaw: number): void {
     if (moved < WALK_SPEED * dt * 0.18) rt.stuck += dt;
     else rt.stuck = 0;
     if (rt.stuck > 0.5) {
+      // THE WALL PAINTS ITSELF. Before the order is dropped, find what he was
+      // leaning on: the nearest blocker whose edge he is standing against, and
+      // the point on that edge between him and it. That point is what the scene
+      // puffs and what the hint names. A refusal with no blocker in reach (the
+      // world's own rim) marks the spot in front of him instead.
+      let best: Blocker | null = null;
+      let bestGap = Infinity;
+      for (const b of rt.blockers) {
+        const gap = Math.hypot(rt.pos.x - b.x, rt.pos.z - b.z) - b.r - HERO_RADIUS;
+        if (gap < bestGap) {
+          bestGap = gap;
+          best = b;
+        }
+      }
+      if (best && bestGap < 0.9) {
+        const dx = best.x - rt.pos.x;
+        const dz = best.z - rt.pos.z;
+        const d = Math.max(0.001, Math.hypot(dx, dz));
+        rt.blocked.at.set(
+          rt.pos.x + (dx / d) * HERO_RADIUS,
+          0,
+          rt.pos.z + (dz / d) * HERO_RADIUS,
+        );
+      } else {
+        const d = Math.max(0.001, rt.vel.length());
+        rt.blocked.at.set(
+          rt.pos.x + (rt.vel.x / d) * HERO_RADIUS,
+          0,
+          rt.pos.z + (rt.vel.z / d) * HERO_RADIUS,
+        );
+      }
+      rt.blocked.age = 0;
       rt.dest = null;
       rt.stuck = 0;
       rt.vel.set(0, 0, 0);
@@ -267,6 +315,7 @@ export function stepWalker(rt: Runtime, dt: number, camYaw: number): void {
     rt.stuck = 0;
   }
 
+  rt.blocked.age += dt;
   rt.moving = moved > 0.004;
   if (rt.moving) {
     rt.stepAccum += moved;

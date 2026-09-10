@@ -27,7 +27,7 @@
  * screenshot diff mean something (`test-playable-web-games`).
  */
 
-import type { Room, WorldManifest } from "./contract";
+import type { CosmosManifest, Room, WorldManifest } from "./contract";
 import { EMITTER_PROP, PROPS, type Blocker } from "./props";
 
 export interface Placement {
@@ -371,6 +371,77 @@ export function lightsFor(world: WorldManifest) {
       return { ...l, id: `${world.id}:${r.id}:${i}`, room: r.id, lamp };
     });
   });
+}
+
+/**
+ * WHERE HE ACTUALLY STANDS ON THE FIRST FRAME, when where he was is nowhere.
+ *
+ * A world's `size` is its whole footprint, mist at the edges included. Its ROOMS
+ * are the part of it that is built. Nothing before round four kept those two
+ * apart, and both routes into the cosmos paid for it:
+ *
+ *   - the deep link takes 28 percent of the world's DEPTH, which for the quiet
+ *     practice (56 m deep, rooms stopping at z 7) is z 15.7. Eight metres past
+ *     the last room. "YOU ARE HERE" printed a blank line, the nearest thing to
+ *     open was 20.3 m away, and the straight line to it runs into the hall's
+ *     north wall while the hall opens east: six taps, fifteen centimetres.
+ *     (The Critic's deductions 12 and 3.) The depths' own deep link lands 0.2 m
+ *     outside its only room, which is the same bug at a different scale.
+ *   - the remembered position is honoured to the centimetre, which is the
+ *     never-restart rule and is right, until a harness walks him forty metres
+ *     into the mist and leaves him there. Then it is not a memory, it is a
+ *     coordinate.
+ *
+ * One rule for both: A POSITION THAT IS IN NO ROOM IS NOT A PLACE. Inside any
+ * room, he is exactly where he was, forever. Outside every room, he arrives:
+ * `layout.spawn` when the cartographer has named the spot, else the middle of
+ * the first room he can walk in. And never within reach of a door, because a
+ * spawn inside a stair's dwell radius is a trapdoor rather than a threshold.
+ */
+const ARRIVAL_DOOR_CLEARANCE_M = 4;
+
+export function arrivalSpot(world: WorldManifest): { x: number; z: number } {
+  const rooms = world.layout.rooms;
+  const walkable =
+    rooms.find((r) => r.purpose === "traversal") ??
+    rooms.find((r) => r.purpose === "orientation") ??
+    rooms[0];
+  const said = world.layout.spawn;
+  let spot = said
+    ? { x: said.x, z: said.z }
+    : walkable
+      ? { x: walkable.anchor.x, z: walkable.anchor.z }
+      : { x: world.layout.origin.x, z: world.layout.origin.z };
+
+  // Off the doors, walking back toward the room's own middle, which is always
+  // inside it. Bounded rather than `while`: a room could be ringed in doors.
+  const doors = rooms.flatMap((r) => r.doors);
+  const home = walkable ?? rooms[0];
+  const hx = home?.anchor.x ?? world.layout.origin.x;
+  const hz = home?.anchor.z ?? world.layout.origin.z;
+  for (let i = 0; i < 8; i++) {
+    const onADoor = doors.some(
+      (d) => Math.hypot(d.at.x - spot.x, d.at.z - spot.z) < ARRIVAL_DOOR_CLEARANCE_M,
+    );
+    if (!onADoor) break;
+    spot = { x: spot.x + (hx - spot.x) * 0.35, z: spot.z + (hz - spot.z) * 0.35 };
+  }
+  return { x: Math.round(spot.x * 100) / 100, z: Math.round(spot.z * 100) / 100 };
+}
+
+/**
+ * The manifest with the Wayfarer put somewhere that names a room. A no-op in the
+ * ordinary case, which is the point: it only fires when he is nowhere.
+ */
+export function arrived(m: CosmosManifest): CosmosManifest {
+  const world =
+    m.worlds.find((w) => w.id === m.hero.world) ??
+    m.worlds.find((w) => w.id === "quiet-practice") ??
+    m.worlds[0];
+  if (!world) return m;
+  if (world.id === m.hero.world && roomAt(world, m.hero.x, m.hero.z)) return m;
+  const spot = arrivalSpot(world);
+  return { ...m, hero: { world: world.id, x: spot.x, z: spot.z } };
 }
 
 /** Which room a point is in, or null. Drives the hearth, the stairs and the bed. */

@@ -38,6 +38,7 @@ import {
 import { useSound } from "../../_components/SoundProvider";
 import type { CosmosManifest, SceneObject } from "./contract";
 import { createRuntime, recentre, type Runtime } from "./runtime";
+import { arrived } from "./place";
 import { WorldCanvas, type HudState } from "./WorldCanvas";
 import {
   Compass,
@@ -69,7 +70,7 @@ const HERO_NAME = "the Wayfarer";
 const STILL = "/api/cosmos/asset/vault/worlds/quiet-practice/plates/still-hall";
 
 export function CosmosStage({
-  manifest,
+  manifest: served,
   bodies,
   sources,
   season,
@@ -82,6 +83,16 @@ export function CosmosStage({
   /** The season name. A pure function of the date, computed on the server. */
   season: string;
 }) {
+  /**
+   * A POSITION THAT IS IN NO ROOM IS NOT A PLACE. `arrived` is a no-op whenever
+   * the Wayfarer stands anywhere the vault has built, which is the ordinary case
+   * and the never-restart rule kept to the centimetre. It fires only when he is
+   * nowhere: the deep link's "28 percent of the world's depth" landing him eight
+   * metres past the last room of the practice, or a harness leaving him forty
+   * metres out in the mist. See `place.ts arrived`.
+   */
+  const manifest = useMemo(() => arrived(served), [served]);
+
   const rt = useRef<Runtime>(
     createRuntime(manifest.hero.x, manifest.hero.z, manifest.focus ?? manifest.hero.world),
   );
@@ -107,6 +118,7 @@ export function CosmosStage({
     x: manifest.hero.x,
     z: manifest.hero.z,
     room: null,
+    blocked: false,
   });
   const [open, setOpen] = useState<string | null>(
     manifest.satchel.length && manifest.fixture === "unfold" ? manifest.satchel[0] : null,
@@ -507,6 +519,7 @@ export function CosmosStage({
           reduced={reduced}
           keyboard={keyboard}
           sitting={hud.sitting}
+          blocked={hud.blocked}
         />
       </div>
 

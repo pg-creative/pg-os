@@ -95,6 +95,12 @@ export interface HudState {
   z: number;
   /** The room he is in, for "YOU ARE HERE". */
   room: string | null;
+  /**
+   * A walk order the world refused, in the last few seconds. The scuff on the
+   * ground says WHERE; the hint says WHAT, because a wall he cannot see is a
+   * wall he will tap at six more times.
+   */
+  blocked: boolean;
 }
 
 /** `state/weather.json`, read for the two things weather can honestly drive. */
@@ -153,6 +159,63 @@ export function usePhone(): boolean {
     };
   }, []);
   return phone;
+}
+
+/**
+ * WHAT STOPPED HIM, drawn where it stopped him.
+ *
+ * The walk order already gives up rather than grinding (`runtime.stepWalker`),
+ * and round three proved that giving up SILENTLY is its own defect: six taps
+ * toward the hall's north wall moved the Critic fifteen centimetres with nothing
+ * on the glass to read. "Every control on the glass fires, and what failed was a
+ * walk order into a wall the game never draws as a wall."
+ *
+ * So the wall draws itself: a flat ring on the ground at the contact point,
+ * opening and fading over three quarters of a second, in the register's own
+ * paper colour. Not a hit spark and not a red X. A scuff, the shape of a
+ * footprint that did not go anywhere, in the grammar of a painted world.
+ *
+ * One mesh, mounted forever, moved and faded from the runtime. No state, no
+ * re-render, nothing allocated per refusal.
+ */
+function Refusal({ rt, color }: { rt: React.RefObject<Runtime>; color: string }) {
+  const mesh = useRef<THREE.Mesh>(null);
+  const mat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(color),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        toneMapped: false,
+        fog: false,
+        side: THREE.DoubleSide,
+      }),
+    [color],
+  );
+  const LIFE = 0.75;
+  useFrame(() => {
+    const r = rt.current;
+    const m = mesh.current;
+    if (!r || !m) return;
+    const age = r.blocked.age;
+    if (age > LIFE) {
+      if (m.visible) m.visible = false;
+      return;
+    }
+    m.visible = true;
+    m.position.set(r.blocked.at.x, 0.02, r.blocked.at.z);
+    const k = age / LIFE;
+    // Opens outward and thins: a scuff spreading, not a pulse.
+    const spread = 0.34 + k * 0.5;
+    m.scale.set(spread, spread, 1);
+    mat.opacity = 0.52 * (1 - k) * (1 - k);
+  });
+  return (
+    <mesh ref={mesh} material={mat} rotation={[-Math.PI / 2, 0, 0]} visible={false} renderOrder={6}>
+      <ringGeometry args={[0.55, 0.92, 20]} />
+    </mesh>
+  );
 }
 
 // ── The per-frame conductor ──────────────────────────────────────────────────
@@ -533,6 +596,7 @@ function Conductor({
       x: r.pos.x,
       z: r.pos.z,
       room: room?.id ?? null,
+      blocked: r.blocked.age < 3.2,
     });
     void state;
   });
@@ -1126,6 +1190,7 @@ export const WorldCanvas = memo(function WorldCanvas({
             onRelease={release}
             lightBudget={LIGHT_SLOTS}
             current={isHere}
+            phone={phone}
           />
         );
       })}
@@ -1139,6 +1204,8 @@ export const WorldCanvas = memo(function WorldCanvas({
         lanternRange={9}
         model={heroModel}
       />
+
+      <Refusal rt={rt} color={palette.paper} />
 
       <Warmup />
       <Conductor

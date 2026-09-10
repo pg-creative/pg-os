@@ -456,6 +456,7 @@ export function Hint({
   reduced,
   keyboard,
   sitting,
+  blocked = false,
 }: {
   near: string | null;
   moved: boolean;
@@ -463,16 +464,24 @@ export function Hint({
   keyboard: boolean;
   /** On the hearth mat the dwell is suspended, so standing still is not a verb. */
   sitting: boolean;
+  /**
+   * The world refused a walk order in the last few seconds. It outranks every
+   * other line here: the Critic tapped six times at a wall the game never drew
+   * as a wall and had nothing to read. The scuff on the ground says where; this
+   * says what, and what to do about it.
+   */
+  blocked?: boolean;
 }) {
   const text = useMemo(() => {
     if (reduced) return null;
+    if (blocked && !near) return "the way is closed here · walk around";
     if (near) {
       if (!keyboard) return `${near} · hold to open`;
       return sitting ? `${near} · press E` : `${near} · stand still, or press E`;
     }
     if (!moved) return keyboard ? "click the ground to walk" : "tap the ground to walk";
     return null;
-  }, [near, moved, reduced, keyboard, sitting]);
+  }, [near, moved, reduced, keyboard, sitting, blocked]);
 
   if (!text) return null;
   return <p className="cosmos-hint">{text}</p>;

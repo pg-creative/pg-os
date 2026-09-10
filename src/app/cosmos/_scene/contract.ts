@@ -110,6 +110,13 @@ export interface Layout {
   size: { w: number; d: number };
   ground: string;
   rooms: Room[];
+  /**
+   * Where the Wayfarer arrives when where he was is nowhere. A world's `size` is
+   * its footprint including the mist at its edges; its ROOMS are the built part,
+   * and the deep link used to land him 28 percent into the first and eight metres
+   * past the last. Null means the world has not said.
+   */
+  spawn?: { x: number; z: number } | null;
 }
 
 export interface WorldManifest {
@@ -126,11 +133,19 @@ export interface WorldManifest {
   attention: Record<string, string>;
   hero: { world: string; x: number; z: number } | null;
   /**
-   * The painted horizon. `crop` is the band of the plate that stands on the
-   * horizon, 0 at the top of the image: a plate whose subject sits high (the
-   * depths' red moon) says so here rather than being cut off by a default.
+   * The painted horizon, and WHICH PART OF THE PLATE stands on it.
+   *
+   * `from`/`to` are the vertical band in texture uv (0 at the BOTTOM of the
+   * image); `left`/`right` cut its sides. Round three shipped a fixed band across
+   * the middle of every plate and it put two door jambs in the practice's sky and
+   * a dog's head on the yard's horizon. A plate whose subject is not a horizon
+   * says so here.
    */
-  backdrop: { url: string; lqip: string; crop?: { from: number; to: number } } | null;
+  backdrop: {
+    url: string;
+    lqip: string;
+    crop?: { from: number; to: number; left?: number; right?: number } | null;
+  } | null;
   bed: string | null;
   /**
    * The rigged hero for this world, when `model:` names one. `?hero=model` draws

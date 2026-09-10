@@ -33,6 +33,33 @@
  * attention light moves with his arm as he walks. `runtime.lantern` is written
  * from that bone, which means the mist shader follows the actual hand and not a
  * number offset from his feet.
+ *
+ * AND A FOURTH, FOUND BY THE CRITIC: HE MUST NEVER TURN HIS BACK. Round three
+ * shipped `?hero=model` as "a shapeless dark-green column with a pointed cap, no
+ * head, no arms, no legs, walking or standing". The rig is not the problem and
+ * the inspection says so: 22 bones, 30,741 verts, a 2048 texture on both slots,
+ * one clean 4.23 s clip whose 22 scale tracks are all exactly 1.0 and whose
+ * position tracks are in the same units as the bind pose, netting to 1.6 m. The
+ * STANDING capture is a whole traveller with a staff and a lantern. Only the
+ * WALKING one is a column, and that is the entire finding:
+ *
+ *     `g.rotation.y = heading` turned him to face the way he was going, and the
+ *     way he was going was away from the camera. His A-pose is 1.27 m across the
+ *     shoulders and 0.55 m front to back. Edge-on that is 43 percent of the
+ *     silhouette, at 114 px of phone glass, in a dark meadow, behind a depth of
+ *     field pass. A person seen from behind at that size IS a stump.
+ *
+ * The sprite never had this problem because a billboard cannot turn away: it
+ * faces the camera and MIRRORS to show a heading. A rig can do the same thing
+ * honestly, which is what every isometric JRPG does. `FACE_LIMIT` below is how
+ * far off the camera he is allowed to turn, and the silhouette can never fall
+ * below 85 percent of front-on.
+ *
+ * AND IF THE RIG EVER IS BROKEN, IT DOES NOT SHIP. `poseFault` samples the clip
+ * at six phases before the first frame and measures the world bounds at each. A
+ * rig that collapses, explodes or loses its height is refused, the switch falls
+ * back to the painted sprite, and the reason is one line in the console. The
+ * brief's rule, made mechanical: do not ship a stump.
  */
 
 import { useEffect, useMemo, useRef } from "react";
@@ -56,16 +83,70 @@ export interface HeroModelSpec {
 /** A bone a lantern could hang on, in the order worth trying. */
 const HAND = [/lantern/i, /hand/i, /wrist/i, /forearm/i, /arm/i];
 
+/**
+ * How far off the camera he may turn, in radians. 62 degrees is a three-quarter
+ * view: both shoulders, the hood's profile and the lantern hand all still read,
+ * and the projected silhouette is 1.27·cos62 + 0.55·sin62 = 1.08 m against 1.27
+ * front-on, so it never drops below 85 percent. Beyond it he is drawn turning
+ * rather than turned, which is the compromise a fixed isometric camera has made
+ * since the first one.
+ */
+const FACE_LIMIT = 1.08;
+
+/**
+ * Is this rig safe to draw? Sampled once, before the first frame.
+ *
+ * Six phases of the clip, world bounds at each. A rig whose height leaves
+ * [0.7, 1.3] of its bind height, or whose widest horizontal extent falls under
+ * 0.45 of bind, is collapsing or exploding, and either way it is not a person.
+ * Returns the reason, or null when there is nothing wrong.
+ */
+function poseFault(
+  root: THREE.Object3D,
+  mixer: THREE.AnimationMixer,
+  clip: THREE.AnimationClip | null,
+): string | null {
+  const box = new THREE.Box3();
+  const size = new THREE.Vector3();
+  const at = (): { h: number; w: number } => {
+    root.updateMatrixWorld(true);
+    box.setFromObject(root);
+    box.getSize(size);
+    return { h: size.y, w: Math.max(size.x, size.z) };
+  };
+  const bind = at();
+  if (!(bind.h > 0.2) || !(bind.w > 0.05)) {
+    return `bind pose measures ${bind.w.toFixed(2)} by ${bind.h.toFixed(2)} m`;
+  }
+  if (!clip) return null;
+  let worst: string | null = null;
+  for (let i = 1; i <= 6; i++) {
+    mixer.setTime((clip.duration * i) / 7);
+    const p = at();
+    if (p.h < bind.h * 0.7 || p.h > bind.h * 1.3) {
+      worst = `height ${p.h.toFixed(2)} m against a bind height of ${bind.h.toFixed(2)}`;
+    } else if (p.w < bind.w * 0.45) {
+      worst = `width ${p.w.toFixed(2)} m against a bind width of ${bind.w.toFixed(2)}`;
+    }
+    if (worst) break;
+  }
+  mixer.setTime(0);
+  return worst ? `the clip collapses the rig: ${worst}` : null;
+}
+
 export function HeroModel({
   rt,
   spec,
   lanternColor,
   lanternRange,
+  onRefuse,
 }: {
   rt: React.RefObject<Runtime>;
   spec: HeroModelSpec;
   lanternColor: string;
   lanternRange: number;
+  /** Called once when this rig is not fit to draw, with the reason. */
+  onRefuse: (why: string) => void;
 }) {
   const group = useRef<THREE.Group>(null);
   const light = useRef<THREE.PointLight>(null);
@@ -85,7 +166,7 @@ export function HeroModel({
    * the rig and the skinning and leaves the cache alone, and the deps are now
    * the three things that actually describe the model.
    */
-  const { mixer, action, hand, sway } = useMemo(() => {
+  const { mixer, action, hand, sway, fault } = useMemo(() => {
     const root = clone(gltf.scene) as THREE.Group;
     root.scale.setScalar(1);
     root.position.set(0, 0, 0);
@@ -102,10 +183,17 @@ export function HeroModel({
       const swap = (mat: THREE.MeshStandardMaterial) => {
         const map = mat.map ?? null;
         if (map) map.colorSpace = THREE.SRGBColorSpace;
+        // THE LANTERN IS PAINTED INTO THE TEXTURE AND ALSO EMISSIVE, on a second
+        // slot pointing at the same 2048 image. Round three read `map` and
+        // dropped `emissive`, so the one warm thing on the model was as dull as
+        // his boots while the sprite's lamp glowed. Both slots come over.
         const toon = new THREE.MeshToonMaterial({
           map,
           color: 0xffffff,
           gradientMap: ramp,
+          emissive: mat.emissive ?? new THREE.Color(0x000000),
+          emissiveMap: mat.emissiveMap ?? null,
+          emissiveIntensity: mat.emissiveIntensity ?? 1,
           transparent: mat.transparent,
           alphaTest: mat.alphaTest,
           side: mat.side,
@@ -153,8 +241,21 @@ export function HeroModel({
     const sway = new THREE.Group();
     sway.add(root);
 
-    return { mixer, action, hand, sway };
+    // Before the first frame, not after the screenshot.
+    const fault = poseFault(root, mixer, clip);
+
+    return { mixer, action, hand, sway, fault };
   }, [gltf, spec.height, spec.clip]);
+
+  useEffect(() => {
+    if (!fault) return;
+    // One line, and it names the rig and the measurement, so the next person
+    // knows what to fix rather than that something was wrong.
+    console.info(
+      `[cosmos] ?hero=model fell back to the painted sprite: ${fault} (${spec.url})`,
+    );
+    onRefuse(fault);
+  }, [fault, onRefuse, spec.url]);
 
   useEffect(
     () => () => {
@@ -190,7 +291,22 @@ export function HeroModel({
       while (d < -Math.PI) d += Math.PI * 2;
       heading.current += d * Math.min(1, dt * 9);
     }
-    g.rotation.y = heading.current;
+    /**
+     * AND THEN HE IS TURNED BACK TOWARD THE EYE. `heading` is the truth of where
+     * he is going and it stays the truth: the lantern hand, the dust and the
+     * stride all read from it. What is DRAWN is that heading folded back to
+     * within `FACE_LIMIT` of the camera's own bearing, so a walk west shows a
+     * traveller walking west in three-quarter view rather than a hooded back at
+     * 114 px. This is the billboard's trick, paid for honestly by a rig.
+     */
+    const toEye = Math.atan2(
+      state.camera.position.x - r.pos.x,
+      state.camera.position.z - r.pos.z,
+    );
+    let off = heading.current - toEye;
+    while (off > Math.PI) off -= Math.PI * 2;
+    while (off < -Math.PI) off += Math.PI * 2;
+    g.rotation.y = toEye + Math.max(-FACE_LIMIT, Math.min(FACE_LIMIT, off));
 
     // The stride IS the ground going past. Standing, the clip eases home and a
     // slow sway carries him instead.
@@ -225,6 +341,8 @@ export function HeroModel({
     r.lantern.copy(lanternWorld);
     if (speed > 0.02) invalidate();
   });
+
+  if (fault) return null;
 
   return (
     <group ref={group}>

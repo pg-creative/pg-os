@@ -28,7 +28,7 @@
  */
 
 import { useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mixHex, type Palette } from "../registers";
 import type { Runtime } from "../runtime";
@@ -300,10 +300,35 @@ const PaperWindow = ({ p }: PropProps) => {
  * The shrine hall: home base, sized to its room, open to the valley at the
  * front, with the stair cut through its floor where the VAULT puts the door.
  *
- * The roof is the one occluder in the world big enough to hide him, so it has
- * its own material (not the shared cache, which every other roof in the cosmos
- * would fade with it) and it thins while he is inside. Fading, not hiding: the
- * hall still reads as a room with a roof on it from every angle.
+ * A CUTAWAY, NOT A VANISHING. Round three faded the WHOLE roof to 0.16 while he
+ * was inside and left both side walls as one-metre rails, so the best frame in
+ * the build was also the Critic's deduction 6: "the painted back wall floating on
+ * posts over open meadow, with the ground visible under and past it", an interior
+ * with no ceiling, in a building you could see straight through.
+ *
+ * An architectural cutaway does the opposite of vanishing. It CUTS, and it shows
+ * the cut: the half of the building between you and the room is sliced off at
+ * about waist height and the cut edge is drawn with thickness, while everything
+ * beyond the room stays solid, so what you are looking into still reads as one
+ * building with a roof on it. That is the whole change here.
+ *
+ * WHICH HALF IS "BETWEEN YOU AND THE ROOM" is not a constant, because the vault
+ * turns the building to face its own door: this hall's stair is at the practice's
+ * west edge, so it faces east and the camera's bearing lands on its local +x/+z.
+ * The camera's position is read into the hall's own frame every frame (three
+ * lines, no allocation) and the near pair is cut, the far pair kept. Nothing is
+ * hardcoded to one world's yaw.
+ *
+ *   far side wall     full height, so the interior has a wall behind him
+ *   near side wall    cut to a rail, with a lit cut-edge cap along the top
+ *   far roof slab     solid, always: this is the ceiling you see under
+ *   near roof slab    fades while he is inside, leaving its rafter beam standing
+ *   gable             the triangle over the back wall, so the roof meets a wall
+ *
+ * The far slab does not hide him. At 14 degrees of pitch with the eye 6.6 m up
+ * and 18 m out, the sight line to his head passes under the ridge by more than a
+ * metre even with him against the back wall; it is the geometry the camera round
+ * was tuned to and it is why the ceiling can stay solid.
  *
  * The back wall wears the world's own painting when the vault has one, lined up
  * so the painted hearth sits over the real hearth's light.
@@ -311,6 +336,12 @@ const PaperWindow = ({ p }: PropProps) => {
 const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, interiorAt = 0 }: PropProps) => {
   const self = useRef<THREE.Group>(null);
   const here = useMemo(() => new THREE.Vector3(), []);
+  const eye = useMemo(() => new THREE.Vector3(), []);
+  const { camera } = useThree();
+  /** The four pieces the cutaway switches: two upper side walls, two roof slabs. */
+  const wallHi = useRef<(THREE.Object3D | null)[]>([null, null]);
+  const cutCap = useRef<(THREE.Object3D | null)[]>([null, null]);
+  const slab = useRef<(THREE.Mesh | null)[]>([null, null]);
   const hw = w / 2;
   const hd = d / 2;
 
@@ -343,6 +374,14 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
     return m;
   }, [p.roof, p.key]);
 
+  /**
+   * THE HALF OF THE ROOF THAT IS THE CEILING. Shared from the cache, so it costs
+   * no program: only the CUT half needs a material of its own to fade with.
+   */
+  const solidRoof = useMemo(() => toon(p.roof), [p.roof]);
+  /** The cut, drawn as a cut: a lit edge on sawn timber. */
+  const cutHex = useMemo(() => mixHex(p.wood, p.key, 0.5), [p.wood, p.key]);
+
   const art = useMemo(() => {
     if (!interior) return null;
     return new THREE.MeshBasicMaterial({ map: interior, toneMapped: false, fog: true });
@@ -355,10 +394,26 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
     const dx = r.pos.x - here.x;
     const dz = r.pos.z - here.z;
     const inside = Math.hypot(dx, dz) < Math.max(hw, hd) + 1.2;
-    const want = inside ? 0.16 : 1;
+    const want = inside ? 0.10 : 1;
     roofMat.opacity += (want - roofMat.opacity) * Math.min(1, dt * 4);
     roofMat.depthWrite = roofMat.opacity > 0.92;
     trimMat.opacity = roofMat.opacity;
+
+    // The camera, in the hall's own frame. `worldToLocal` mutates in place and
+    // the vector is allocated once, so this is three multiplies a frame.
+    eye.copy(camera.position);
+    self.current.worldToLocal(eye);
+    const nearX = eye.x >= 0 ? 1 : 0;
+    const nearZ = eye.z >= 0 ? 1 : 0;
+    // Index 0 is the -x wall / -z slab, index 1 is +x / +z.
+    for (let i = 0; i < 2; i++) {
+      const near = i === nearX;
+      if (wallHi.current[i]) wallHi.current[i]!.visible = !near;
+      if (cutCap.current[i]) cutCap.current[i]!.visible = near;
+      const m = slab.current[i];
+      // The far slab is the ceiling and never fades; the near one is the cut.
+      if (m) m.material = i === nearZ ? roofMat : solidRoof;
+    }
   });
 
   // The floor, as four boards around the stair's hole. No hole, one board.
@@ -404,14 +459,40 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
         </mesh>
       )}
 
-      {/* Side rails, low, so nothing between the eye and him is taller than he is. */}
-      <Box at={[-hw, 0.5, 0]} size={[0.26, 1.0, d]} color={p.woodDark} />
-      <Box at={[hw, 0.5, 0]} size={[0.26, 1.0, d]} color={p.woodDark} />
+      {/* THE GABLE. The triangle over the back wall, so the roof lands on a wall
+          instead of stopping in mid-air. Two boxes rather than a real triangle:
+          at this distance the step is invisible and it costs no new geometry. */}
+      <Box at={[0, 3.32, -hd + 0.02]} size={[w * 0.72, 0.66, 0.26]} color={p.woodDark} />
+      <Box at={[0, 3.92, -hd + 0.02]} size={[w * 0.34, 0.62, 0.26]} color={p.woodDark} />
 
-      {/* Roof: two slabs and a ridge, on their own fading material. */}
-      <mesh geometry={GEO.box} material={roofMat} position={[0, 3.6, -hd * 0.5]} scale={[w + 2.4, 0.28, d * 0.62]} rotation={[-0.34, 0, 0]} castShadow receiveShadow />
-      <mesh geometry={GEO.box} material={roofMat} position={[0, 3.6, hd * 0.5]} scale={[w + 2.4, 0.28, d * 0.62]} rotation={[0.34, 0, 0]} castShadow receiveShadow />
-      <mesh geometry={GEO.box} material={roofMat} position={[0, 4.5, 0]} scale={[w + 2.8, 0.3, 0.6]} castShadow />
+      {/* THE TWO SIDE WALLS. Each is a rail plus an upper panel; the panel is
+          hidden on whichever side the camera is on and a lit cut-edge cap takes
+          its place, which is the cut in "cutaway". `useFrame` above switches
+          them, so the pair is correct at any yaw the vault gives the building. */}
+      {[-1, 1].map((sx, i) => (
+        <group key={sx}>
+          <Box at={[sx * hw, 0.5, 0]} size={[0.26, 1.0, d]} color={p.woodDark} />
+          <group ref={(g) => { wallHi.current[i] = g; }}>
+            <Box at={[sx * hw, 2.0, 0]} size={[0.26, 2.0, d]} color={p.woodDark} />
+          </group>
+          <group ref={(g) => { cutCap.current[i] = g; }}>
+            <Box at={[sx * hw, 1.05, 0]} size={[0.34, 0.12, d]} color={cutHex} shadow={false} />
+          </group>
+        </group>
+      ))}
+
+      {/* Roof: two slabs and a ridge. The far slab is the ceiling and keeps the
+          shared material; the near one takes `roofMat` and fades to a tenth. */}
+      <mesh ref={(m) => { slab.current[0] = m; }} geometry={GEO.box} material={roofMat} position={[0, 3.6, -hd * 0.5]} scale={[w + 2.4, 0.28, d * 0.62]} rotation={[-0.34, 0, 0]} castShadow receiveShadow />
+      <mesh ref={(m) => { slab.current[1] = m; }} geometry={GEO.box} material={roofMat} position={[0, 3.6, hd * 0.5]} scale={[w + 2.4, 0.28, d * 0.62]} rotation={[0.34, 0, 0]} castShadow receiveShadow />
+      <mesh geometry={GEO.box} material={solidRoof} position={[0, 4.5, 0]} scale={[w + 2.8, 0.3, 0.6]} castShadow />
+      {/* THE RIDGE IS THE CUT LINE, and it is the only frame member this needs.
+          A first pass hung a purlin and two rafters under the near slab; the
+          slab is a tilted plane running from y 4.84 at the ridge to 2.36 at the
+          eave, so anything at a constant height pierced it and drew a pale
+          stripe across the roof from outside. The ridge box above already stands
+          proud of both slabs at their meeting line, so when the near one fades
+          it IS the sawn edge, with 0.3 m of thickness, for free. */}
       {/* The light on the ridge, and on both eaves. */}
       <mesh geometry={GEO.box} material={trimMat} position={[0, 4.68, 0]} scale={[w + 2.9, 0.1, 0.72]} />
       <mesh
@@ -429,9 +510,16 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
         rotation={[0.34, 0, 0]}
       />
 
-      {/* Steps down to the ground at the open front. All at ground height. */}
-      <Box at={[0, 0.02, hd + 0.6]} size={[w * 0.6, 0.04, 1]} color={p.stone} shadow={false} />
-      <Box at={[0, 0.02, hd + 1.5]} size={[w * 0.7, 0.04, 1]} color={p.stoneDark} shadow={false} />
+      {/* THE STEPS, and the Critic's "two untextured white quads on the floor
+          beside him". They were 4 cm slabs of `p.stone` laid flat at y 0.02 next
+          to a floor at 0.10, so from inside they read as two sheets of paper on
+          the grass rather than as a way down. A step is a TREAD and a RISER: two
+          real solids, each stepping down from the one behind it, the riser in the
+          darker stone so the edge catches. */}
+      <Box at={[0, 0.045, hd + 0.62]} size={[w * 0.6, 0.09, 1.1]} color={p.stone} />
+      <Box at={[0, 0.09, hd + 0.09]} size={[w * 0.6, 0.03, 0.26]} color={p.stoneDark} shadow={false} />
+      <Box at={[0, 0.02, hd + 1.58]} size={[w * 0.7, 0.05, 1.1]} color={p.stoneDark} />
+      <Box at={[0, 0.045, hd + 1.05]} size={[w * 0.62, 0.03, 0.26]} color={p.stone} shadow={false} />
     </group>
   );
 };

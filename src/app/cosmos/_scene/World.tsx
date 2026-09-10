@@ -28,7 +28,7 @@
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Monument, Room, SceneObject, WorldManifest } from "./contract";
 import { untouchedFor } from "./contract";
@@ -39,7 +39,7 @@ import { EMITTER_SOCKET, Flame, PROPS } from "./props";
 import { GEO, toon } from "./toon";
 import type { Runtime } from "./runtime";
 import { Backdrop } from "./Backdrop";
-import { useRoomLoop } from "./FrameLoop";
+import { loopBudget, useRoomLoop } from "./FrameLoop";
 
 /**
  * Where a painted hearth sits across an interior plate, 0 to 1, so the fire in
@@ -517,6 +517,7 @@ export const World = memo(function World({
   onRelease,
   lightBudget,
   current,
+  phone,
 }: {
   world: WorldManifest;
   p: Palette;
@@ -527,6 +528,8 @@ export const World = memo(function World({
   lightBudget: number;
   /** True while the Wayfarer is standing in this biome. */
   current: boolean;
+  /** One definition of "a phone" for the whole scene; it lives on the canvas. */
+  phone: boolean;
 }) {
   const byRoom = useMemo(() => {
     const all = placeWorld(world);
@@ -559,6 +562,19 @@ export const World = memo(function World({
    */
   const [inRoom, setInRoom] = useState<string | null>(null);
   const roomAcc = useRef(0);
+  /**
+   * IS THE BREATHING WALL ON SCREEN. Read by the loop player every frame and
+   * written here twice a second: a frustum test against the room's own sphere,
+   * which is one matrix multiply and eight plane tests. Round three uploaded a
+   * 1280 by 720 texture twelve times a second whether or not the surface was in
+   * the frame, in a biome he was merely near (the Critic's deduction 10). Turning
+   * round is now free. It starts true so the first paint is never a dark wall.
+   */
+  const seen = useRef(true);
+  const frustum = useMemo(() => new THREE.Frustum(), []);
+  const projScreen = useMemo(() => new THREE.Matrix4(), []);
+  const sphere = useMemo(() => new THREE.Sphere(), []);
+  const { camera } = useThree();
   useFrame((_, dt) => {
     const r = rt.current;
     if (!r) return;
@@ -585,13 +601,36 @@ export const World = memo(function World({
       }
     }
     setInRoom((prev) => (prev === best ? prev : best));
+
+    // The loop's surface: the room's own footprint for an interior wall, and the
+    // painted horizon's bearing for the rest. A generous radius, because a wall
+    // half off the edge of the glass is still a wall he can see.
+    const room = best ? world.layout.rooms.find((x) => x.id === best) : null;
+    if (!room) {
+      seen.current = false;
+      return;
+    }
+    projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projScreen);
+    sphere.center.set(room.anchor.x, 2, room.anchor.z);
+    sphere.radius = Math.hypot(room.size.w, room.size.d) / 2 + 6;
+    seen.current = frustum.intersectsSphere(sphere);
   });
 
   const breathing = useMemo(
     () => world.layout.rooms.find((r) => r.id === inRoom && r.loop) ?? null,
     [world.layout.rooms, inRoom],
   );
-  const live = useRoomLoop(breathing?.loop ?? null);
+  /**
+   * What this register's loop is worth, in uploads a second and canvas width.
+   * See `FrameLoop.ts LOOP_BUDGET`: the practice's hearth keeps its twelve, the
+   * depths' red moon takes four, and a phone takes two thirds of the width again.
+   */
+  const budget = useMemo(
+    () => loopBudget(world.register, phone),
+    [world.register, phone],
+  );
+  const live = useRoomLoop(breathing?.loop ?? null, budget, seen);
   /** An interior wall takes the loop; otherwise the horizon does. */
   const wall = breathing && interiorOf(breathing) ? breathing.id : null;
 

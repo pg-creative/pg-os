@@ -84,6 +84,28 @@ export interface WorldEntry {
    * ocarina." A backdrop has no figure in it, because the figure is the walker.
    */
   backdrop: string | null;
+  /**
+   * WHICH PART OF THE PLATE STANDS ON THE HORIZON.
+   *
+   * The backdrop plane is 200 m by 18.2, about eleven to one, and a plate is
+   * three to two. Something has to be cut, and until round four the cut was a
+   * fixed band across the middle of every plate in the cosmos. Two of the five
+   * plates have a subject there and both of them shipped:
+   *
+   *   - the practice's `04-valley-from-the-hall-q2` is the valley seen THROUGH
+   *     the hall's doorway, so its two weathered door jambs stand at the extreme
+   *     left and right of the frame. Blown to two hundred metres they became
+   *     the Critic's "two headless tree trunks hanging in the sky", which is why
+   *     this crop needs `left`/`right` and not only `from`/`to`.
+   *   - the yard's `02-ordinary-sacred-day-q3` has a dog sitting on a dock in
+   *     the middle of it, so the band landed on the dog: "a blurred dog's head
+   *     fills the horizon of the ordinary sacred".
+   *
+   * All four numbers are fractions of the plate, measured from its TOP and LEFT
+   * edges, which is how a person reads a picture and how `sips -c` cuts one. The
+   * scene turns them into texture uv. Null means the scene's own default band.
+   */
+  backdropCrop: { from: number; to: number; left: number; right: number } | null;
   bed: string | null;
   /**
    * The rigged GLB this world offers as the hero, and its plain twin.
@@ -146,6 +168,7 @@ export function parseWorldsYml(text: string): WorldEntry[] {
     private: w.private === true,
     heroPlate: typeof w.hero_plate === "string" ? w.hero_plate : null,
     backdrop: typeof w.backdrop === "string" ? w.backdrop : null,
+    backdropCrop: asCrop(w.backdrop_crop),
     bed: typeof w.bed === "string" ? w.bed : null,
     model: typeof w.model === "string" ? w.model : null,
     modelStatic: typeof w.model_static === "string" ? w.model_static : null,
@@ -169,6 +192,7 @@ export function parseWorldFile(text: string, fallback: WorldEntry): WorldEntry {
     heroPlate:
       typeof raw.hero_plate === "string" ? raw.hero_plate : fallback.heroPlate,
     backdrop: typeof raw.backdrop === "string" ? raw.backdrop : fallback.backdrop,
+    backdropCrop: asCrop(raw.backdrop_crop) ?? fallback.backdropCrop,
     bed: typeof raw.bed === "string" ? raw.bed : fallback.bed,
     model: typeof raw.model === "string" ? raw.model : fallback.model,
     modelStatic:
@@ -184,6 +208,36 @@ export class VaultError extends Error {
     super(message);
     this.name = "VaultError";
   }
+}
+
+/**
+ * `backdrop_crop: { from: 0.52, to: 0.63, left: 0.19, right: 0.82 }`.
+ *
+ * Every number is clamped to 0..1 and the pairs are ordered, so a crop typed
+ * backwards is a crop, not a plane with a negative width. A missing pair takes
+ * the whole axis, which is what makes `left`/`right` optional on a plate that
+ * only needs its band moved (the yard) rather than its edges cut (the practice).
+ */
+function asCrop(
+  v: unknown,
+): { from: number; to: number; left: number; right: number } | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const n = (k: string, dflt: number): number =>
+    typeof o[k] === "number" && Number.isFinite(o[k])
+      ? Math.min(1, Math.max(0, o[k] as number))
+      : dflt;
+  const a = n("from", NaN);
+  const b = n("to", NaN);
+  const l = n("left", 0);
+  const r = n("right", 1);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return {
+    from: Math.min(a, b),
+    to: Math.max(a, b),
+    left: Math.min(l, r),
+    right: Math.max(l, r),
+  };
 }
 
 /** `at: { x: 3, z: -1 }`, or `at: [3, -1]`. Anything else is null. */
@@ -915,6 +969,7 @@ export type WorldManifest = {
     size: { w: number; d: number };
     ground: string;
     rooms: Room[];
+    spawn: { x: number; z: number } | null;
   };
   objects: SceneObject[];
   monuments: Monument[];
@@ -928,7 +983,12 @@ export type WorldManifest = {
   hero: { world: string; x: number; z: number } | null;
   /** The GLB hero this world offers, behind the scene's `?hero=model` switch. */
   hero_model: HeroModel | null;
-  backdrop: { url: string; lqip: string } | null;
+  backdrop: {
+    url: string;
+    lqip: string;
+    /** The band of the plate that stands on the horizon. See `backdropCrop`. */
+    crop: { from: number; to: number; left: number; right: number } | null;
+  } | null;
   bed: string | null;
   /** Prop words with a painting on disk. See `readCutouts`: it saves the 404s. */
   cutouts: string[];
@@ -1078,6 +1138,21 @@ export interface WorldLayout {
   size: { w: number; d: number };
   ground: string;
   rooms: Room[];
+  /**
+   * WHERE YOU ARRIVE, when where you were is nowhere.
+   *
+   * A world's `size` is its whole footprint including the mist at its edges; its
+   * ROOMS are the part of it that is built. The two are not the same rectangle
+   * and round three proved it: the deep link put the Wayfarer at 28 percent of
+   * the practice's 56 metre depth, which is z 15.7, which is eight metres north
+   * of the last room in the world. "YOU ARE HERE" printed a blank line and the
+   * nearest thing to walk to was twenty metres away.
+   *
+   * So the cartographer names the spot, in metres, absolute, like everything
+   * else: `layout.spawn`. Null means the world has not said, and the scene falls
+   * back to the middle of the first room it can walk in.
+   */
+  spawn: { x: number; z: number } | null;
 }
 
 /** Default footprint, when a world.yml names no size. */
@@ -1126,6 +1201,7 @@ export function defaultLayout(register: Register, index = 0): WorldLayout {
         bed: null,
       },
     ],
+    spawn: null,
   };
 }
 
@@ -1164,6 +1240,7 @@ export function parseLayout(
     size: asSize(o.size, fallback.size),
     ground: typeof o.ground === "string" ? o.ground : fallback.ground,
     rooms: rooms.length ? rooms : fallback.rooms,
+    spawn: asPoint(o.spawn),
   };
 }
 
@@ -1667,7 +1744,13 @@ export function readWorldManifest(
     register,
     phase: asWorldPhase(world.phase, root),
     private: world.private,
-    layout: { origin: layout.origin, size: layout.size, ground: layout.ground, rooms },
+    layout: {
+      origin: layout.origin,
+      size: layout.size,
+      ground: layout.ground,
+      rooms,
+      spawn: layout.spawn,
+    },
     objects,
     monuments,
     thread: { season: seasonOf().name, chapter: newestDraftChapter(root) },
@@ -1675,7 +1758,9 @@ export function readWorldManifest(
     attention,
     hero: readHero(root),
     hero_model: heroModelFor(world, root),
-    backdrop: backdropUrl ? { url: backdropUrl, lqip: lqipFor(backdropAbs) } : null,
+    backdrop: backdropUrl
+      ? { url: backdropUrl, lqip: lqipFor(backdropAbs), crop: world.backdropCrop }
+      : null,
     bed: world.bed,
     cutouts: readCutouts(worldId, root),
   };
