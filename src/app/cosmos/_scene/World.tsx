@@ -33,7 +33,7 @@ import * as THREE from "three";
 import type { Monument, Room, SceneObject, WorldManifest } from "./contract";
 import { untouchedFor } from "./contract";
 import type { Palette } from "./registers";
-import { blockersFor, lightsFor, placeWorld, roomAt, type Placement } from "./place";
+import { blockersFor, lightsFor, placeWorld, type Placement } from "./place";
 import { Cutout, cutoutUrl, cutoutsAllowed, useCutout } from "./Cutout";
 import { EMITTER_SOCKET, Flame, PROPS } from "./props";
 import { GEO, toon } from "./toon";
@@ -565,8 +565,26 @@ export const World = memo(function World({
     roomAcc.current += dt;
     if (roomAcc.current < 0.5) return;
     roomAcc.current = 0;
-    const here = current ? (roomAt(world, r.pos.x, r.pos.z)?.id ?? null) : null;
-    setInRoom((prev) => (prev === here ? prev : here));
+    // NEAR ENOUGH TO SEE IT, not strictly inside it. The hall's back wall wears
+    // its painting and the hall has an open front, so the hearth is visible from
+    // outside the building; a hearth that only flickers once you are standing in
+    // the room is worse than one that never flickers, because it is a thing that
+    // starts when you look away. Eighteen metres past the room's own corner is
+    // about the distance at which the wall stops being legible.
+    let best: string | null = null;
+    let bestD = Infinity;
+    if (current) {
+      for (const room of world.layout.rooms) {
+        if (!room.loop) continue;
+        const d = Math.hypot(room.anchor.x - r.pos.x, room.anchor.z - r.pos.z);
+        const reach = Math.hypot(room.size.w, room.size.d) / 2 + 18;
+        if (d < reach && d < bestD) {
+          bestD = d;
+          best = room.id;
+        }
+      }
+    }
+    setInRoom((prev) => (prev === best ? prev : best));
   });
 
   const breathing = useMemo(
