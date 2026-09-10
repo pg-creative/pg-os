@@ -436,6 +436,11 @@ export function CosmosStage({
       /* Where the SERVER put him on this load. The never-restart proof reads
          this before and after a reload: walk, reload, and it has moved. */
       data-hero={`${manifest.hero.world}:${manifest.hero.x.toFixed(1)},${manifest.hero.z.toFixed(1)}`}
+      /* Where he is standing NOW, on the world's own slow tick. The camera's
+         look-at sits a few metres ahead of him on a narrow frame, so a harness
+         that wants to know where the Wayfarer is cannot read it off the camera
+         any more. Two numbers, already computed for the compass. */
+      data-at={`${hud.x.toFixed(2)},${hud.z.toFixed(2)}`}
     >
       <WorldCanvas
         manifest={manifest}

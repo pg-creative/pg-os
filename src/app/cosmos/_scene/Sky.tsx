@@ -30,7 +30,7 @@ import { PHASES, phaseForHour } from "../../_components/emaki/theme";
 import type { Phase as WorldPhase } from "./contract";
 import type { Palette } from "./registers";
 import { NOISE } from "./glsl";
-import { CAM_YAW } from "./IsoCamera";
+import { CAM_YAW, FOV, PITCH, pitchFor } from "./IsoCamera";
 import { MIST } from "./toon";
 
 const FRAG = /* glsl */ `
@@ -94,9 +94,9 @@ const FRAG = /* glsl */ `
     float d = bearing(dir, uGlowEl, uGlowAz);
     col += uGlow * pow(max(0.0, 1.0 - d * 0.9), 4.0) * 0.9 * (1.0 - uMoon);
 
-    // The depths get one red moon and nothing else in the sky. Where it hangs is
-    // set in TypeScript, beside the camera's own pitch, because the two numbers
-    // are one number: see MOON_EL.
+    // The depths get one red moon and nothing else in the sky. Its elevation is
+    // solved in TypeScript from the pitch this viewport is using, so the disc
+    // lands at the same place on the glass at every pitch: see MOON_NDC_Y.
     if (uMoon > 0.5) {
       float md = bearing(dir, uMoonEl, uMoonAz);
       col = mix(col, uGlow, smoothstep(uMoonR * 1.10, uMoonR * 0.92, md));
@@ -134,35 +134,53 @@ export interface SkyLook {
 }
 
 /**
- * WHERE THE MOON HANGS, and why it is these three numbers.
+ * THE MOON'S SIZE AND ITS BEARING. Where it lands on the glass is below.
  *
  * The Critic's deduction 3: the disc sat at asin(0.17) = 9.8 degrees of
- * elevation and this camera holds 6.5 degrees of sky at the top centre, so the
- * red moon of the depths was three and a third degrees above the frame on every
- * device. It was never a moon anyone could see.
- *
- * The camera's own arithmetic decides this, so it cannot drift again. The top
- * edge of the frame sits at `FOV/2 - PITCH` degrees of elevation; a direction at
- * elevation `e` and `h` degrees off the view axis lands at NDC
- * `tan(e + PITCH) / (cos(h) * tan(FOV/2))`. The first number off that arithmetic
- * (3.6 degrees) put the disc's top edge exactly ON the frame's, measured at
- * 1440 by 900: the model is right about the shape and about a degree optimistic
- * about the eye's height, which rides with the zoom. 2.4 degrees puts the whole
- * disc between the horizon and the top edge with room either side, on the
- * desktop, at DPR 2 and on a phone (a narrower lens moves it sideways, never
- * up). A moon standing over the crypt, not behind the reader's head.
+ * elevation and this camera holds about six degrees of sky at the top centre,
+ * so the red moon of the depths was three and a third degrees above the frame on
+ * every device. It was never a moon anyone could see.
  */
-const MOON_ELEV_DEG = 2.4;
 const MOON_RADIUS_DEG = 1.4;
 /** Off the view axis, so it is not a bullseye behind the walker. */
 const MOON_OFFSET_DEG = 6.3;
 const D2R = Math.PI / 180;
 /** The bearing the camera looks along, from its yaw. */
 const VIEW_AZ = Math.atan2(-Math.sin(CAM_YAW), -Math.cos(CAM_YAW));
-export const MOON_EL = Math.sin(MOON_ELEV_DEG * D2R);
 export const MOON_AZ = VIEW_AZ + MOON_OFFSET_DEG * D2R;
 /** Chord between two unit vectors that far apart, which is what `bearing` returns. */
 export const MOON_R = 2 * Math.sin((MOON_RADIUS_DEG * D2R) / 2);
+
+/**
+ * WHERE THE DISC LANDS ON THE GLASS. 0.80 of clip space, at every pitch.
+ *
+ * 2.4 degrees of elevation was the answer to "where does the disc go at 15.5
+ * degrees of pitch", and it was written down as if it were the answer to "where
+ * does the moon hang". It is not: pitching the camera moves the moon up the
+ * frame, and round three had to cap the portrait pitch at 17.5 to keep the disc
+ * on the glass, then said so in its own notes and left the coupling in.
+ *
+ * This is the number that was actually meant. 0.80 is exactly where 2.4 degrees
+ * put the disc on the desk, so the surface PG has looked at is unchanged; every
+ * other pitch now gets the same picture instead of a moon that drifts with the
+ * shape of the window. The moon still hangs at a WORLD bearing, not a screen
+ * position: it is re-hung once when the viewport changes shape, and walking
+ * toward it does not move it, which is what a moon does.
+ */
+const MOON_NDC_Y = 0.804;
+
+export function moonElevation(pitch: number): number {
+  const ndc = MOON_NDC_Y * Math.cos(MOON_OFFSET_DEG * D2R) * Math.tan(((FOV / 2) * Math.PI) / 180);
+  return Math.atan(ndc) - pitch;
+}
+
+/** Sine of that elevation, which is the form the shader wants. */
+export function moonEl(pitch: number): number {
+  return Math.sin(moonElevation(pitch));
+}
+
+/** The desk's own, kept as the export round three's harness reads. */
+export const MOON_EL = moonEl(PITCH);
 
 /**
  * The hour, live, ticked on the minute.
@@ -340,6 +358,12 @@ export function Sky({
 }) {
   const mat = useRef<THREE.ShaderMaterial>(null);
   const camera = useThree((s) => s.camera);
+  const size = useThree((s) => s.size);
+  /** Re-hung once when the window changes shape, and never per frame. */
+  const moonEl_ = useMemo(
+    () => moonEl(pitchFor(size.width, size.height)),
+    [size.width, size.height],
+  );
 
   const uniforms = useMemo(
     () => ({
@@ -353,7 +377,7 @@ export function Sky({
       uBanding: { value: banding },
       uMistDensity: { value: mistDensity },
       uMoon: { value: look.moon ? 1 : 0 },
-      uMoonEl: { value: MOON_EL },
+      uMoonEl: { value: moonEl_ },
       uMoonAz: { value: MOON_AZ },
       uMoonR: { value: MOON_R },
       uInvProj: { value: new THREE.Matrix4() },
@@ -361,7 +385,7 @@ export function Sky({
     }),
     // Rebuilt on every look change: five uniform objects is cheaper than a
     // per-frame branch, and the look only changes when the biome or hour does.
-    [look, banding, mistDensity],
+    [look, banding, mistDensity, moonEl_],
   );
 
   useFrame((_, dt) => {

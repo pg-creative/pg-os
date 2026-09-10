@@ -68,6 +68,30 @@ export interface Palette {
   banding: number;
   grain: number;
   mistDensity: number;
+  /**
+   * WHAT HOUR THIS REGISTER IS PAINTED AT. 0 a cream page, 1 a midnight.
+   *
+   * The bug PG opened in bed. `KeyLight` asked `theme === "light"` and called
+   * that daylight, so the OS's own light-mode default lit a register whose sky
+   * is `#0e0816` with a 1.28 intensity pale-pink sun. A gouache twilight under a
+   * noon key is exactly the grey-green murk he saw: full light on dark local
+   * colour makes mud, and mud has no focal point in it.
+   *
+   * The register's own sky says what hour it was painted at, and it is the only
+   * thing that ever should have. PG's light/dark toggle still moves the whole
+   * picture up or down (see `themeLift`), because that is a reading preference,
+   * and it can no longer turn night into day.
+   */
+  night: number;
+  /**
+   * The colour of unlit air at this hour: the sky, halfway to its own horizon.
+   *
+   * The one hex the night derivation hangs off. Everything that is not near a
+   * flame moves toward it, which is what a painter does and what the plate does:
+   * `04-twilight-shrine` has no local colour left in the far hills at all, only
+   * plum, and the moss reads green because the lantern is standing on it.
+   */
+  air: string;
 }
 
 // ── Hex arithmetic ───────────────────────────────────────────────────────────
@@ -132,17 +156,6 @@ function derive(id: Register): Palette {
   const bright = (sr * 0.299 + sg * 0.587 + sb * 0.114) / 255 > 0.5;
   const up = bright ? 1 : -1;
 
-  const stone = mixHex(desat(L.mist, 0.35), bright ? "#FFFFFF" : "#C8C4C0", 0.3);
-  const wood = warm(shade(L.ground, bright ? 0.1 : 0.16), 0.62);
-  const paper = bright ? shade(desat(L.fog, 0.45), 0.72) : shade(desat(L.mist, 0.55), 0.62);
-  /**
-   * A FLAME IS WARM, whatever colour the air is. `particles` is the register's
-   * drifting mote (sakura at twilight, foxfire at midnight, gold by day) and
-   * deriving the fire straight from it lit the shrine's hearth sakura pink in
-   * the first frame off this file. Every fire in every register is the particle
-   * hue pulled most of the way to lamplight; the motes keep their own colour.
-   */
-  const flame = mixHex(L.particles, "#EAA050", 0.62);
   /**
    * The horizon carries the register's own light in it. `fog` alone is the grey
    * of distance; a sky that meets the ground in pure grey has no hour in it. The
@@ -156,19 +169,84 @@ function derive(id: Register): Palette {
   const skyLum = (sr * 0.299 + sg * 0.587 + sb * 0.114) / 255;
   const fog = mixHex(L.fog, L.particles, Math.min(0.34, Math.max(0.1, 0.1 + skyLum * 2.2)));
 
+  // ── The hour, and what it does to every local colour ──────────────────────
+  //
+  // `night` is 0 for riso's cream page and 0.88 for the practice's twilight.
+  // `air` is what the unlit world turns into: the sky, halfway to its horizon.
+  const night = Math.min(1, Math.max(0, 1 - skyLum * 2.6));
+  const air = mixHex(L.sky, fog, 0.5);
+
+  /**
+   * A local colour, taken to the hour.
+   *
+   * `pull` is how much of the air it takes on and `drop` is how far its value
+   * falls, both scaled by the register's own night. Two moves rather than one
+   * because they are different things: a green in plum air goes GREY-PLUM (the
+   * pull) and a green at night goes DARK (the drop), and doing only the pull
+   * gives the washed-out pastel round three shipped.
+   */
+  const atHour = (h: string, pull: number, drop: number) =>
+    shade(mixHex(h, air, pull * night), -drop * night);
+
+  /**
+   * THE GROUND GOES DEEP AND PLUM, and the grass stays lighter over it.
+   *
+   * `#3A5B48` is a daylight forest green and `#7FA163` a spring one; they are
+   * the practice's own hexes and they belong to a meadow at noon. Held at full
+   * value under a `#0e0816` sky, they are the grey-green soup PG opened on his
+   * phone. The ground takes most of the air and most of the drop; the grass
+   * takes half of each. The GAP between them is the point: round three had the
+   * ground and its cover eleven points of luminance apart, which is nothing, so
+   * a meadow read as one flat wash with speckles on it. These are twenty-seven
+   * apart and both sit above a fifth of a stop, which is the second half of the
+   * lesson: the first pass at these numbers took the ground to 0.22 luminance
+   * and the band between him and the hall went dead. Legible at night is not
+   * the same as dark.
+   */
+  const ground = atHour(L.ground, 0.46, 0.22);
+  const grass = atHour(L.grass, 0.24, 0.04);
+
+  const stone = atHour(
+    mixHex(desat(L.mist, 0.35), bright ? "#FFFFFF" : "#C8C4C0", 0.3),
+    0.34,
+    0.16,
+  );
+  /**
+   * WOOD STAYS WARM. It is the only structural colour that does, and it is
+   * doing the job the plate's own timber does: `04-twilight-shrine` holds one
+   * warm post against a whole picture of plum, and that post is why the shrine
+   * reads as shelter rather than as more rock. It takes the value drop of the
+   * hour and almost none of the air.
+   */
+  const wood = atHour(warm(shade(L.ground, bright ? 0.1 : 0.24), 0.72), 0.1, 0.12);
+  const paper = bright ? shade(desat(L.fog, 0.45), 0.72) : shade(desat(L.mist, 0.55), 0.62);
+  /**
+   * A FLAME IS WARM, whatever colour the air is. `particles` is the register's
+   * drifting mote (sakura at twilight, foxfire at midnight, gold by day) and
+   * deriving the fire straight from it lit the shrine's hearth sakura pink in
+   * the first frame off this file. Every fire in every register is the particle
+   * hue pulled most of the way to lamplight; the motes keep their own colour.
+   *
+   * AND IT GETS HOTTER AS THE HOUR GETS DARKER. Not because fire changes, but
+   * because this hex is the emitter's own painted body and a lamp at midnight
+   * has to be the brightest thing on the glass or the picture has no focus.
+   */
+  const flame = mixHex(mixHex(L.particles, "#EAA050", 0.62), "#FFB74A", 0.5 * night);
+
   return {
-    ground: L.ground,
-    groundAlt: shade(L.ground, bright ? -0.08 : 0.07),
-    grass: L.grass,
-    grassTip: shade(L.grass, bright ? 0.14 : 0.22),
+    ground,
+    groundAlt: shade(ground, bright ? -0.08 : -0.14),
+    grass,
+    // Moonlight catches the tips. The one place a night value goes UP.
+    grassTip: shade(mixHex(grass, air, 0.18 * night), bright ? 0.14 : 0.3),
     stone,
     stoneDark: shade(stone, -0.38),
     wood,
     woodDark: shade(wood, -0.34),
     // The one saturated architectural note: the particle hue at roof value.
-    roof: mixHex(shade(L.particles, bright ? -0.36 : -0.52), L.mist, 0.34),
-    foliage: shade(L.grass, -0.3),
-    foliageDark: shade(L.grass, -0.52),
+    roof: atHour(mixHex(shade(L.particles, bright ? -0.36 : -0.52), L.mist, 0.34), 0.3, 0.16),
+    foliage: shade(grass, -0.3),
+    foliageDark: shade(grass, -0.52),
     trunk: shade(wood, -0.28),
     paper,
     ink: shade(L.sky, bright ? -0.62 : 0.06),
@@ -176,18 +254,46 @@ function derive(id: Register): Palette {
     flameCore: shade(flame, 0.55),
     water: mixHex(L.fog, L.sky, 0.42),
     waterDeep: shade(mixHex(L.fog, L.sky, 0.72), -0.24),
-    mist: L.mist,
-    // The key light is the particle colour taken almost to white: one warm sun,
-    // whatever hour the register was painted at.
-    key: shade(mixHex(L.particles, "#FFF0D8", 0.4), 0.5),
-    fill: shade(L.mist, 0.28),
-    ambient: shade(desat(L.mist, 0.3), up * 0.18),
+    /**
+     * THE MIST IS THE AIR, not a light lavender laid over it.
+     *
+     * `#9C86A4` sits at 0.55 of luminance and the practice's ground sat at 0.31,
+     * so every metre of weather LIFTED the picture toward a flat pale band. That
+     * band across the middle of the portrait frame is most of what PG saw. Mist
+     * that reads as depth has to be the colour the distance already is, which is
+     * the horizon, and only slightly lighter than what it veils.
+     */
+    mist: mixHex(L.mist, air, 0.62 * night),
+    /**
+     * THE KEY IS A MOON, and this is the line that fixes the murk.
+     *
+     * It used to be the particle hue taken almost to white: `#F5DFE9`, a pale
+     * pink at 0.88 of luminance, driven at 1.28 intensity over a twilight
+     * register because the OS was in light mode. Full pale light on dark local
+     * colour is the definition of mud.
+     *
+     * At night it is the air itself lifted to moonlight: cool, violet, and
+     * nowhere near white, so it models the form (a roof edge, his shoulders, the
+     * rise of a hill) without arguing with the one warm thing on the glass. The
+     * plate's whole engine is a warm lantern inside a cool picture; this is the
+     * cool picture.
+     */
+    key: mixHex(
+      shade(mixHex(L.particles, "#FFF0D8", 0.4), 0.5),
+      shade(mixHex(air, "#C6C8EE", 0.6), 0.16),
+      night,
+    ),
+    /** The bounce off the ground: the air, one step down. Never a grey. */
+    fill: mixHex(shade(L.mist, 0.28), shade(air, 0.1), night),
+    ambient: mixHex(shade(desat(L.mist, 0.3), up * 0.18), shade(air, -0.1), night),
     skyTop: L.sky,
     skyMid: mixHex(L.sky, fog, 0.42),
     skyHorizon: fog,
     skyGlow: L.particles,
     moon: vivid(L.fog),
     fog,
+    night,
+    air,
     banding: t.banding,
     grain: L.grain,
     mistDensity: t.air,

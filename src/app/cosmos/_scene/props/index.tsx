@@ -117,6 +117,70 @@ function segment(x0: number, z0: number, x1: number, z1: number, r = 0.42): Bloc
 }
 
 /**
+ * A HALO: the glow around a light, painted rather than post-processed.
+ *
+ * PG asked for "real bloom-free glow", and bloom is exactly what this is not.
+ * A bloom pass reads the whole frame back, finds every bright pixel and smears
+ * it, which costs a fullscreen pass this scene will not spend on a phone and
+ * which glows things that are merely pale (a cream page, a white wall) as
+ * readily as things that are burning.
+ *
+ * This is what a painter does instead: one soft radial disc, additive, hung at
+ * the lamp, facing the camera, four hundred bytes of texture shared by every
+ * light in the cosmos. It glows because something is on fire there, and nothing
+ * else in the frame glows at all.
+ */
+let HALO: THREE.CanvasTexture | null = null;
+function haloTexture(): THREE.CanvasTexture {
+  if (HALO) return HALO;
+  const size = 128;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  // Squared falloff, so the core is small and the spill is long: a lamp, not a
+  // disc with a soft edge.
+  g.addColorStop(0, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.18, "rgba(255,255,255,0.42)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.12)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  HALO = new THREE.CanvasTexture(c);
+  HALO.colorSpace = THREE.SRGBColorSpace;
+  return HALO;
+}
+
+export function Halo({
+  color,
+  size = 2.2,
+  opacity = 0.5,
+  at = [0, 0, 0],
+}: {
+  color: string;
+  size?: number;
+  opacity?: number;
+  at?: [number, number, number];
+}) {
+  const material = useMemo(
+    () =>
+      new THREE.SpriteMaterial({
+        map: haloTexture(),
+        color: new THREE.Color(color),
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+        fog: true,
+      }),
+    [color, opacity],
+  );
+  return <sprite material={material} position={at} scale={[size, size, size]} />;
+}
+
+/**
  * A flame: a small emissive body that flickers, and nothing else. The LIGHT that
  * belongs to it is mounted by the room's light list at the same coordinates, so
  * a flame you can see and a light you can feel are always the same object.
@@ -137,10 +201,16 @@ export function Flame({ color, core, size = 1, seed = 0 }: { color: string; core
     g.current.position.y = Math.sin(t * 3.3) * 0.012;
   });
   return (
-    <group ref={g}>
-      <mesh geometry={GEO.cone} material={outer} scale={[0.34, 0.62, 0.34]} position={[0, 0.31, 0]} />
-      <mesh geometry={GEO.cone} material={inner} scale={[0.17, 0.36, 0.17]} position={[0, 0.19, 0]} />
-    </group>
+    <>
+      <group ref={g}>
+        <mesh geometry={GEO.cone} material={outer} scale={[0.34, 0.62, 0.34]} position={[0, 0.31, 0]} />
+        <mesh geometry={GEO.cone} material={inner} scale={[0.17, 0.36, 0.17]} position={[0, 0.19, 0]} />
+      </group>
+      {/* Outside the flickering group on purpose: the fire breathes, the glow
+          around it does not, and a halo that pulsed with the cone read as a
+          strobe from twenty metres. */}
+      <Halo color={core} size={size * 2.6} opacity={0.42} at={[0, 0.3 * size, 0]} />
+    </>
   );
 }
 
@@ -192,13 +262,29 @@ const PaperWindow = ({ p }: PropProps) => {
   // Emissive at 0.9 on a near-white core blew to a flat white slab under ACES,
   // and three of them stood in the hall reading as headstones. A lit paper
   // window is warm and DIM: the light it throws is the point, not the panel.
+  /**
+   * AND IT GOES UP WITH THE HOUR. 0.34 was chosen against a key light of 1.28
+   * that has since come down to 0.86 and turned cool, and a window that was
+   * "warm and DIM" in a washed-out picture is invisible in a dark one. At a
+   * twilight register this lands near 0.8, which under ACES is a lit paper
+   * panel rather than the flat white slab the old note is warning about: what
+   * blew it out then was a near-white core, and `flame` is a saturated gold now.
+   */
   const glow = useMemo(
-    () => toon(p.flame, { noMist: true, emissive: p.flame, emissiveIntensity: 0.34 }),
-    [p.flame],
+    () =>
+      toon(p.flame, {
+        noMist: true,
+        emissive: p.flame,
+        emissiveIntensity: 0.34 + p.night * 0.52,
+      }),
+    [p.flame, p.night],
   );
   return (
     <group>
       <Box at={[0, 0.95, 0]} size={[1.5, 1.9, 0.14]} color={p.woodDark} />
+      {/* The spill on the air in front of the paper. What PG asked for as
+          "real bloom-free glow", and it is one sprite. */}
+      <Halo color={p.flame} size={3.4} opacity={0.3 * p.night} at={[0, 1.0, 0.3]} />
       <mesh geometry={GEO.box} material={glow} position={[0, 1.0, 0.08]} scale={[1.16, 1.42, 0.04]} />
       {[-0.34, 0.34].map((x) => (
         <Box key={x} at={[x * 1.16, 1.0, 0.12]} size={[0.05, 1.42, 0.04]} color={p.woodDark} shadow={false} />

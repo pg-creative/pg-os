@@ -46,7 +46,7 @@ import {
   type Runtime,
 } from "./runtime";
 import { EMITTER_SOCKET, PROPS } from "./props";
-import { CAM_YAW, IsoCamera } from "./IsoCamera";
+import { CAM_YAW, ENTRY_SECONDS, IsoCamera } from "./IsoCamera";
 import { Ground } from "./Ground";
 import { coverFor, GrassField, type Clearing } from "./Grass";
 import { Sky, skyFor, useHour, type SkyLook } from "./Sky";
@@ -165,6 +165,7 @@ function Conductor({
   onDoor,
   onStep,
   theme,
+  night,
 }: {
   rt: React.RefObject<Runtime>;
   worlds: WorldManifest[];
@@ -173,6 +174,8 @@ function Conductor({
   onDoor: (to: string, kind: "mist" | "stairs") => void;
   onStep: () => void;
   theme: "light" | "dark";
+  /** The register's own hour, for the foreground shape the ground draws. */
+  night: number;
 }) {
   const gl = useThree((s) => s.gl);
   const acc = useRef(0);
@@ -373,7 +376,12 @@ function Conductor({
    */
   useEffect(() => {
     const arm = () => {
-      if (rt.current) rt.current.armed = true;
+      if (!rt.current) return;
+      rt.current.armed = true;
+      // And the establishing shot hands the frame over the instant anybody
+      // touches the glass. Nobody sits through a camera move they did not ask
+      // for, twice.
+      rt.current.entry = 0;
     };
     const opts = { capture: true, passive: true } as const;
     window.addEventListener("pointerdown", arm, opts);
@@ -403,11 +411,17 @@ function Conductor({
 
     if (!r.paused) stepWalker(r, dt, CAM_YAW);
 
+    // THE ESTABLISHING SHOT, spent. One subtraction, and it is over: the camera
+    // reads `entry` and eases, so the settle is the existing damping rather
+    // than a second animation with its own opinion about easing.
+    if (r.entry > 0) r.entry = r.reduced ? 0 : Math.max(0, r.entry - dt / ENTRY_SECONDS);
+
     // The mist takes the lantern, the eye and the register, once, for everything.
     MIST.uTime.value += dt;
     MIST.uLantern.value.copy(r.lantern);
     MIST.uFocus.value.copy(r.target);
     MIST.uFloor.value = theme === "light" ? 1 : 0;
+    MIST.uNight.value = night;
     // One wind for the whole world: the grass, the pines and the painted foliage
     // are in the same gust because they read the same clock.
     WIND_CLOCK.value += dt;
@@ -560,20 +574,45 @@ function KeyLight({
   });
 
   // A short night is a dimmer sun. Not a warning, not a number: weather.
-  const day = theme === "light";
   const k = 0.68 + weather.key * 0.5;
+  /**
+   * THE HOUR IS THE REGISTER'S, NOT THE TOGGLE'S.
+   *
+   * This line was `const day = theme === "light"` and it is the single largest
+   * cause of what PG opened on his phone. His own standing rule puts every
+   * surface in light mode by default; the cosmos read that as daylight and
+   * drove a 1.28 intensity pale-pink sun over a register whose sky is `#0e0816`.
+   * A gouache twilight under a noon key is mud, and mud has no focal point.
+   *
+   * `p.night` comes off the register's own sky. `themeLift` is what the toggle
+   * is actually allowed to do: light mode lifts the whole picture about a fifth
+   * of a stop so the world is legible on a bright phone at arm's length, and
+   * dark mode lets it sit down. It moves the VALUE and never the hour.
+   */
+  const night = p.night;
+  const themeLift = theme === "light" ? 1.18 : 1.0;
 
   return (
     <>
       {/* Three lights adding to about 3.2 of irradiance put every lit face of
           the ground past white, and a painted world with blown highlights is a
-          grey one. About 1.6 total keeps the toon ramp inside its own colour. */}
-      <hemisphereLight color={p.key} groundColor={p.ambient} intensity={(day ? 0.62 : 0.4) * k} />
-      <ambientLight color={p.fill} intensity={(day ? 0.2 : 0.14) * k} />
+          grey one. About 1.6 total keeps the toon ramp inside its own colour.
+
+          AT NIGHT THE BUDGET MOVES rather than shrinking: the key comes down
+          and the hemisphere goes up, because moonlight is mostly sky and only a
+          little direction. What that buys is the thing the plate has and round
+          three did not: a cool, modelled, LOW-contrast world with one hot warm
+          thing standing in it. */}
+      <hemisphereLight
+        color={p.key}
+        groundColor={p.ambient}
+        intensity={(0.62 + night * 0.26) * k * themeLift}
+      />
+      <ambientLight color={p.fill} intensity={(0.2 - night * 0.05) * k * themeLift} />
       <directionalLight
         ref={dir}
         color={p.key}
-        intensity={(day ? 1.28 : 0.95) * k}
+        intensity={(1.28 - night * 0.42) * k * themeLift}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-26}
@@ -617,9 +656,12 @@ const LIGHT_SLOTS = 8;
 function LightPool({
   rt,
   worlds,
+  night,
 }: {
   rt: React.RefObject<Runtime>;
   worlds: WorldManifest[];
+  /** The register's own hour. A lamp at midnight has to carry the picture. */
+  night: number;
 }) {
   const refs = useRef<(THREE.PointLight | null)[]>([]);
   const acc = useRef(0);
@@ -660,9 +702,22 @@ function LightPool({
       slot.position.set(l.x, l.y, l.z);
       slot.color.set(l.color);
       slot.distance = l.range;
-      // A neighbour's lamp still burns, a little further off, so a biome's edge
-      // reads as somewhere rather than as a wall of dark.
-      slot.intensity = l.intensity * (l.world === r.world ? 1 : 0.7);
+      /**
+       * A neighbour's lamp still burns, a little further off, so a biome's edge
+       * reads as somewhere rather than as a wall of dark.
+       *
+       * AND EVERY LAMP GETS LOUDER AS THE HOUR GETS DARKER. This is the other
+       * half of the murk fix and it does not work without the first: the key
+       * came down 0.42 and the lamps go up 1.85, so the RATIO between the one
+       * warm thing and everything else moves by about three times. That ratio
+       * is the whole composition of PG's plate, where a single paper lantern
+       * out-values an entire twilight sky.
+       *
+       * The vault still says how bright each lamp is and what colour it burns;
+       * this only says what a lamp is worth at this hour.
+       */
+      slot.intensity =
+        l.intensity * (1 + night * 0.85) * (l.world === r.world ? 1 : 0.7);
     }
   }, [all, rt]);
 
@@ -957,7 +1012,9 @@ export const WorldCanvas = memo(function WorldCanvas({
         times.length = 0;
         checks++;
         if (p90 > 17.5) {
-          setQuality((q) => (q === "full" ? "cheap" : q === "cheap" ? "off" : q));
+          setQuality((q) =>
+            q === "full" ? "cheap" : q === "cheap" ? "grain" : q === "grain" ? "off" : q,
+          );
         }
         if (checks >= 4) return;
       }
@@ -985,10 +1042,28 @@ export const WorldCanvas = memo(function WorldCanvas({
    * up, and it is the honest test for "this is a handset".
    */
   const phone = usePhone();
+  /**
+   * A HANDSET SKIPS THE DEPTH OF FIELD AND SPENDS THE PIXELS INSTEAD.
+   *
+   * Round three capped a phone at one device pixel per CSS pixel, so an iPhone
+   * rendered the world at 390 by 844 and the display blew it up to 1170 by 2532.
+   * Everything soft, every edge three pixels wide, the Wayfarer a smudge before
+   * he was ever a speck. That is a large part of "inoperably bad".
+   *
+   * Two at 390 by 844 is 1.32 megapixels, which is LESS than the 2.16 by 1.35
+   * this build already draws on the desk, and the bokeh that used to eat the
+   * difference is off on this path. The adaptive ladder still runs underneath
+   * and can take it to `off`.
+   */
   const dpr = useMemo<[number, number]>(() => {
     if (reduced) return [1, 1];
-    return phone ? [1, 1] : [1, 1.5];
+    return phone ? [1.5, 2] : [1, 1.5];
   }, [reduced, phone]);
+
+  // The ladder starts two rungs down on a handset, and never climbs.
+  useEffect(() => {
+    if (phone) setQuality((q) => (q === "full" || q === "cheap" ? "grain" : q));
+  }, [phone]);
 
   return (
     <Canvas
@@ -1055,7 +1130,7 @@ export const WorldCanvas = memo(function WorldCanvas({
         );
       })}
 
-      <LightPool rt={rt} worlds={visible} />
+      <LightPool rt={rt} worlds={visible} night={palette.night} />
 
       <Hero
         rt={rt}
@@ -1074,6 +1149,7 @@ export const WorldCanvas = memo(function WorldCanvas({
         onDoor={onDoor}
         onStep={onStep}
         theme={theme}
+        night={palette.night}
       />
       <FocusProbe rt={rt} set={setFocus} />
 

@@ -148,6 +148,7 @@ export function Ground({
         uniform float uMistSpeed;
         uniform vec3  uFocus;
         uniform float uFloor;
+        uniform float uNight;
         uniform float uUntouched;
         uniform vec2  uBC[${MAX_BIOMES}];
         uniform vec2  uBH[${MAX_BIOMES}];
@@ -223,8 +224,19 @@ export function Ground({
           // THE COVER BLEND. Grass takes the rises and the bare ground keeps the
           // hollows, on a second, finer octave so the edge is a meadow edge and
           // not a contour line.
-          float cov = smoothstep(0.40, 0.74, broad * 0.7 + vnoise(wp * 0.21) * 0.45);
-          ground = mix(ground, cover, cov * 0.42 * (1.0 - outside));
+          /**
+           * THE COVER BLEND, at half again the strength it had.
+           *
+           * At 0.42 with a ground and a grass eleven points of luminance apart,
+           * the meadow was one flat wash. The two hexes are now twenty-four
+           * apart (registers.ts takes them to the hour separately) and the
+           * blend is 0.62, so there is a real difference between where the
+           * ground is bare and where it is covered: that difference IS the
+           * path, the clearing and the worn ring around a doorway, and it is
+           * what PG asked for as "contrast between ground, path and grass".
+           */
+          float cov = smoothstep(0.38, 0.76, broad * 0.7 + vnoise(wp * 0.21) * 0.45);
+          ground = mix(ground, cover, cov * 0.62 * (1.0 - outside));
 
           // OUT PAST EVERY BIOME THE FLOOR IS THE HORIZON. Round two painted the
           // void a darkened mist hex, and at a camera that can see a hundred
@@ -250,16 +262,39 @@ export function Ground({
           float n = gMottle;
           float lant = distance(vWorldPosC, uLantern);
           float lit = 1.0 - smoothstep(uLanternR * 0.30, uLanternR, lant);
-          float far = smoothstep(34.0, 108.0, distance(vWorldPosC.xz, uFocus.xz));
-          float veil = uMistDensity * (0.22 + 0.78 * smoothstep(0.28, 0.94, n));
-          veil = veil * (0.10 + 0.90 * far);
+
+          /**
+           * THE FOREGROUND IS A DARK SHAPE. The first move, before any air.
+           *
+           * Round three's portrait frame spent its bottom two fifths on lawn at
+           * the same value as the middle distance, so nothing framed anything
+           * and the eye had nowhere to enter the picture. Every plate PG has
+           * picked does the opposite: 04-twilight-shrine puts near-black rock
+           * across the bottom corners and lets the valley open behind it.
+           *
+           * Fourteen metres in and it is gone, so it never touches the ground he
+           * is standing on: at 18 units back with a 14 degree pitch, the near
+           * edge of the frame is about eight metres from the eye and he is at
+           * eighteen. It rides the register's hour, so a cream riso page keeps
+           * its flat even light.
+           */
+          float dCam = distance(vWorldPosC, cameraPosition);
+          float fore = 1.0 - smoothstep(7.0, 18.0, dCam);
+          gl_FragColor.rgb *= mix(1.0, 0.72, fore * uNight * (1.0 - uFloor * 0.3));
+
+          // ATMOSPHERE, monotonic in distance from the eye, weather-modulated by
+          // about a fifth. See toon.ts for why this is not the look-at.
+          float depthBand = smoothstep(24.0, 110.0, dCam);
+          float mottle = 0.58 + 0.42 * smoothstep(0.30, 0.92, n);
+          float veil = uMistDensity * depthBand * mottle;
           veil *= (1.0 - lit * 0.90);
-          veil = clamp(veil * (1.0 - uFloor * 0.58), 0.0, 0.88);
+          veil = clamp(veil * (1.0 - uFloor * 0.45), 0.0, 0.88);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, uMistColor, veil);
+
           // And then into the sky. Far enough out the ground IS the horizon, so
           // the plane has no edge and the world has no end you can point at. The
           // stop is past the hills, so the country rolls before it dissolves.
-          float haze = smoothstep(130.0, 320.0, distance(vWorldPosC.xz, uFocus.xz));
+          float haze = smoothstep(105.0, 300.0, dCam);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, uSkyHorizon, haze);
         `,
           );

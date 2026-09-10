@@ -98,6 +98,21 @@ export interface Runtime {
   stuck: number;
   reduced: boolean;
   paused: boolean;
+  /**
+   * THE FIRST FIVE SECONDS, as one number from 1 to 0.
+   *
+   * PG opened a cold load on his phone and got a cream page with a title on it
+   * and no world: "It's awful." A cold load has to land on something worth
+   * screenshotting, and the cheapest version of that is a camera that starts a
+   * beat wider and settles into the play frame while the lantern catches.
+   *
+   * One float, driven by the walker's own clock, read by `IsoCamera` and by
+   * nothing else. It is set to 0 by the first input of any kind, because an
+   * establishing shot that keeps running after somebody has started playing is
+   * a cutscene, and this world does not have those. Reduced motion starts it at
+   * 0, so the frame it opens on IS the play frame.
+   */
+  entry: number;
 }
 
 /**
@@ -135,6 +150,7 @@ export function createRuntime(x: number, z: number, world = ""): Runtime {
     stuck: 0,
     reduced: false,
     paused: false,
+    entry: 1,
   };
 }
 

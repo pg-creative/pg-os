@@ -44,6 +44,16 @@ export interface MistUniforms {
   uFocus: { value: THREE.Vector3 };
   /** Raised in light mode so nothing is ever a silhouette on cream paper. */
   uFloor: { value: number };
+  /**
+   * The register's own hour, 0 to 1. Drives the near-field darkening.
+   *
+   * A painted plate puts a DARK SHAPE in the corner nearest the eye and lets the
+   * picture open behind it: `04-twilight-shrine` does it with rock on both
+   * sides. Round three's phone frame had no foreground at all, only lawn at the
+   * same value as everything else, so nothing framed anything. A cream riso page
+   * gets none of this, which is why it rides on the hour rather than being on.
+   */
+  uNight: { value: number };
 }
 
 export const MIST: MistUniforms = {
@@ -56,6 +66,7 @@ export const MIST: MistUniforms = {
   uMistSpeed: { value: 0.035 },
   uFocus: { value: new THREE.Vector3(0, 0, 0) },
   uFloor: { value: 0.0 },
+  uNight: { value: 0.0 },
 };
 
 /** Every border band the walker can be lost in, as flat rectangles to soften. */
@@ -97,6 +108,7 @@ const MIST_FN = /* glsl */ `
   uniform float uMistSpeed;
   uniform vec3  uFocus;
   uniform float uFloor;
+  uniform float uNight;
   uniform float uUntouched;
   varying vec3 vWorldPosC;
 
@@ -113,14 +125,27 @@ const MIST_FN = /* glsl */ `
     float lant = distance(wp, uLantern);
     float lit = 1.0 - smoothstep(uLanternR * 0.30, uLanternR, lant);
 
-    // Distance from the eye. This is the diorama: the near table sharp, the far
-    // country soft, without a depth-of-field pass having to carry the colour.
-    float far = smoothstep(34.0, 108.0, distance(wp.xz, uFocus.xz));
+    /**
+     * ATMOSPHERE IS DISTANCE FROM THE EYE, and it has to be MONOTONIC in it.
+     *
+     * This read smoothstep(34, 108, distance from the LOOK-AT) and multiplied
+     * the register's weather noise straight into the amount, so the middle of a
+     * portrait frame was a mottled lavender band at full strength and the near
+     * ground was at a tenth. Two flat plateaus with a blotchy step between them,
+     * which is what "grey-green soup" looks like from the inside.
+     *
+     * Now the ramp runs off the CAMERA (which is what air actually does), it
+     * starts where the near field ends, and it never comes back down. The
+     * weather noise only modulates it by about a fifth, so a foggy night is
+     * thicker air and not a different picture.
+     */
+    float dCam = distance(wp, cameraPosition);
+    float band = smoothstep(24.0, 110.0, dCam);
+    float mottle = 0.58 + 0.42 * smoothstep(0.30, 0.92, n);
 
-    float veil = uMistDensity * (0.22 + 0.78 * smoothstep(0.28, 0.94, n));
-    veil = veil * (0.10 + 0.90 * far) + uUntouched * 0.34 * (1.0 - far * 0.4);
+    float veil = uMistDensity * band * mottle + uUntouched * 0.34 * (1.0 - band * 0.4);
     veil *= (1.0 - lit * 0.88);
-    return clamp(veil * (1.0 - uFloor * 0.58), 0.0, 0.86);
+    return clamp(veil * (1.0 - uFloor * 0.45), 0.0, 0.86);
   }
 `;
 

@@ -33,7 +33,22 @@
 import { EffectComposer, DepthOfField, Noise, Vignette } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
 
-export type PostQuality = "full" | "cheap" | "off";
+/**
+ * `grain` is new this round and it is the level a PHONE starts on.
+ *
+ * The steps used to be full, cheap, off, and off meant no composer at all: no
+ * grain, no paper edge, a flat WebGL frame. That is the wrong thing to fall back
+ * to, because the grain and the vignette are what make the render look painted
+ * and they cost one cheap fullscreen pass between them, while the depth of field
+ * costs a downsample, two blur passes and a composite.
+ *
+ * So the ladder is now full, cheap, grain, off, and a handset skips the first
+ * two. What that buys is the pixels: a phone rendered at one device pixel per
+ * CSS pixel and was then blown up three times by the display, which is most of
+ * why PG's frame looked like mush. Trading the bokeh for real resolution is not
+ * close.
+ */
+export type PostQuality = "full" | "cheap" | "grain" | "off";
 
 export function Postfx({
   quality,
@@ -47,6 +62,15 @@ export function Postfx({
   focusDistance: number;
 }) {
   if (quality === "off") return null;
+
+  if (quality === "grain") {
+    return (
+      <EffectComposer enableNormalPass={false} multisampling={0}>
+        <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={grain * 0.9} />
+        <Vignette eskil={false} offset={0.36} darkness={0.26} />
+      </EffectComposer>
+    );
+  }
 
   return (
     <EffectComposer enableNormalPass={false} multisampling={0}>

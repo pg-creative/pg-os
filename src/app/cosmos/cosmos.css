@@ -61,7 +61,49 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: #ece2ce;
+
+  /*
+   * THE FIRST PAINT IS A PAINTING, and it used to be `#ece2ce`.
+   *
+   * PG opened a cold load on his phone in bed and got a flat cream page with a
+   * title floating on it and no world under it, for as long as a three.js bundle
+   * takes to arrive on a phone network. Measured on the fast-3G proxy: the frame
+   * at zero seconds, at two and at six were all the same blank sheet.
+   *
+   * Two layers, in the order they can possibly arrive. The gradient is the
+   * twilight of `04-twilight-shrine` read off the plate itself (plum at the
+   * zenith, sakura where the sun went down, ink at the ground) and it costs one
+   * paint with no network at all, so the first frame after the stylesheet is
+   * already the right world at the right hour. The plate goes over it as soon as
+   * it lands, soft and low, so the load reads as a painting coming into focus.
+   * The canvas is opaque and covers both the moment it draws.
+   *
+   * No spinner. Nothing counts up. It is the same rule as the rest of the world:
+   * a state is weather, never a progress bar.
+   */
+  background:
+    radial-gradient(128% 58% at 50% 96%, #241d33 0%, rgba(36, 29, 51, 0) 62%),
+    radial-gradient(150% 78% at 62% 12%, #7d5580 0%, #5b4270 34%, #33294a 66%, #1a1526 100%);
+}
+
+.cosmos-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: url("/api/cosmos/asset/vault/worlds/quiet-practice/plates/still-hall")
+    center / cover no-repeat;
+  opacity: 0.42;
+  filter: blur(3px) saturate(0.92);
+  animation: cosmos-fade 900ms ease-out both;
+  pointer-events: none;
+}
+
+/* The stage is opaque the moment three paints, so the backdrop only ever shows
+   through the hole the load leaves. */
+.cosmos-stage,
+.cosmos-still {
+  z-index: 1;
 }
 
 .cosmos-stage[data-theme="dark"] {
@@ -135,6 +177,60 @@
   --chrome: #f7f1e4;
   --chrome-soft: rgba(247, 241, 228, 0.76);
   --chrome-shadow: 0 1px 3px rgba(18, 12, 22, 0.72), 0 0 18px rgba(18, 12, 22, 0.35);
+}
+
+/* ── The first five seconds ────────────────────────────────────────────────
+ *
+ * PG's third ask: a cold load should land on something worth screenshotting.
+ * The camera already opens a beat wider and eases in (`IsoCamera` ENTRY_PULL);
+ * this is the chrome arriving with it rather than being there before the world
+ * is. Four pieces, in reading order, over about a second and a half, which is
+ * the same beat the camera takes: the world's name, then the weather, then
+ * where he is, then the dock he can act with.
+ *
+ * Purely decorative, so `prefers-reduced-motion` gets none of it. The reduced
+ * path renders a still plate and no HUD animation at all, and this is the belt
+ * to that brace.
+ */
+
+@keyframes cosmos-settle {
+  from {
+    opacity: 0;
+    transform: translateY(-9px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cosmos-settle-c {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cosmos-tl {
+    animation: cosmos-settle 900ms 120ms cubic-bezier(0.16, 0.84, 0.36, 1) both;
+  }
+  .cosmos-weather {
+    animation: cosmos-settle 900ms 420ms cubic-bezier(0.16, 0.84, 0.36, 1) both;
+  }
+  .cosmos-here {
+    animation: cosmos-settle 900ms 700ms cubic-bezier(0.16, 0.84, 0.36, 1) both;
+  }
+  .cosmos-dock {
+    animation: cosmos-settle-c 900ms 900ms cubic-bezier(0.16, 0.84, 0.36, 1) both;
+  }
+  .cosmos-hint {
+    animation: cosmos-settle-c 900ms 1150ms cubic-bezier(0.16, 0.84, 0.36, 1) both;
+  }
 }
 
 /* ── Top left: the overline, the world, the season ─────────────────────── */
@@ -442,22 +538,29 @@
 
 /* ── The one hint ──────────────────────────────────────────────────────── */
 
+/*
+ * THE INVITATION IS TYPE ON THE PAINTING, not a chip on top of it.
+ *
+ * It was a filled dark pill with a hairline border, mono, centred, and on a
+ * phone it sat across the middle of the sky: the one element in the frame that
+ * looked like a debug overlay rather than like a game. The reference sets the
+ * same line as plain cream type over its own valley and it reads perfectly,
+ * because that is what the two corner scrims are already for.
+ */
 .cosmos-hint {
   position: absolute;
   left: 50%;
   bottom: calc(78px + var(--safe-b));
   transform: translateX(-50%);
   margin: 0;
-  padding: 7px 15px;
-  border-radius: 999px;
-  background: rgba(24, 17, 28, 0.72);
-  border: 1px solid rgba(247, 241, 228, 0.16);
+  padding: 0;
   font-family: var(--mono);
   font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--chrome);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chrome-soft);
+  text-shadow: var(--chrome-shadow);
   white-space: nowrap;
-  animation: cosmos-fade 260ms ease both;
 }
 
 /* The thread owns that spot when it is open. */
@@ -908,18 +1011,101 @@
     white-space: normal;
     text-align: center;
   }
+  /* ── The sheet ─────────────────────────────────────────────────────────
+   *
+   * PG's word for what it was: "the panel plain". It was a cream rectangle with
+   * a 6 px corner, a 30 px close cross, 15 px body type and the page's own
+   * painting boxed at 16:9 with a margin around it, which is a modal on a
+   * desktop shrunk to fit rather than a thing built for a thumb.
+   *
+   * What a released sheet does, and all of it costs nothing: a real corner
+   * radius so it reads as paper laid over the world, a grab handle so it looks
+   * like it can be pushed back down, the PAINTING FULL BLEED across the top
+   * because it is the best thing on the page, type at a size that reads at
+   * arm's length rather than at desk distance, a 44 px close target, the home
+   * indicator honoured in the padding, and `dvh` so the address bar cannot eat
+   * the last paragraph.
+   */
   .cosmos-page {
     top: auto;
     bottom: 0;
     left: 0;
-    transform: translateY(14px);
+    transform: translateY(20px);
     width: 100%;
-    max-height: 78vh;
-    border-radius: 6px 6px 0 0;
-    padding: 18px 18px 24px;
+    max-height: 82vh;
+    max-height: 82dvh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+    padding: 0 20px calc(26px + var(--safe-b));
+    box-shadow: 0 -16px 52px rgba(16, 10, 22, 0.46);
+    overscroll-behavior: contain;
   }
   .cosmos-page[data-open="true"] {
     transform: none;
+  }
+
+  /* The grab handle. Sticky, so it stays while the words scroll under it. */
+  .cosmos-page::before {
+    content: "";
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: block;
+    width: 44px;
+    height: 4px;
+    margin: 11px auto 4px;
+    border-radius: 999px;
+    background: var(--rule);
+  }
+
+  /* THE PAINTING IS THE PAGE'S FIRST SENTENCE. Edge to edge, and taller than a
+     desktop's 16:9, because a portrait sheet has the width to spend and a plate
+     cropped to a letterbox is a plate nobody can see. */
+  .cosmos-page-plate {
+    margin: 8px -20px 18px;
+    border-radius: 0;
+    aspect-ratio: 4 / 3;
+  }
+
+  .cosmos-page-eyebrow {
+    font-size: 10.5px;
+  }
+  .cosmos-page-title {
+    margin: 8px 0 16px;
+    font-size: 30px;
+  }
+  .cosmos-page-body p {
+    margin: 0 0 15px;
+    font-size: 17px;
+    line-height: 1.62;
+  }
+  .cosmos-page-body blockquote {
+    font-size: 18px;
+    line-height: 1.56;
+  }
+  .cosmos-page-source {
+    margin-top: 20px;
+    font-size: 11px;
+  }
+  /* A thumb target, and it sits over the plate rather than beside the words. */
+  .cosmos-page-close {
+    top: 6px;
+    right: 6px;
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+    color: var(--ink-soft);
+  }
+
+  /* The world dims behind the sheet, so the sheet is where you are. */
+  .cosmos-stage[data-open="true"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: rgba(14, 9, 18, 0.36);
+    pointer-events: none;
+    animation: cosmos-fade 260ms ease both;
   }
   .cosmos-satchel {
     bottom: calc(62px + var(--safe-b));
@@ -977,6 +1163,24 @@
   .cosmos-thread-chapter {
     font-size: 16px;
   }
+  /* A side sheet is not a bottom sheet: no grab handle (nothing is being
+     pushed down), and the plate bleeds to the sheet's own padding. */
+  .cosmos-page::before {
+    display: none;
+  }
+  .cosmos-page-plate {
+    margin: 4px -18px 14px calc(-18px);
+    aspect-ratio: 16 / 9;
+  }
+  .cosmos-page-title {
+    font-size: 24px;
+    margin: 6px 0 12px;
+  }
+  .cosmos-page-body p {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
   /* A side sheet: the world stays visible beside the words. */
   .cosmos-page {
     top: 0;
@@ -991,6 +1195,10 @@
   }
   .cosmos-page[data-open="true"] {
     transform: none;
+  }
+  /* No scrim on a side sheet: the world beside the words is the point. */
+  .cosmos-stage[data-open="true"]::after {
+    display: none;
   }
   .cosmos-satchel {
     bottom: calc(58px + var(--safe-b));

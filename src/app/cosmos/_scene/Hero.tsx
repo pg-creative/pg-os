@@ -28,6 +28,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Palette } from "./registers";
 import { GEO, toon } from "./toon";
+import { Halo } from "./props";
 import type { Runtime } from "./runtime";
 import { STRIDE } from "./runtime";
 import type { HeroModelSpec } from "./HeroModel";
@@ -325,6 +326,14 @@ export function Hero({
             />
           </>
         )}
+        {/* THE LANTERN CATCHES, and it is the one warm thing that is always on
+            screen. The painted sprite carries a lamp on the staff and the light
+            was real from round two, but nothing joined the two: at 114 px of a
+            phone frame the lamp is nine pixels of paint with no air around it.
+            One additive disc, hung where the light hangs, and the whole night
+            has a source. It rides the register's hour, so a riso day gets none
+            of it. */}
+        <Halo color={p.flameCore} size={1.1 + p.night * 0.8} opacity={0.2 + p.night * 0.24} />
       </group>
 
       <pointLight

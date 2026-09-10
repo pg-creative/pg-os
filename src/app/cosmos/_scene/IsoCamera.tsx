@@ -60,24 +60,26 @@ export const HORIZON_NDC =
 export const NARROW_ASPECT = 0.75;
 
 /**
- * The portrait pitch: TWO degrees steeper, and two is the whole budget.
+ * The portrait pitch: FOURTEEN degrees, which is a degree and a half SHALLOWER
+ * than the desk, and round three had it two degrees steeper.
  *
- * A phone held upright spends 44 degrees of lens on the short way across a tall
- * frame, so at 15.5 degrees the top sixth of it is empty sky and the world is a
- * letterbox in the middle. Every degree of pitch trades sky for ground: at 17.5
- * the horizon moves from 0.686 to 0.780 in clip space and the sky band goes from
- * 15.7 percent of the frame to 11.
+ * Round three reasoned that a tall frame wants more ground, pitched down to
+ * 17.5, and got a phone picture with an eleven percent strip of sky at the top
+ * and lavender murk under it. PG's own plate is the argument against: half of
+ * `04-twilight-shrine` is plum sky with cream in it, and that sky is most of
+ * why the plate is beautiful. A portrait frame has the height to spend on it.
  *
- * WHY IT STOPS AT TWO, and this is arithmetic rather than taste. The depths' red
- * moon hangs at a FIXED elevation (`Sky.tsx MOON_ELEV_DEG`, 2.4 degrees, chosen
- * against the desktop pitch) and a direction at elevation e lands at NDC
- * `tan(e + pitch) / (cos(h) * tan(fov/2))`. Pitching down pushes the moon UP the
- * frame: 0.80 at 15.5 degrees, 0.90 at 17.5, and 1.00 at 19.5, which is the top
- * edge. Its disc is 0.12 NDC across. So 17.5 leaves the whole moon between the
- * horizon and the frame's top with room either side, and 19.5 would have posted
- * a phone leg that says the moon is in the band while it sat outside the glass.
+ * At 14 degrees the horizon lands at 0.594 in clip space and the sky band is
+ * 20.3 percent of the glass, which is the reference's own proportion. What pays
+ * for it is the forward bias below: the ground that used to sit under him now
+ * sits ahead of him, so nothing is lost to the swap except the lawn behind his
+ * back, which nobody was walking to.
+ *
+ * The depths' red moon no longer constrains this. `Sky.tsx` derives its
+ * elevation from the pitch in use so the disc lands at the same 0.80 of clip
+ * space at every pitch, which is the fix round three named and left.
  */
-export const PITCH_NARROW = 0.3054;
+export const PITCH_NARROW = 0.2443;
 
 /** The pitch this viewport gets. One switch, and the camera eases across it. */
 export function pitchFor(width: number, height: number): number {
@@ -87,8 +89,6 @@ export function pitchFor(width: number, height: number): number {
 
 export const MIN_ZOOM = 0.62;
 export const MAX_ZOOM = 2.0;
-/** As far back as a narrow frame is ever allowed to stand. */
-const MAX_NARROW_DISTANCE = 46;
 
 const TAN_HALF_FOV = Math.tan(((FOV / 2) * Math.PI) / 180);
 
@@ -98,43 +98,120 @@ function wideDistance(aspect: number): number {
 }
 
 /**
- * How much ground stands either side of him at the threshold aspect.
+ * How far back a phone held upright stands. PG'S NUMBER, NOT A DERIVED ONE.
  *
- * DERIVED, so the two rules below meet without a step in them. The wide rule at
- * exactly 0.75 puts the camera 26.6 units back, and a 44 degree lens on a 0.75
- * frame is 8.06 units of half-width at that distance. The narrow rule holds that
- * number and solves for the distance instead, which is the whole fix: a phone
- * gets the same eight metres of ground around him that a tablet does, by
- * standing further back, and never by opening the lens.
+ * Round three chose the other side of this trade and PG opened it in bed:
+ * "It's awful", "That's like inoperably bad r u fr". The Wayfarer was 36 px on
+ * an 844 px frame. The instruction that replaced it names pixels: "90 to 130 px
+ * tall on the phone glass".
+ *
+ * THE TRADE IS ABSOLUTE AND IT IS WORTH WRITING DOWN, because the previous pass
+ * spent a round discovering it the expensive way. Under a perspective camera the
+ * ground WIDTH across the glass and the hero's FRACTION of the frame are locked
+ * together by geometry alone:
+ *
+ *     width_across = hero_height * aspect / hero_fraction
+ *
+ * No lens and no distance changes that product. On a 0.462 frame with him at an
+ * eighth of the height, the world is about six metres across, full stop. Round
+ * three bought eight metres either side of him and paid for it with a 36 px
+ * speck. This round buys the character and pays with the width.
+ *
+ * What makes the width affordable is DEPTH, which the same geometry gives away
+ * free: at a shallow pitch the frame's vertical extent runs all the way to the
+ * horizon, so a portrait phone is a corridor rather than a keyhole. That only
+ * reads if the corridor is pointed AHEAD of him, which is what `heroNdcY` below
+ * is for. The two changes are one change; neither works alone.
+ *
+ * 18 units, measured: 116 px at 390 by 844, in the middle of PG's band.
  */
-const NARROW_HALF_WIDTH =
-  wideDistance(NARROW_ASPECT) * TAN_HALF_FOV * NARROW_ASPECT;
+const NARROW_DISTANCE = 18;
+
+/** 0 at a wide frame, 1 at a phone held upright, smooth across the middle. */
+function narrowness(aspect: number): number {
+  const t = Math.min(1, Math.max(0, (0.85 - aspect) / 0.3));
+  return t * t * (3 - 2 * t);
+}
 
 /**
  * How far back the camera sits at zoom 1, for a viewport of this shape.
  *
- * Desktop lands at 19 units, which puts the Wayfarer at about an eighth of the
- * frame's height: he is a person in a valley, not a portrait.
- *
- * A PHONE HELD UPRIGHT IS A DIFFERENT PROBLEM, and round three's phone leg is
- * what found it. The lens is fixed, so a 0.46 frame has ten and a half degrees
- * of horizontal field either side of the axis; at the old 30 unit ceiling that
- * is five and a half metres of ground across the whole screen, which is a
- * keyhole with nothing in it to walk to. The ceiling was the bug. Below 0.75 the
- * distance is driven by the WIDTH he needs rather than by a curve fitted to
- * desktop aspects: about eight metres either side of him, which on a 390 by 844
- * phone is 43 units back. He is smaller (36 px of an 844 px frame, which is the
- * same tenth of the SHORT edge a desktop gives him) and the hall is on screen
- * from the spawn, which is the thing that makes it playable.
+ * Desktop lands at 19 units, unchanged, which puts the Wayfarer at about an
+ * eighth of the frame's height: he is a person in a valley, not a portrait.
+ * A phone lands at 18. The two are blended across aspect 0.85 to 0.55 rather
+ * than switched at a threshold, because an iPad turning over used to cross a
+ * step of nine units in one frame.
  */
 export function baseDistance(width: number, height: number): number {
   const aspect = Math.max(0.3, width / Math.max(height, 1));
-  if (aspect >= NARROW_ASPECT) return wideDistance(aspect);
-  return Math.min(MAX_NARROW_DISTANCE, NARROW_HALF_WIDTH / (TAN_HALF_FOV * aspect));
+  const wide = wideDistance(aspect);
+  return wide + (NARROW_DISTANCE - wide) * narrowness(aspect);
+}
+
+/**
+ * WHERE HIS FEET LAND ON THE GLASS, in clip space. The composition, as a number.
+ *
+ * Round three left the look-at centred on him, and named the consequence in its
+ * own notes without fixing it: "the bottom of a portrait frame is the empty
+ * ground BEHIND him ... about 40 percent of the picture". Forty percent of a
+ * phone screen spent on lawn nobody is walking to.
+ *
+ * The reference (Crayon's "Where the Wind Wanders") puts its heroine about
+ * three fifths of the way down and gives everything above her to the valley.
+ * PG's own plate does the same: the flute player sits low and right, and the
+ * whole upper half is sky and hills.
+ *
+ * So this is the target, and the bias needed to hit it is SOLVED each frame
+ * rather than dialled in, which is what keeps it true under zoom. Desktop's
+ * number is -0.185 because that is where a 19 unit, 15.5 degree camera already
+ * puts him with no bias at all: the wide frame is unchanged by construction,
+ * and zooming out no longer drifts him toward the middle.
+ */
+const HERO_NDC_Y_WIDE = -0.185;
+const HERO_NDC_Y_NARROW = -0.45;
+
+export function heroNdcY(width: number, height: number): number {
+  const aspect = Math.max(0.3, width / Math.max(height, 1));
+  const t = narrowness(aspect);
+  return HERO_NDC_Y_WIDE + (HERO_NDC_Y_NARROW - HERO_NDC_Y_WIDE) * t;
+}
+
+/**
+ * How far AHEAD of him the look-at sits, so his feet land on `wantNdcY`.
+ *
+ * Closed form, no damping, no guess. The camera stands `d cos(pitch)` of ground
+ * behind the look-at at height `d sin(pitch) + lookY`; a ground point at range
+ * R from it is depressed `atan(h/R)` below horizontal and therefore lands at
+ * `tan(pitch - atan(h/R)) / tan(fov/2)` in clip space. Set that equal to the
+ * target and R falls out; the bias is the difference.
+ *
+ * Clamped at zero because a wide frame must never pull the look-at BEHIND him:
+ * that is the one direction this could regress the desktop.
+ */
+function forwardBias(dist: number, pitch: number, lookY: number, wantNdcY: number): number {
+  const h = dist * Math.sin(pitch) + lookY;
+  const a = Math.atan(wantNdcY * TAN_HALF_FOV);
+  const drop = pitch - a;
+  if (drop <= 0.02) return 0;
+  const R = h / Math.tan(drop);
+  return Math.max(0, dist * Math.cos(pitch) - R);
 }
 
 /** As far as two fingers may carry the look-at off the Wayfarer, in metres. */
 export const PAN_MAX = 12;
+
+/**
+ * How much wider the establishing shot stands, as a fraction of the play frame.
+ *
+ * 0.42 at 18 units is 25.6, which on a phone is the valley and the hall with
+ * him small in it, and the ease into 18 is the world coming to meet you. Small
+ * on purpose: a cold load has about a second and a half of anybody's patience,
+ * and a camera that travels a long way in that time reads as a cutscene rather
+ * than as the picture settling.
+ */
+const ENTRY_PULL = 0.42;
+/** Seconds the establishing shot takes to hand the frame over. */
+export const ENTRY_SECONDS = 2.6;
 
 export function IsoCamera({
   rt,
@@ -167,6 +244,16 @@ export function IsoCamera({
   const base = useMemo(
     () => baseDistance(size.width, size.height),
     [size.width, size.height],
+  );
+  /** Where his feet belong on the glass for a viewport this shape. */
+  const wantNdcY = useMemo(
+    () => heroNdcY(size.width, size.height),
+    [size.width, size.height],
+  );
+  /** Screen-up on the ground, at this yaw. The bias runs along it. */
+  const fwd = useMemo(
+    () => ({ x: -Math.sin(CAM_YAW), z: -Math.cos(CAM_YAW) }),
+    [],
   );
 
   // Wheel zoom, clamped. The canvas swallows the gesture so the page cannot
@@ -253,16 +340,26 @@ export function IsoCamera({
       // The plane is tilted away, so a pixel up the frame is more ground than a
       // pixel across it. `sin(pitch)` is exactly how much more.
       const dy = ((t.cy - panFrom.y) * mPerPx) / Math.max(0.2, Math.sin(pitch));
-      // Screen right and screen up, on the ground, at this yaw. Drag the world:
-      // the ground goes the way the fingers go, so the target goes the other.
-      const rx = -Math.cos(CAM_YAW);
-      const rz = Math.sin(CAM_YAW);
+      // SCREEN RIGHT AND SCREEN UP, ON THE GROUND, and both signs matter.
+      //
+      // The camera looks along `f = (-sin yaw, 0, -cos yaw)` across the plane,
+      // so screen-right is `cross(f, up) = (cos yaw, 0, -sin yaw)` and screen-up
+      // on the ground is `f` itself. The first pass had the right vector
+      // NEGATED and the two axes then disagreed with each other: dragging
+      // sideways moved the camera and dragging up and down moved the world, on
+      // the same two fingers, in the same gesture.
+      //
+      // Drag the world, on both axes: the ground under the fingers goes where
+      // the fingers go, so the target goes the other way. Screen y grows
+      // downward, which is the second sign.
+      const rx = Math.cos(CAM_YAW);
+      const rz = -Math.sin(CAM_YAW);
       const ux = -Math.sin(CAM_YAW);
       const uz = -Math.cos(CAM_YAW);
       r.pan.set(
-        panStart.x - (dx * rx - dy * ux),
+        panStart.x - dx * rx + dy * ux,
         0,
-        panStart.z - (dx * rz - dy * uz),
+        panStart.z - dx * rz + dy * uz,
       );
       if (r.pan.length() > PAN_MAX) r.pan.setLength(PAN_MAX);
     };
@@ -322,11 +419,19 @@ export function IsoCamera({
     if (r.reduced) dir.current.copy(wantDir);
     else dir.current.lerp(wantDir, Math.min(1, dt * 4)).normalize();
 
-    const want = base * r.zoom;
+    // THE ESTABLISHING SHOT. `r.entry` runs 1 to 0 over the first beat of a
+    // cold load, and while it is above zero the camera stands further back and
+    // eases in. Nothing else in the scene knows about it: the frame just opens.
+    const want = base * r.zoom * (1 + ENTRY_PULL * r.entry);
     r.dist += (want - r.dist) * (r.reduced ? 1 : Math.min(1, dt * 4));
 
-    const tx = look.current.x + r.pan.x;
-    const tz = look.current.z + r.pan.z;
+    // AND HIS FEET LAND WHERE THE COMPOSITION WANTS THEM. Solved from the
+    // distance in use, so a pinch does not slide him up the glass, and pushed
+    // along the camera's own forward on the ground, so he keeps the same spot
+    // on screen whichever way he is walking.
+    const bias = forwardBias(r.dist, pitch, look.current.y, wantNdcY);
+    const tx = look.current.x + r.pan.x + fwd.x * bias;
+    const tz = look.current.z + r.pan.z + fwd.z * bias;
     r.target.set(tx, look.current.y, tz);
     if (target.current) target.current.copy(r.target);
 
