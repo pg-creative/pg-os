@@ -144,13 +144,15 @@ export interface SkyLook {
  * The camera's own arithmetic decides this, so it cannot drift again. The top
  * edge of the frame sits at `FOV/2 - PITCH` degrees of elevation; a direction at
  * elevation `e` and `h` degrees off the view axis lands at NDC
- * `tan(e + PITCH) / (cos(h) * tan(FOV/2))`. At 3.6 degrees up and 6.3 degrees
- * off-axis the disc's centre lands at 0.87 of the frame and its top edge at
- * 0.93, inside the band on the desktop, at DPR 2 and on a phone (a narrower lens
- * moves it sideways, never up). The horizon is at 0.686, so it clears that too:
- * a moon standing in the sky over the crypt, not behind the reader's head.
+ * `tan(e + PITCH) / (cos(h) * tan(FOV/2))`. The first number off that arithmetic
+ * (3.6 degrees) put the disc's top edge exactly ON the frame's, measured at
+ * 1440 by 900: the model is right about the shape and about a degree optimistic
+ * about the eye's height, which rides with the zoom. 2.4 degrees puts the whole
+ * disc between the horizon and the top edge with room either side, on the
+ * desktop, at DPR 2 and on a phone (a narrower lens moves it sideways, never
+ * up). A moon standing over the crypt, not behind the reader's head.
  */
-const MOON_ELEV_DEG = 3.6;
+const MOON_ELEV_DEG = 2.4;
 const MOON_RADIUS_DEG = 1.4;
 /** Off the view axis, so it is not a bullseye behind the walker. */
 const MOON_OFFSET_DEG = 6.3;
@@ -218,15 +220,21 @@ export function skyFor(
     moon: false,
   };
 
+  const moon = p.banding < 0.5 && p.mistDensity > 0.6;
+
   if (resolved === "midnight" || resolved === "night") {
     return {
       ...base,
       top: shade(p.skyTop, theme === "light" ? -0.05 : -0.3),
       mid: shade(p.skyMid, theme === "light" ? -0.05 : -0.34),
       horizon: shade(p.skyHorizon, theme === "light" ? -0.16 : -0.42),
-      glow: PHASES.night.foxfire,
+      // A register with a moon takes the moon's colour for its one light in the
+      // sky; everything else at midnight takes foxfire. The Critic's deduction 3
+      // was that the disc was above the frame; the half of it nobody measured is
+      // that it was GOLD, because `uGlow` was foxfire and the moon reads `uGlow`.
+      glow: moon ? p.moon : PHASES.night.foxfire,
       glowEl: 0.42,
-      moon: p.banding < 0.5 && p.mistDensity > 0.6,
+      moon,
     };
   }
   if (resolved === "day") {
@@ -303,7 +311,7 @@ function MoonPool({ color, on }: { color: string; on: boolean }) {
     if (!m) return;
     const eye = MIST.uFocus.value;
     m.position.set(eye.x + Math.sin(MOON_AZ) * 30, 0.03, eye.z + Math.cos(MOON_AZ) * 30);
-    const want = on ? 0.5 : 0;
+    const want = on ? 0.34 : 0;
     material.opacity += (want - material.opacity) * Math.min(1, dt * 2.5);
     m.visible = material.opacity > 0.004;
   });
@@ -316,7 +324,7 @@ function MoonPool({ color, on }: { color: string; on: boolean }) {
       renderOrder={-60}
       frustumCulled={false}
     >
-      <planeGeometry args={[74, 74]} />
+      <planeGeometry args={[62, 62]} />
     </mesh>
   );
 }

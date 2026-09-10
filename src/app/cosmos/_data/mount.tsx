@@ -76,10 +76,20 @@ export function MountCosmos({
   const manifest = readCosmos({ fixture, world, drafts: wantDrafts });
   const text = readBodies(wantDrafts);
 
+  // A MONUMENT IS NOT A PAGE, and it must not be given a page's empty body.
+  //
+  // The Critic's deduction 2: "a stone opens and says nothing". This loop ran over
+  // every object in the manifest, monuments included, while `readBodies` reads
+  // pages only, so `bodies[ledger-7-...]` was the "The vault has not written this
+  // one yet." placeholder, and `CosmosStage`'s `?? lines.get(open)` fallback to
+  // the LEDGER line could never run. Skipping the type leaves the key absent,
+  // which is what the fallback is for; the line itself also comes back from
+  // `/api/cosmos/body`, which has served `ledger-` ids since round 2.1.
   const bodies: Record<string, ReactNode> = {};
   const sources: Record<string, string> = {};
   for (const w of manifest.worlds) {
     for (const o of w.objects) {
+      if (o.type === "monument") continue;
       const t = text[o.id];
       bodies[o.id] = renderBody(t?.body ?? "");
       if (t?.source) sources[o.id] = t.source;

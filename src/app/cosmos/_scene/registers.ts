@@ -51,6 +51,18 @@ export interface Palette {
   skyMid: string;
   skyHorizon: string;
   skyGlow: string;
+  /**
+   * The moon's own colour, for a register that has one.
+   *
+   * DERIVED, not chosen. COSMOLOGY.md says the depths carry a red moon and the
+   * register map has no red in it that is bright enough to hang in a sky: the
+   * closest thing it holds is `fog` (#3A1C22 for the paperback), which is that
+   * red at crypt value. This takes that hue and brings it to a value a light
+   * source has, so the moon is the depths' own colour turned up rather than a
+   * hex somebody liked. A register whose fog is not red gets a moon it will
+   * never draw, which costs nothing.
+   */
+  moon: string;
   /** The horizon the ground dissolves into, and the FogExp2 colour. */
   fog: string;
   banding: number;
@@ -174,11 +186,47 @@ function derive(id: Register): Palette {
     skyMid: mixHex(L.sky, fog, 0.42),
     skyHorizon: fog,
     skyGlow: L.particles,
+    moon: vivid(L.fog),
     fog,
     banding: t.banding,
     grain: L.grain,
     mistDensity: t.air,
   };
+}
+
+/**
+ * A hex at its own hue, taken to the saturation and value of something that
+ * emits. Used for the moon, and nothing else.
+ */
+function vivid(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const mx = Math.max(r, g, b);
+  const mn = Math.min(r, g, b);
+  const d = mx - mn;
+  let h = 0;
+  if (d > 1e-6) {
+    if (mx === r) h = ((g - b) / d) % 6;
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+  }
+  h = (h * 60 + 360) % 360;
+  const S = 0.7;
+  const L = 0.54;
+  const c = (1 - Math.abs(2 * L - 1)) * S;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = L - c / 2;
+  const [rr, gg, bb] =
+    h < 60 ? [c, x, 0]
+    : h < 120 ? [x, c, 0]
+    : h < 180 ? [0, c, x]
+    : h < 240 ? [0, x, c]
+    : h < 300 ? [x, 0, c]
+    : [c, 0, x];
+  const to = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${to(rr)}${to(gg)}${to(bb)}`;
 }
 
 /** Every register, derived once at module load. Four objects for the session. */

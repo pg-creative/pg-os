@@ -23,13 +23,33 @@
  * takes its position every frame and everything inside its radius de-mists.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Palette } from "./registers";
 import { GEO, toon } from "./toon";
 import type { Runtime } from "./runtime";
 import { STRIDE } from "./runtime";
+import type { HeroModelSpec } from "./HeroModel";
+
+/**
+ * The rigged model, loaded only when it is asked for.
+ *
+ * `?hero=model` is a switch PG has not thrown yet, and drei plus a GLTF loader
+ * is a chunk the default route should not carry to draw a painted cutout. Lazy,
+ * so the sprite path downloads none of it.
+ */
+const RiggedHero = lazy(() => import("./HeroModel"));
+
+/** Whether this load asked for the model. Read once: it is a URL, not a state. */
+function wantsModel(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get("hero") === "model";
+  } catch {
+    return false;
+  }
+}
 
 const BASE = "/agent-office/characters";
 /**
@@ -186,12 +206,16 @@ export function Hero({
   p,
   lanternColor,
   lanternRange,
+  model,
 }: {
   rt: React.RefObject<Runtime>;
   p: Palette;
   lanternColor: string;
   lanternRange: number;
+  /** The vault's rigged hero, when a world names one. Drawn on `?hero=model`. */
+  model: HeroModelSpec | null;
 }) {
+  const asModel = useMemo(() => wantsModel(), []);
   const group = useRef<THREE.Group>(null);
   const billboard = useRef<THREE.Mesh>(null);
   const figure = useRef<THREE.Group>(null);
@@ -256,6 +280,23 @@ export function Hero({
     }
     void dt;
   });
+
+  if (asModel && model) {
+    return (
+      <>
+        <Suspense fallback={null}>
+          <RiggedHero
+            rt={rt}
+            spec={model}
+            p={p}
+            lanternColor={lanternColor}
+            lanternRange={lanternRange}
+          />
+        </Suspense>
+        <Dust rt={rt} color={p.paper} />
+      </>
+    );
+  }
 
   return (
     <>

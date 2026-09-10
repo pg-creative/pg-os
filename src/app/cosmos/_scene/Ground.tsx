@@ -250,7 +250,7 @@ export function Ground({
           float n = gMottle;
           float lant = distance(vWorldPosC, uLantern);
           float lit = 1.0 - smoothstep(uLanternR * 0.30, uLanternR, lant);
-          float far = smoothstep(22.0, 68.0, distance(vWorldPosC.xz, uFocus.xz));
+          float far = smoothstep(34.0, 108.0, distance(vWorldPosC.xz, uFocus.xz));
           float veil = uMistDensity * (0.22 + 0.78 * smoothstep(0.28, 0.94, n));
           veil = veil * (0.10 + 0.90 * far);
           veil *= (1.0 - lit * 0.90);

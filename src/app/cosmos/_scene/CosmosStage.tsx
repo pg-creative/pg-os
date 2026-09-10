@@ -323,9 +323,23 @@ export function CosmosStage({
   useEffect(() => {
     sound.setFire(hud.sitting);
   }, [hud.sitting, sound]);
+  /**
+   * THE HALL HAS ITS OWN BED NOW, and a room's wins over its biome's.
+   *
+   * `bed-hall.mp3` (Higgsfield, 10 s: a low hearth fire, wind on paper windows,
+   * one timber creak, a far chime) is named on the shrine hall's room block, not
+   * on the world, because that is the truth of it. Step out onto the grounds and
+   * the practice's own `bed:` takes over, which is still the procedural floor;
+   * `setBed` crossfades over a second and a half either way.
+   */
+  const bed = useMemo(() => {
+    const room = current?.layout.rooms.find((r) => r.id === hud.room);
+    return room?.bed ?? current?.bed ?? null;
+  }, [current, hud.room]);
+
   useEffect(() => {
-    sound.setBed(current?.bed ?? null);
-  }, [current?.bed, sound]);
+    sound.setBed(bed);
+  }, [bed, sound]);
 
   // ── Where he stood. The never-restart proof: reload and he is still there. ──
   const saveHero = useCallback(() => {

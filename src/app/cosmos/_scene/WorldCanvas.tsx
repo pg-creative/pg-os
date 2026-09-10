@@ -40,7 +40,7 @@ import { createRuntime, HERO_RADIUS, stepWalker, STEER_MARGIN, STRIDE, type Runt
 import { EMITTER_SOCKET, PROPS } from "./props";
 import { CAM_YAW, IsoCamera } from "./IsoCamera";
 import { Ground } from "./Ground";
-import { GrassField, type Clearing } from "./Grass";
+import { coverFor, GrassField, type Clearing } from "./Grass";
 import { Sky, skyFor, useHour, type SkyLook } from "./Sky";
 import { World, worldBlockers } from "./World";
 import { Hero } from "./Hero";
@@ -501,7 +501,7 @@ function LightPool({
           world: w.id,
           x: l.at.x,
           z: l.at.z,
-          y: EMITTER_SOCKET[l.emitter] ?? 1.2,
+          y: l.lamp ? (EMITTER_SOCKET[l.emitter] ?? 1.2) : 0.22,
           color: l.color,
           range: l.range,
           intensity: l.intensity,
@@ -674,6 +674,16 @@ export const WorldCanvas = memo(function WorldCanvas({
 
   const palette = useMemo(() => paletteFor(current?.register), [current]);
 
+  /**
+   * The rigged Wayfarer, when the vault names one. He is one traveller, so the
+   * world he is standing in gets first say and any world that declares a model
+   * answers otherwise: he does not become a different man at a border.
+   */
+  const heroModel = useMemo(
+    () => current?.hero_model ?? worlds.find((w) => w.hero_model)?.hero_model ?? null,
+    [current, worlds],
+  );
+
   const weather = useMemo(
     () => weatherLook(current?.weather),
     [current],
@@ -840,16 +850,19 @@ export const WorldCanvas = memo(function WorldCanvas({
       <GrassField
         key={current?.layout.ground ?? "grass"}
         target={target}
-        /* Root near the ground it grows out of, tip the register's own grass.
-           Rooted in `foliageDark` the blades read as dark chips scattered on a
-           cream page rather than as a meadow. */
-        root={palette.foliage}
-        tip={palette.grassTip}
+        /* ROOTED IN THE GROUND ITSELF. `foliage` is a mid green whatever the
+           register, so on the forge's cream flagstones the blades read as dark
+           chips scattered on a page and on the practice as pale spikes. A blade
+           that starts at the floor's own colour and ends at the register's grass
+           emerges from the ground instead of sitting on it, in every biome, for
+           free: the colour is in the vertices. */
+        root={palette.ground}
+        tip={palette.grass}
         clearings={clearings}
-        /* `stone` was in this list and the forge grew a meadow on its flagstones.
-           The vault's word is the answer: grass and earth grow blades, stone and
-           ash and anything else it invents grow none. */
-        count={/grass|earth|meadow/i.test(current?.layout.ground ?? "grass") ? 3000 : 0}
+        /* The vault's word decides how thick the cover is, not whether there is
+           any: a meadow is thick, a flagged yard carries weeds in its joints,
+           ash carries nothing. `coverFor` holds the numbers. */
+        count={Math.round(3000 * coverFor(current?.layout.ground))}
         radius={22}
       />
 
@@ -871,7 +884,13 @@ export const WorldCanvas = memo(function WorldCanvas({
 
       <LightPool rt={rt} worlds={visible} />
 
-      <Hero rt={rt} p={palette} lanternColor={palette.flame} lanternRange={9} />
+      <Hero
+        rt={rt}
+        p={palette}
+        lanternColor={palette.flame}
+        lanternRange={9}
+        model={heroModel}
+      />
 
       <Warmup />
       <Conductor

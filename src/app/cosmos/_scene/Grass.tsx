@@ -33,9 +33,28 @@ function hash2(x: number, y: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-/** Two crossed quads with a colour ramp baked into the vertices. */
+/**
+ * Two crossed blades with a colour ramp baked into the vertices.
+ *
+ * TAPERED, which is the Critic's fifteenth small thing: a 0.13 by 0.42 quad with
+ * parallel sides reads as a rectangle stuck in the ground, and ten thousand
+ * rectangles read as gravel. Grass narrows to a point. The taper is applied to
+ * the plane's own vertices before merging, so it costs nothing at draw time:
+ * full width at the root, a tenth of it at the tip, on a curve rather than a
+ * straight line so the blade has a shoulder.
+ */
 function bladeGeometry(w: number, h: number, root: string, tip: string) {
-  const a = new THREE.PlaneGeometry(w, h, 1, 3);
+  const taper = (g: THREE.BufferGeometry) => {
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const t = THREE.MathUtils.clamp((p.getY(i) + h / 2) / h, 0, 1);
+      const k = Math.pow(1 - t, 0.62) * 0.9 + 0.1;
+      p.setX(i, p.getX(i) * k);
+    }
+    p.needsUpdate = true;
+    return g;
+  };
+  const a = taper(new THREE.PlaneGeometry(w, h, 1, 3));
   const b = a.clone().rotateY(Math.PI / 2);
   const merged = merge([a, b]);
   merged.translate(0, h / 2, 0);
@@ -83,6 +102,29 @@ function merge(list: THREE.BufferGeometry[]) {
   return out;
 }
 
+/**
+ * HOW MUCH COVER A GROUND CARRIES, from the vault's own word for it.
+ *
+ * The Critic's fifteenth small thing was a meadow growing on the forge's
+ * flagstones, and round three's first answer (grass on grass, nothing anywhere
+ * else) turned the practice into a sheet of flat green paint, because the vault
+ * calls the practice's ground `stone` too. Neither is right. Ground cover is not
+ * a switch: a meadow is thick, bare earth is patchy, a flagged yard carries
+ * weeds in its joints, and ash and water carry nothing at all. One number per
+ * word, and a word the vault invents grows nothing until someone gives it one.
+ */
+export const COVER: Record<string, number> = {
+  grass: 1,
+  meadow: 1,
+  earth: 0.55,
+  stone: 0.28,
+  sand: 0.12,
+};
+
+export function coverFor(ground: string | undefined): number {
+  return COVER[(ground ?? "grass").toLowerCase()] ?? 0;
+}
+
 /** A rotated rectangle grass does not grow inside. A floor is a floor. */
 export interface Clearing {
   x: number;
@@ -113,7 +155,7 @@ export function GrassField({
   const lastLay = useRef<unknown>(null);
 
   const { geometry, material } = useMemo(() => {
-    const geometry = bladeGeometry(0.13, 0.42, root, tip);
+    const geometry = bladeGeometry(0.095, 0.34, root, tip);
     const material = new THREE.MeshLambertMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,

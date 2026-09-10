@@ -71,6 +71,19 @@ export interface Runtime {
   depth: boolean;
   /** Distance walked since the last footstep, for the tick and the dust. */
   stepAccum: number;
+  /**
+   * Seconds he has been trying to reach `dest` and getting nowhere.
+   *
+   * The bug this closes is the one under three of the Critic's findings. A walk
+   * order is a POINT, and the steering can park him short of it: against a
+   * blocker, in a doorway, at the arm's length a card holds him at. `dest` was
+   * only ever cleared by arriving within 28 cm of it, so a point he could not
+   * quite reach meant he leaned on it forever, `moving` stayed true, and every
+   * rule that waits for him to STOP never fired: the dwell, the click-to-open,
+   * and the harness's own "did he get there". "Five separate walks toward the
+   * hall stalled at (-3.15, 1)" was this, with a grove in the way.
+   */
+  stuck: number;
   reduced: boolean;
   paused: boolean;
 }
@@ -105,6 +118,7 @@ export function createRuntime(x: number, z: number, world = ""): Runtime {
     sitting: false,
     depth: world === "depths",
     stepAccum: 0,
+    stuck: 0,
     reduced: false,
     paused: false,
   };
@@ -190,6 +204,22 @@ export function stepWalker(rt: Runtime, dt: number, camYaw: number): void {
     const d = Math.sqrt(Math.max(d2, 1e-6));
     rt.pos.x = b.x + (dx / d) * rr;
     rt.pos.z = b.z + (dz / d) * rr;
+  }
+
+  // A WALK ORDER GIVES UP RATHER THAN GRINDS. Half a second of leaning on
+  // something without covering ground means the point cannot be reached from
+  // here, and standing still where he ended up is a better answer than pushing
+  // at a wall until the tab closes.
+  if (rt.dest && !kx && !kz) {
+    if (moved < WALK_SPEED * dt * 0.18) rt.stuck += dt;
+    else rt.stuck = 0;
+    if (rt.stuck > 0.5) {
+      rt.dest = null;
+      rt.stuck = 0;
+      rt.vel.set(0, 0, 0);
+    }
+  } else {
+    rt.stuck = 0;
   }
 
   rt.moving = moved > 0.004;

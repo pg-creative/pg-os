@@ -33,12 +33,13 @@ import * as THREE from "three";
 import type { Monument, Room, SceneObject, WorldManifest } from "./contract";
 import { untouchedFor } from "./contract";
 import type { Palette } from "./registers";
-import { blockersFor, lightsFor, placeWorld, type Placement } from "./place";
+import { blockersFor, lightsFor, placeWorld, roomAt, type Placement } from "./place";
 import { Cutout, cutoutUrl, cutoutsAllowed, useCutout } from "./Cutout";
 import { EMITTER_SOCKET, Flame, PROPS } from "./props";
 import { GEO, toon } from "./toon";
 import type { Runtime } from "./runtime";
 import { Backdrop } from "./Backdrop";
+import { useRoomLoop } from "./FrameLoop";
 
 /**
  * Where a painted hearth sits across an interior plate, 0 to 1, so the fire in
@@ -50,6 +51,14 @@ import { Backdrop } from "./Backdrop";
  * consulted. Set from the practice's hall plate, which is the only one painted.
  */
 const HEARTH_U = 0.355;
+
+/** One room's interior painting, from the vault, in the two forms it can take. */
+function interiorOf(room: Room): { url: string; u: number } | null {
+  const raw = room.interior ?? null;
+  if (!raw) return null;
+  if (typeof raw === "string") return { url: raw, u: HEARTH_U };
+  return { url: raw.url, u: raw.hearth_u ?? HEARTH_U };
+}
 
 // ── A page, standing in a room ───────────────────────────────────────────────
 
@@ -174,16 +183,27 @@ function StandingFigure({ p, v }: { p: Palette; v: number }) {
   const shawl = "#C4645C";
   const hair = "#2A2018";
   const skin = "#F2DAC0";
+  // The silhouette is the whole job at eighty pixels tall. A narrow skirt, a
+  // shoulder line wider than the hips, arms at her sides and a head you can
+  // actually see: the first pass was a wide cone with a red block on it and it
+  // read as a traffic cone, which is a different way of not being a person.
   return (
     <group rotation={[0, v * Math.PI * 2, 0]}>
-      <mesh geometry={GEO.cyl} material={toon(p.woodDark)} position={[-0.11, 0.09, 0]} scale={[0.17, 0.18, 0.19]} castShadow />
-      <mesh geometry={GEO.cyl} material={toon(p.woodDark)} position={[0.11, 0.09, 0]} scale={[0.17, 0.18, 0.19]} castShadow />
-      {/* A long skirt, wider at the hem: the silhouette does the work at this size. */}
-      <mesh geometry={GEO.cone} material={toon(p.paper)} position={[0, 0.5, 0]} scale={[0.58, 0.82, 0.5]} castShadow />
-      <mesh geometry={GEO.box} material={toon(shawl)} position={[0, 1.02, 0]} scale={[0.48, 0.34, 0.34]} castShadow />
-      <mesh geometry={GEO.sphere} material={toon(skin)} position={[0, 1.32, 0]} scale={0.27} castShadow />
-      <mesh geometry={GEO.sphere} material={toon(hair)} position={[0, 1.37, -0.04]} scale={[0.3, 0.3, 0.32]} castShadow />
-      <mesh geometry={GEO.box} material={toon(hair)} position={[0, 1.2, -0.13]} scale={[0.26, 0.34, 0.14]} castShadow />
+      <mesh geometry={GEO.cyl} material={toon(p.woodDark)} position={[-0.1, 0.08, 0.02]} scale={[0.16, 0.16, 0.2]} castShadow />
+      <mesh geometry={GEO.cyl} material={toon(p.woodDark)} position={[0.1, 0.08, 0.02]} scale={[0.16, 0.16, 0.2]} castShadow />
+      {/* Skirt: narrow, to the ankle, a little flare at the hem. */}
+      <mesh geometry={GEO.cone} material={toon(p.paper)} position={[0, 0.44, 0]} scale={[0.44, 0.78, 0.38]} castShadow />
+      {/* Waist and shoulders: the two widths that say person from any distance. */}
+      <mesh geometry={GEO.box} material={toon(shawl)} position={[0, 0.92, 0]} scale={[0.36, 0.32, 0.26]} castShadow />
+      <mesh geometry={GEO.box} material={toon(shawl)} position={[0, 1.11, 0]} scale={[0.5, 0.14, 0.28]} castShadow />
+      {/* Arms, close in. */}
+      <mesh geometry={GEO.cyl} material={toon(shawl)} position={[-0.26, 0.94, 0.01]} scale={[0.11, 0.42, 0.11]} rotation={[0, 0, 0.07]} castShadow />
+      <mesh geometry={GEO.cyl} material={toon(shawl)} position={[0.26, 0.94, 0.01]} scale={[0.11, 0.42, 0.11]} rotation={[0, 0, -0.07]} castShadow />
+      {/* Neck, head, hair down the back. */}
+      <mesh geometry={GEO.cyl} material={toon(skin)} position={[0, 1.22, 0]} scale={[0.11, 0.12, 0.11]} castShadow />
+      <mesh geometry={GEO.sphere} material={toon(skin)} position={[0, 1.38, 0.015]} scale={[0.27, 0.3, 0.27]} castShadow />
+      <mesh geometry={GEO.sphere} material={toon(hair)} position={[0, 1.44, -0.045]} scale={[0.31, 0.31, 0.3]} castShadow />
+      <mesh geometry={GEO.box} material={toon(hair)} position={[0, 1.18, -0.14]} scale={[0.26, 0.42, 0.11]} castShadow />
     </group>
   );
 }
@@ -340,7 +360,7 @@ const Prop = memo(function Prop({
   worldId: string;
   p: Palette;
   rt: React.RefObject<Runtime>;
-  interior: { url: string; u: number } | null;
+  interior: { tex: THREE.Texture; u: number } | null;
   /**
    * Prop words this world has paintings for, from the manifest. Null means the
    * reader sent no list and the scene may probe; an empty set means it sent one
@@ -394,7 +414,7 @@ const Prop = memo(function Prop({
         w={pl.w}
         d={pl.d}
         gap={pl.gap ?? null}
-        interior={pl.kind === "hall" ? (interior?.url ?? null) : null}
+        interior={pl.kind === "hall" ? (interior?.tex ?? null) : null}
         interiorU={interior?.u ?? 0.5}
         interiorAt={pl.interiorAt ?? 0}
       />
@@ -421,7 +441,7 @@ const RoomProps = memo(function RoomProps({
   worldId,
   p,
   rt,
-  interior,
+  live,
   painted,
 }: {
   room: Room;
@@ -429,12 +449,25 @@ const RoomProps = memo(function RoomProps({
   worldId: string;
   p: Palette;
   rt: React.RefObject<Runtime>;
-  interior: { url: string; u: number } | null;
+  /** This room's loop, already playing, when it is the room he is standing in. */
+  live: THREE.Texture | null;
   /** See `Prop`: null means no list came, an empty set means one did. */
   painted: Set<string> | null;
 }) {
   const group = useRef<THREE.Group>(null);
   const acc = useRef(0);
+
+  // The painting on this room's back wall: the vault's plate, and the SAME
+  // painting in motion when the room is breathing. The still is loaded either
+  // way, so the wall is painted from the first frame and the loop takes over
+  // when its frames arrive rather than after them.
+  const spec = interiorOf(room);
+  const still = useCutout(spec?.url ?? null);
+  const interior = useMemo(() => {
+    if (!spec) return null;
+    const tex = live ?? (still.status === "ok" ? still.tex : null);
+    return tex ? { tex, u: spec.u } : null;
+  }, [spec, live, still.status, still.tex]);
   const radius = useMemo(
     () => Math.hypot(room.size.w, room.size.d) / 2 + 42,
     [room.size.w, room.size.d],
@@ -514,28 +547,47 @@ export const World = memo(function World({
   );
 
   /**
-   * THE PAINTED INTERIOR COMES FROM THE VAULT NOW.
+   * WHICH ROOM IS BREATHING, and where its loop hangs.
    *
-   * The Critic's deduction 11: this file kept its own `INTERIOR` map from world
-   * id to plate, so a second world with a painted back wall was a code edit, and
-   * the vault's own `interior:` field (which `world.yml` has carried since round
-   * 2.1) was read by nobody. It is read here. What stays in code is one number,
-   * `HEARTH_U`, where a painted hearth sits across an image, and it is a default
-   * the vault can override with `interior: { file, hearth_u }` the moment a
-   * second painting wants a different one.
+   * One loop plays at a time, and it is the loop of the room he is standing in.
+   * The rule for where it goes is in the data and not in a word: a room with an
+   * `interior:` hangs its loop on that wall (the hall, whose frames were cut
+   * from the same painting the wall wears); a room without one drives the
+   * world's painted horizon, because each of the other three loops was cut from
+   * the plate that world already uses as its backdrop. Nothing plays in a biome
+   * he is not standing in: a page holding four decoders is a page with a fan on.
    */
-  const interior = useMemo(() => {
-    const raw = world.layout.rooms.find((r) => r.interior)?.interior ?? null;
-    if (!raw) return null;
-    if (typeof raw === "string") return { url: raw, u: HEARTH_U };
-    return { url: raw.url, u: raw.hearth_u ?? HEARTH_U };
-  }, [world.layout.rooms]);
+  const [inRoom, setInRoom] = useState<string | null>(null);
+  const roomAcc = useRef(0);
+  useFrame((_, dt) => {
+    const r = rt.current;
+    if (!r) return;
+    roomAcc.current += dt;
+    if (roomAcc.current < 0.5) return;
+    roomAcc.current = 0;
+    const here = current ? (roomAt(world, r.pos.x, r.pos.z)?.id ?? null) : null;
+    setInRoom((prev) => (prev === here ? prev : here));
+  });
+
+  const breathing = useMemo(
+    () => world.layout.rooms.find((r) => r.id === inRoom && r.loop) ?? null,
+    [world.layout.rooms, inRoom],
+  );
+  const live = useRoomLoop(breathing?.loop ?? null);
+  /** An interior wall takes the loop; otherwise the horizon does. */
+  const wall = breathing && interiorOf(breathing) ? breathing.id : null;
 
   void lightBudget;
 
   return (
     <group>
-      <Backdrop world={world} p={p} rt={rt} current={current} />
+      <Backdrop
+        world={world}
+        p={p}
+        rt={rt}
+        current={current}
+        live={wall ? null : live}
+      />
 
       {world.layout.rooms.map((room) => {
         const pls = byRoom.get(room.id);
@@ -548,7 +600,7 @@ export const World = memo(function World({
             worldId={world.id}
             p={p}
             rt={rt}
-            interior={interior}
+            live={wall === room.id ? live : null}
             painted={painted}
           />
         );
@@ -562,7 +614,8 @@ export const World = memo(function World({
           drift apart. A window's lamp is its own lit panel: light, no flame. */}
       {lights.map((l) => {
         if (l.emitter === "window") return null;
-        const socket = EMITTER_SOCKET[l.emitter] ?? 1.2;
+        // No lamp claimed, no socket to hang on: it burns on the ground.
+        const socket = l.lamp ? (EMITTER_SOCKET[l.emitter] ?? 1.2) : 0.22;
         return (
           <group key={l.id} position={[l.at.x, socket, l.at.z]}>
             <Flame

@@ -348,9 +348,29 @@ export function blockersFor(placements: Placement[]): Blocker[] {
  * floating unexplained light becomes impossible rather than merely discouraged.
  */
 export function lightsFor(world: WorldManifest) {
-  return world.layout.rooms.flatMap((r) =>
-    r.lights.map((l, i) => ({ ...l, id: `${world.id}:${r.id}:${i}`, room: r.id })),
-  );
+  return world.layout.rooms.flatMap((r) => {
+    // The same claim the placer makes, so a light and its lamp agree about
+    // whether there IS a lamp. A light whose room did not ask for its emitter
+    // still burns (the vault put it there), but it burns ON THE GROUND rather
+    // than at the height a lamp would have held it: a fire on the ash, not a
+    // flame hanging in the air with nothing under it.
+    const asked = propsOf(r);
+    const list = asked.length ? [...asked] : fallbackProps(r);
+    return r.lights.map((l, i) => {
+      const kind = EMITTER_PROP[l.emitter];
+      let lamp = false;
+      if (kind) {
+        const j = list.indexOf(kind);
+        if (j >= 0) {
+          list.splice(j, 1);
+          lamp = true;
+        } else if (!asked.length) {
+          lamp = true;
+        }
+      }
+      return { ...l, id: `${world.id}:${r.id}:${i}`, room: r.id, lamp };
+    });
+  });
 }
 
 /** Which room a point is in, or null. Drives the hearth, the stairs and the bed. */

@@ -301,9 +301,14 @@ export function useWorldSound(enabled: boolean): WorldSound {
     const rig = rigRef.current;
     if (!rig) return;
     const marker = !bed || /\.procedural$/.test(bed);
+    // A room's bed arrives already resolved to an asset URL by the reader; a
+    // world's is still a raw vault path. Take either, and never build a URL out
+    // of one that is already one.
     const url = marker
       ? null
-      : `/api/cosmos/asset/vault/${bed.replace(/^\/+/, "").replace(/\.[a-z0-9]+$/i, "")}`;
+      : bed.startsWith("/api/")
+        ? bed
+        : `/api/cosmos/asset/vault/${bed.replace(/^\/+/, "").replace(/\.[a-z0-9]+$/i, "")}`;
 
     if (rig.file && rig.file.url === (url ?? "")) return;
 

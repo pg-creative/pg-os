@@ -67,6 +67,19 @@ export interface Room {
    * bed and then to the procedural floor.
    */
   bed?: string | null;
+  /**
+   * The frames this room breathes: `loop: plates/hall-loop` in the vault, cut to
+   * 12 fps WebP by the keeper's `cut-frames.sh`. It hangs on the room's own
+   * interior wall when it has one, and drives the world's painted horizon when
+   * it does not, because that is what each of the four cut loops is a loop OF.
+   */
+  loop?: {
+    base: string;
+    count: number;
+    fps: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 export interface SceneObject {
@@ -119,6 +132,16 @@ export interface WorldManifest {
    */
   backdrop: { url: string; lqip: string; crop?: { from: number; to: number } } | null;
   bed: string | null;
+  /**
+   * The rigged hero for this world, when `model:` names one. `?hero=model` draws
+   * it; the sprite stays the default until PG picks.
+   */
+  hero_model?: {
+    url: string;
+    static_url: string | null;
+    height: number;
+    clip: string | null;
+  } | null;
   /**
    * Prop words this world has a painted cutout for on disk. The reader looks now
    * (`vault.ts:readCutouts`), so the scene asks for exactly these and misses

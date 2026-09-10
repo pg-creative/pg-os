@@ -50,8 +50,12 @@ export interface PropProps {
   d?: number;
   /** Where the stair cuts the floor, in the prop's own local coordinates. */
   gap?: { x: number; z: number } | null;
-  /** The world's own painting, when this prop is the room that holds it. */
-  interior?: string | null;
+  /**
+   * The world's own painting, when this prop is the room that holds it. A
+   * TEXTURE and not a URL, because the same wall wears the still plate or the
+   * live 12 fps loop cut from it and the prop must not care which.
+   */
+  interior?: THREE.Texture | null;
   /** Where the painted feature (a hearth) sits in that painting, 0..1 across. */
   interiorU?: number;
   /** And where the real thing it must line up with stands, in local x. */
@@ -234,9 +238,7 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
 
   const art = useMemo(() => {
     if (!interior) return null;
-    const t = new THREE.TextureLoader().load(interior);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return new THREE.MeshBasicMaterial({ map: t, toneMapped: false, fog: true });
+    return new THREE.MeshBasicMaterial({ map: interior, toneMapped: false, fog: true });
   }, [interior]);
 
   useFrame((_, dt) => {
