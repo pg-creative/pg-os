@@ -81,9 +81,28 @@
    * No spinner. Nothing counts up. It is the same rule as the rest of the world:
    * a state is weather, never a progress bar.
    */
+  /*
+   * The composition of the world's own frame, in five gradient stops: sky at
+   * the top, the horizon a fifth of the way down where the camera actually puts
+   * it, two soft hill masses under it, and the ground going into shadow at the
+   * bottom the way the near field does. It is not a picture of the practice, it
+   * is the SHAPE of the practice, and at a glance on a phone that is the same
+   * thing. Zero bytes, one paint.
+   */
   background:
-    radial-gradient(128% 58% at 50% 96%, #241d33 0%, rgba(36, 29, 51, 0) 62%),
-    radial-gradient(150% 78% at 62% 12%, #7d5580 0%, #5b4270 34%, #33294a 66%, #1a1526 100%);
+    radial-gradient(78% 26% at 22% 30%, rgba(72, 60, 104, 0.85) 0%, rgba(72, 60, 104, 0) 70%),
+    radial-gradient(64% 22% at 78% 27%, rgba(60, 52, 92, 0.8) 0%, rgba(60, 52, 92, 0) 72%),
+    linear-gradient(
+      180deg,
+      #3a2a4e 0%,
+      #6b4668 12%,
+      #a46a83 18%,
+      #8d6f96 21%,
+      #5f5279 30%,
+      #3f4450 52%,
+      #2d3639 74%,
+      #171a1c 100%
+    );
 }
 
 .cosmos-root::before {

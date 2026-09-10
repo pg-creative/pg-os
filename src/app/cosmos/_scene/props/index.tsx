@@ -30,7 +30,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { Palette } from "../registers";
+import { mixHex, type Palette } from "../registers";
 import type { Runtime } from "../runtime";
 import { GEO, toon } from "../toon";
 
@@ -322,6 +322,27 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
     return m;
   }, [p.roof]);
 
+  /**
+   * THE RIDGE AND THE EAVES CATCH THE MOON, and the roof stops being a hole.
+   *
+   * Two slabs of one flat hex, tilted away from a key light that is now cool and
+   * low, made the largest single shape in the phone frame the DULLEST: about a
+   * fifth of the glass, no edge, no light, no read. Every painted roof in the
+   * register (`04-twilight-shrine`, the hall interior plate) does the same thing
+   * instead, which is to draw the building's silhouette in light along the ridge
+   * and the eave and leave the field of the roof dark.
+   *
+   * Three thin strips in the key's own colour, fading with the roof so walking
+   * inside still thins the whole thing at once.
+   */
+  const trimMat = useMemo(() => {
+    const m = toon(mixHex(p.roof, p.key, 0.42)).clone();
+    m.transparent = true;
+    m.opacity = 1;
+    m.depthWrite = false;
+    return m;
+  }, [p.roof, p.key]);
+
   const art = useMemo(() => {
     if (!interior) return null;
     return new THREE.MeshBasicMaterial({ map: interior, toneMapped: false, fog: true });
@@ -337,6 +358,7 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
     const want = inside ? 0.16 : 1;
     roofMat.opacity += (want - roofMat.opacity) * Math.min(1, dt * 4);
     roofMat.depthWrite = roofMat.opacity > 0.92;
+    trimMat.opacity = roofMat.opacity;
   });
 
   // The floor, as four boards around the stair's hole. No hole, one board.
@@ -390,6 +412,22 @@ const ShrineHall = ({ p, rt, w = 12, d = 10, gap, interior, interiorU = 0.355, i
       <mesh geometry={GEO.box} material={roofMat} position={[0, 3.6, -hd * 0.5]} scale={[w + 2.4, 0.28, d * 0.62]} rotation={[-0.34, 0, 0]} castShadow receiveShadow />
       <mesh geometry={GEO.box} material={roofMat} position={[0, 3.6, hd * 0.5]} scale={[w + 2.4, 0.28, d * 0.62]} rotation={[0.34, 0, 0]} castShadow receiveShadow />
       <mesh geometry={GEO.box} material={roofMat} position={[0, 4.5, 0]} scale={[w + 2.8, 0.3, 0.6]} castShadow />
+      {/* The light on the ridge, and on both eaves. */}
+      <mesh geometry={GEO.box} material={trimMat} position={[0, 4.68, 0]} scale={[w + 2.9, 0.1, 0.72]} />
+      <mesh
+        geometry={GEO.box}
+        material={trimMat}
+        position={[0, 3.06, -hd * 0.5 - d * 0.29]}
+        scale={[w + 2.5, 0.13, 0.34]}
+        rotation={[-0.34, 0, 0]}
+      />
+      <mesh
+        geometry={GEO.box}
+        material={trimMat}
+        position={[0, 3.06, hd * 0.5 + d * 0.29]}
+        scale={[w + 2.5, 0.13, 0.34]}
+        rotation={[0.34, 0, 0]}
+      />
 
       {/* Steps down to the ground at the open front. All at ground height. */}
       <Box at={[0, 0.02, hd + 0.6]} size={[w * 0.6, 0.04, 1]} color={p.stone} shadow={false} />
