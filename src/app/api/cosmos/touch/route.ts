@@ -6,11 +6,12 @@
  * the commit live in `src/lib/cosmos/state.ts`; this route is validation only.
  *
  * Two bodies:
- *   { "id": "the-stone-hall" }                       a dwell
+ *   { "id": "the-stone-hall" }                       a dwell on a page
+ *   { "id": "ledger-7-2026-07-16" }                  a dwell on a monument
  *   { "hero": { "world": "quiet-practice", x, z } }  a step
- * Both may arrive in one POST. Ids that are not real pages are refused, so a
- * stray POST cannot grow the file; a hero position for a world that is not in
- * `worlds.yml` is refused for the same reason.
+ * Both may arrive in one POST. Ids that are neither a real page nor a real LEDGER
+ * line are refused, so a stray POST cannot grow the file; a hero position for a
+ * world that is not in `worlds.yml` is refused for the same reason.
  *
  * `state/attention.json` is `{ page_id: last_touched }` plus the reserved `hero`
  * key. Mist is a function of days since touched and it NEVER deletes: a key only
@@ -22,17 +23,36 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { cosmosRoot, readPagesForScene, readWorlds } from "../../../../lib/cosmos/vault";
+import {
+  cosmosRoot,
+  readMonuments,
+  readPagesForScene,
+  readWorlds,
+} from "../../../../lib/cosmos/vault";
 import { setHero, touchPage } from "../../../../lib/cosmos/state";
 
 export const dynamic = "force-dynamic";
 
-/** Only ids that are real pages get written, so a stray POST cannot grow the file. */
-function knownPageIds(root: string): Set<string> {
+/**
+ * The ids a dwell may record: every page, and every monument.
+ *
+ * MONUMENTS WERE MISSING, and it cost a 404 per stone (the Critic's deduction 2):
+ * "`CosmosStage.tsx:203` posts a touch for every manifest id while
+ * `api/cosmos/touch/route.ts:31-37` knows page ids only". A monument is an object
+ * in the manifest, it opens like a page, and standing in front of one is
+ * attention exactly the way standing in front of a page is. The id shape is
+ * `ledger-<n>-<date>` and it is checked against the LEDGER itself, not a regex:
+ * an id no line owns is still refused, so a stray POST cannot grow the file.
+ *
+ * `readMonuments(root, 400)` is the same call `/api/cosmos/body` makes for the
+ * same reason, which keeps the two routes agreeing about what a stone is.
+ */
+function knownIds(root: string): Set<string> {
   const ids = new Set<string>();
   for (const w of readWorlds(root)) {
     for (const p of readPagesForScene(w.id, { drafts: true }, root)) ids.add(p.id);
   }
+  for (const m of readMonuments(root, 400)) ids.add(m.id);
   return ids;
 }
 
@@ -61,7 +81,7 @@ export async function POST(req: NextRequest) {
 
   let touched: string | null = null;
   if (id) {
-    if (!knownPageIds(root).has(id)) {
+    if (!knownIds(root).has(id)) {
       return NextResponse.json({ ok: false, error: "unknown page" }, { status: 404 });
     }
     touched = await touchPage(id, root);

@@ -17,10 +17,16 @@
  * `scripts/com.pgos.witness.plist` is drafted and not installed.
  *
  * The rules it will inherit when it does write, from 7g-1 and 7h:
- *   may write:  myth/drafts/*.md with status: draft, state/*.json, straight to main
+ *   may write:  chapters/*.md with status: draft, state/*.json, straight to main
  *   never:      post, spend, delete, edit config, write outside cosmos
  *   never:      LEARNING.md (only the Scribe writes it, quoting PG)
  *   never:      `touched:` by a hand, `season_started_at` into Hero's Chronicle
+ *
+ * ONE CHAPTER FOLDER, and it is `chapters/`. This line said `myth/drafts/*.md`
+ * for a round after that folder was deleted (the Critic's deduction 12: "two docs
+ * that lie"). `.githooks/pre-commit` is the version of this rule that bites: with
+ * WITNESS=1 set it refuses canon text and accepts `chapters/*.md` only when the
+ * STAGED blob carries `status: draft`.
  * And the shape of what it reports: weather only. No threshold, no streak, no
  * grade, no scolding. A missed night is a still sky, never a morning message.
  */

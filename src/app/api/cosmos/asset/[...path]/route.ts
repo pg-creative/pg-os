@@ -25,8 +25,16 @@ import { cosmosRoot, wallPlatesRoot } from "../../../../../lib/cosmos/vault";
 
 export const dynamic = "force-dynamic";
 
-/** Tried in order against the extensionless path. */
-const EXTENSIONS = ["webp", "jpg", "jpeg", "png", "avif", "mp4", "json"];
+/**
+ * Tried in order against the extensionless path.
+ *
+ * `glb` and `mp3` joined in round three: the Wayfarer's Meshy model and the
+ * hall's recorded bed. Neither goes anywhere near `public/`, for the same reason
+ * no plate does. A GLB served as `application/octet-stream` still loads through
+ * three's GLTFLoader, but it also caches badly through a proxy and reads as an
+ * unknown download in a devtools panel, so the type is stated.
+ */
+const EXTENSIONS = ["webp", "jpg", "jpeg", "png", "avif", "mp4", "glb", "mp3", "json"];
 
 const BY_EXT: Record<string, string> = {
   webp: "image/webp",
@@ -35,6 +43,8 @@ const BY_EXT: Record<string, string> = {
   png: "image/png",
   avif: "image/avif",
   mp4: "video/mp4",
+  glb: "model/gltf-binary",
+  mp3: "audio/mpeg",
   json: "application/json",
 };
 
@@ -52,6 +62,12 @@ function sniff(buf: Buffer, ext: string): string {
     const riff = buf.toString("ascii", 0, 4);
     const fmt = buf.toString("ascii", 8, 12);
     if (riff === "RIFF" && fmt === "WEBP") return "image/webp";
+    // glTF binary: the magic is the four ASCII bytes "glTF", then a uint32
+    // version. Checked before `ftyp` because a GLB has neither.
+    if (riff === "glTF") return "model/gltf-binary";
+    // MP3: an ID3 tag, or a raw frame sync (0xFF 0xEx/0xFx).
+    if (buf.toString("ascii", 0, 3) === "ID3") return "audio/mpeg";
+    if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return "audio/mpeg";
     if (buf.toString("ascii", 4, 8) === "ftyp") {
       return fmt.startsWith("avif") || fmt.startsWith("avis")
         ? "image/avif"

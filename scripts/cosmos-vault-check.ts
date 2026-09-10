@@ -18,6 +18,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { EMITTER_PROP } from "../src/lib/cosmos/registers.ts";
 import {
   cosmosRoot,
   isProp,
@@ -68,10 +69,19 @@ try {
 
   // Round two lifts D9 ("sky by hour returns"), so `clock` is legal now; the
   // hall stays twilight-tinted through its register, not through a pinned phase.
-  const PHASES = ["day", "twilight", "midnight", "night", "clock", null];
-  if (!PHASES.includes(qp?.phase ?? null))
-    fail(`world.yml phase is ${qp?.phase}, which is not one of ${PHASES.join(", ")}`);
-  else ok(`phase is ${qp?.phase ?? "unset (follows the clock)"}`);
+  // Round three adds `night-when-on`, the party's rule as data. Every world's
+  // phase is checked, not just the practice's: an unknown word used to fall
+  // silently through to `clock`.
+  const PHASES = ["day", "twilight", "midnight", "night", "clock", "night-when-on", null];
+  let phaseFailures = 0;
+  for (const w of merged) {
+    if (!PHASES.includes(w.phase ?? null)) {
+      fail(`${w.id}: phase is "${w.phase}", which is not one of ${PHASES.join(", ")}`);
+      phaseFailures++;
+    }
+  }
+  if (phaseFailures === 0)
+    ok(`every phase is known (quiet-practice ${qp?.phase ?? "unset (follows the clock)"})`);
 
   // ONE register map, and it is `src/lib/cosmos/registers.ts` (the Critic's
   // deduction 12: two maps of the four registers disagreed about the same hex).
@@ -252,6 +262,96 @@ try {
   if (propFailures === 0)
     ok(`${propCount} props in ${roomsWithProps} rooms, all ${PROPS.length} words known`);
 
+  // ONE ENTRY IS ONE PROP. The reader must never expand a list: the Critic's
+  // deduction 4 was three `pine` entries in the vault becoming twenty-seven
+  // pines on screen, a hedge across the hall's doorstep that stalled five walks.
+  // The renderer owns what a word looks like and not how many there are, so the
+  // manifest's array must be exactly the yml's, word for word.
+  for (const w of readWorlds(root)) {
+    const raw = readLayoutBlock(w.worldFile, root) as { rooms?: unknown } | null;
+    const rooms = raw && typeof raw === "object" ? raw.rooms : null;
+    const entries = Array.isArray(rooms)
+      ? rooms
+      : rooms && typeof rooms === "object"
+        ? Object.values(rooms)
+        : [];
+    const manifest = manifests.find((m) => m.id === w.id);
+    for (const r of entries as Record<string, unknown>[]) {
+      const declared = (Array.isArray(r?.props) ? r.props : []).filter(isProp);
+      const emitted = manifest?.layout.rooms.find((x) => x.id === r.id)?.props ?? [];
+      if (declared.join("|") !== emitted.join("|"))
+        fail(
+          `${w.id}/${String(r?.id)}: props were expanded. yml ${declared.length}, manifest ${emitted.length}`,
+        );
+    }
+  }
+  {
+    const counted = manifests
+      .flatMap((m) => m.layout.rooms.flatMap((r) => r.props))
+      .reduce<Record<string, number>>((acc, p) => ({ ...acc, [p]: (acc[p] ?? 0) + 1 }), {});
+    const pines = counted.pine ?? 0;
+    ok(
+      `props are literal: ${pines} pine, ${counted["stone-lantern"] ?? 0} stone-lantern, ` +
+        `${counted["paper-window"] ?? 0} paper-window across the cosmos`,
+    );
+  }
+
+  // EVERY LIGHT IS MOTIVATED BY A THING YOU CAN SEE. The Critic's deduction 8
+  // was a scene rule; this is the vault half, and it is the half that can be
+  // enforced before anything renders. A light claims one prop from its room's
+  // inventory through `EMITTER_PROP` (the same map `_scene/props` re-exports), so
+  // two `lantern` lights need two `stone-lantern` entries, and a room that lights
+  // a fire with no hearth is a refused commit rather than a flame in mid-air.
+  //
+  // ONE EXCEPTION, by world, room and emitter, never by a flag anyone can set:
+  // the depths' `window` is moonlight through the crypt door's mouth, and a lit
+  // paper shoji on the ash is exactly the bug. SCHEMA.md says the same sentence.
+  const LAMPLESS_BY_DESIGN = "depths/ashen-hollow/window";
+  let litRooms = 0;
+  let unasked = 0;
+  for (const w of readWorlds(root)) {
+    const raw = readLayoutBlock(w.worldFile, root) as { rooms?: unknown } | null;
+    const rooms = raw && typeof raw === "object" ? raw.rooms : null;
+    const entries = Array.isArray(rooms)
+      ? rooms
+      : rooms && typeof rooms === "object"
+        ? Object.values(rooms)
+        : [];
+    for (const r of entries as Record<string, unknown>[]) {
+      const lights = Array.isArray(r?.lights) ? r.lights : [];
+      if (!lights.length) continue;
+      // A room with no `props:` at all is still being written; the scene's
+      // transitional fallback stands its lamps, so this is not its bug yet.
+      const declared = (Array.isArray(r.props) ? r.props : []).filter(isProp);
+      if (!declared.length) continue;
+      litRooms++;
+      const pool = [...declared];
+      for (const l of lights as Record<string, unknown>[]) {
+        const emitter = typeof l?.emitter === "string" ? l.emitter : String(l?.type ?? "");
+        const want = EMITTER_PROP[emitter];
+        const where = `${w.id}/${String(r.id)}/${emitter}`;
+        if (!want) {
+          fail(`${where}: no prop word can ever stand under this emitter`);
+          continue;
+        }
+        const i = pool.indexOf(want);
+        if (i >= 0) {
+          pool.splice(i, 1);
+          continue;
+        }
+        if (where === LAMPLESS_BY_DESIGN) {
+          unasked++;
+          continue;
+        }
+        fail(`${where}: a light with no lamp. Its room's props: name no "${want}"`);
+      }
+    }
+  }
+  ok(
+    `every light in ${litRooms} furnished rooms has a lamp its room asked for, ` +
+      `bar ${unasked} by design (${LAMPLESS_BY_DESIGN})`,
+  );
+
   // Every room that is furnished at all must be furnished by the vault, not by
   // the scene guessing from an id.
   for (const m of manifests) {
@@ -333,6 +433,104 @@ try {
   const thread = manifests[0]?.thread;
   if (!thread?.season) fail("the thread carries no season");
   else ok(`the thread reads season ${thread.season}, chapter ${thread.chapter?.id ?? "(none)"}`);
+
+  // ── Round three ────────────────────────────────────────────────────────────
+
+  // A ROOM THAT NAMES A LOOP HAS ONE. `loop:` resolves through `frames.json`, so
+  // a folder with no manifest file, no frames, or a count of zero comes back null
+  // and the room silently stops breathing. That is a refused commit here instead.
+  let loops = 0;
+  for (const w of readWorlds(root)) {
+    const raw = readLayoutBlock(w.worldFile, root) as { rooms?: unknown } | null;
+    const rooms = raw && typeof raw === "object" ? raw.rooms : null;
+    const entries = Array.isArray(rooms)
+      ? rooms
+      : rooms && typeof rooms === "object"
+        ? Object.values(rooms)
+        : [];
+    for (const r of entries as Record<string, unknown>[]) {
+      if (typeof r?.loop !== "string") continue;
+      const room = manifests
+        .find((m) => m.id === w.id)
+        ?.layout.rooms.find((x) => x.id === r.id);
+      if (!room?.loop) {
+        fail(`${w.id}/${String(r.id)}: loop "${r.loop}" has no readable frames.json`);
+        continue;
+      }
+      loops++;
+      const dir = path.join(root, "worlds", w.id, r.loop);
+      const last = `frame-${String(room.loop.count).padStart(3, "0")}.webp`;
+      if (!fs.existsSync(path.join(dir, last)))
+        fail(`${w.id}/${String(r.id)}: frames.json says ${room.loop.count} frames and ${last} is missing`);
+      if (!room.loop.base.startsWith("/api/cosmos/asset/"))
+        fail(`${w.id}/${String(r.id)}: loop base is not an asset url: ${room.loop.base}`);
+    }
+  }
+  if (loops === 0) fail("no room names a loop; the two Higgsfield loops are wired to nothing");
+  else ok(`${loops} room loop(s) resolve, every frame the count promises is on disk`);
+
+  // A ROOM'S BED IS A FILE, not a marker and not a hope.
+  for (const m of manifests) {
+    for (const r of m.layout.rooms) {
+      if (!r.bed) continue;
+      if (!r.bed.startsWith("/api/cosmos/asset/"))
+        fail(`${m.id}/${r.id}: bed is not an asset url: ${r.bed}`);
+    }
+  }
+
+  // THE HERO MODEL. One world offers one, it is on disk, and its clip is named:
+  // a mistyped clip is a hero standing in an A-pose with no error anywhere.
+  const withModel = readWorlds(root).filter((w) => w.model);
+  if (withModel.length === 0) fail("no world names a `model:`");
+  for (const w of withModel) {
+    const m = manifests.find((x) => x.id === w.id);
+    if (!m?.hero_model) {
+      fail(`${w.id}: model ${w.model} does not resolve to a file on disk`);
+      continue;
+    }
+    if (!m.hero_model.clip) fail(`${w.id}: model names no clip`);
+    if (!m.hero_model.static_url) fail(`${w.id}: model_static does not resolve`);
+    if (!(m.hero_model.height > 0)) fail(`${w.id}: model height is ${m.hero_model.height}`);
+    ok(`${w.id}: hero model resolves (${m.hero_model.height} m, clip ${m.hero_model.clip})`);
+  }
+
+  // THE WEATHER SENTENCE HAS NO NUMBERS IN IT. The Critic's deduction 6 was a
+  // count spelled out ("eight days since the pages"), so a word list is not
+  // enough on its own: the three words are checked for digits AND for the
+  // spelled numbers the HUD used to reach for.
+  const SPELLED = /\b(no|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|many)\b/i;
+  const words = manifests[0]?.weather?.words;
+  if (!words || !words.sky || !words.season || !words.time) {
+    fail("the manifest's weather carries no words {sky, season, time}");
+  } else {
+    const bad = Object.entries(words).filter(
+      ([, v]) => /\d/.test(v) || SPELLED.test(v),
+    );
+    if (bad.length)
+      fail(`weather words carry a count: ${bad.map(([k, v]) => `${k}="${v}"`).join(", ")}`);
+    else ok(`weather words: ${words.sky} / ${words.time} / ${words.season}`);
+  }
+
+  // WHAT IS SUPERSEDED GETS DELETED. Both of the Critic's parked files, checked
+  // by absence, so a `cut-frames.sh` run or a copied world file cannot quietly
+  // put a second home back.
+  for (const w of readWorlds(root)) {
+    for (const gone of ["hero.webp", "hero-lqip.webp"]) {
+      if (fs.existsSync(path.join(root, "worlds", w.id, "plates", gone)))
+        fail(`${w.id}: worlds/${w.id}/plates/${gone} is back; nothing reads it (deduction 13)`);
+    }
+  }
+  const stale: string[] = [];
+  for (const file of ["worlds.yml", ...readWorlds(root).map((w) => w.worldFile).filter(Boolean)]) {
+    const abs = path.join(root, file as string);
+    if (!fs.existsSync(abs)) continue;
+    for (const line of fs.readFileSync(abs, "utf8").split("\n")) {
+      if (/^\s*hero_plate_alt\s*:/.test(line)) stale.push(`${file}: hero_plate_alt`);
+      if (/^\s*loop\s*:\s*\.\./.test(line)) stale.push(`${file}: a world-level loop into self/`);
+    }
+  }
+  if (stale.length) fail(`deleted fields are back: ${stale.join(", ")}`);
+  else ok("no hero_plate_alt, no hero.webp, no world-level loop: nothing parked");
 } catch (err) {
   fail(`layout: ${(err as Error).message}`);
 }

@@ -20,7 +20,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import { REGISTERS, type Register } from "./registers.ts";
+import { isProp, type Prop, REGISTERS, type Register } from "./registers.ts";
 
 /**
  * One register map, and it is `registers.ts`. Round two carried two: `SCENE_PRESETS`
@@ -75,8 +75,6 @@ export interface WorldEntry {
    * card, a share sheet or a page about the world would show.
    */
   heroPlate: string | null;
-  /** Same subject, same register, a second source. Live-switchable in the scene. */
-  heroPlateAlt: string | null;
   /**
    * The picture that hangs on the far plane BEHIND the world, and a different job
    * from `heroPlate`. Round 2.1 conflated the two and the quiet practice ended up
@@ -86,8 +84,19 @@ export interface WorldEntry {
    * ocarina." A backdrop has no figure in it, because the figure is the walker.
    */
   backdrop: string | null;
-  loop: string | null;
   bed: string | null;
+  /**
+   * The rigged GLB this world offers as the hero, and its plain twin.
+   *
+   * `heroPlateAlt` and the world-level `loop:` used to sit here. Both were read by
+   * nothing after round 2.1 (`heroUrlFor` and the scroll conductor are deleted)
+   * and the Critic counted them as parked (deduction 13); they are gone rather
+   * than annotated. A loop belongs to a room now; see `Room.loop`.
+   */
+  model: string | null;
+  modelStatic: string | null;
+  modelHeight: number | null;
+  modelClip: string | null;
   worldFile: string | null;
 }
 
@@ -136,10 +145,12 @@ export function parseWorldsYml(text: string): WorldEntry[] {
     phase: typeof w.phase === "string" ? w.phase : null,
     private: w.private === true,
     heroPlate: typeof w.hero_plate === "string" ? w.hero_plate : null,
-    heroPlateAlt: typeof w.hero_plate_alt === "string" ? w.hero_plate_alt : null,
     backdrop: typeof w.backdrop === "string" ? w.backdrop : null,
-    loop: typeof w.loop === "string" ? w.loop : null,
     bed: typeof w.bed === "string" ? w.bed : null,
+    model: typeof w.model === "string" ? w.model : null,
+    modelStatic: typeof w.model_static === "string" ? w.model_static : null,
+    modelHeight: typeof w.model_height === "number" ? w.model_height : null,
+    modelClip: typeof w.model_clip === "string" ? w.model_clip : null,
     worldFile: typeof w.world_file === "string" ? w.world_file : null,
   }));
 }
@@ -157,13 +168,14 @@ export function parseWorldFile(text: string, fallback: WorldEntry): WorldEntry {
     private: raw.private === true ? true : fallback.private,
     heroPlate:
       typeof raw.hero_plate === "string" ? raw.hero_plate : fallback.heroPlate,
-    heroPlateAlt:
-      typeof raw.hero_plate_alt === "string"
-        ? raw.hero_plate_alt
-        : fallback.heroPlateAlt,
     backdrop: typeof raw.backdrop === "string" ? raw.backdrop : fallback.backdrop,
-    loop: typeof raw.loop === "string" ? raw.loop : fallback.loop,
     bed: typeof raw.bed === "string" ? raw.bed : fallback.bed,
+    model: typeof raw.model === "string" ? raw.model : fallback.model,
+    modelStatic:
+      typeof raw.model_static === "string" ? raw.model_static : fallback.modelStatic,
+    modelHeight:
+      typeof raw.model_height === "number" ? raw.model_height : fallback.modelHeight,
+    modelClip: typeof raw.model_clip === "string" ? raw.model_clip : fallback.modelClip,
   };
 }
 
@@ -513,17 +525,21 @@ export function readMonuments(root = cosmosRoot(), limit = 24): LedgerLine[] {
 /**
  * The world's backdrop: the picture on the far plane, behind everything.
  *
- * Three sources, in order, and the order is the point:
+ * Two sources, in order, and the order is the point:
  *   1. `backdrop:` in world.yml. The cartographer's explicit choice, and the only
- *      one of the three that can say "not the identity plate."
- *   2. `worlds/<id>/plates/hero.webp`, the cut `scripts/cut-frames.sh` writes:
- *      sized and compressed for the plane, with an LQIP sibling.
- *   3. `hero_plate:`, so a world that has neither still has a horizon.
+ *      one of the two that can say "not the identity plate."
+ *   2. `hero_plate:`, so a world that has no backdrop yet still has a horizon.
  *
  * Round 2.1 added the first rung. Before it, a world's identity plate WAS its
  * backdrop, which put the flute player of the quiet practice on the horizon
- * behind the walker. `heroUrlFor` is deleted rather than kept alongside; this is
- * its whole job plus one source.
+ * behind the walker. `heroUrlFor` is deleted rather than kept alongside.
+ *
+ * ROUND THREE DELETED THE MIDDLE RUNG, `worlds/<id>/plates/hero.webp`. Every
+ * world names a `backdrop:` and the check refuses one that does not, so the cut
+ * was unreachable and its two files were the Critic's "second home" (deduction
+ * 13). The files, this rung and the mode of `cut-frames.sh` that wrote them all
+ * went in the same commit: a rung nothing can reach is how a second home comes
+ * back on the next run.
  */
 export function backdropUrlFor(
   worldId: string,
@@ -532,13 +548,10 @@ export function backdropUrlFor(
   root = cosmosRoot(),
 ): string | null {
   if (backdropPath) return assetUrl(root, backdropPath);
-  if (fs.existsSync(path.join(root, "worlds", worldId, "plates", "hero.webp"))) {
-    return `/api/cosmos/asset/vault/worlds/${worldId}/plates/hero`;
-  }
   return platePath ? assetUrl(root, platePath) : null;
 }
 
-/** The same three sources, as absolute paths, so the LQIP sibling can be found. */
+/** The same two sources, as absolute paths, so the LQIP sibling can be found. */
 function backdropAbsFor(
   worldId: string,
   backdropPath: string | null,
@@ -546,8 +559,6 @@ function backdropAbsFor(
   root: string,
 ): string | null {
   if (backdropPath) return resolveVaultPath(root, backdropPath)?.abs ?? null;
-  const cut = path.join(root, "worlds", worldId, "plates", "hero.webp");
-  if (fs.existsSync(cut)) return cut;
   return platePath ? (resolveVaultPath(root, platePath)?.abs ?? null) : null;
 }
 
@@ -592,6 +603,87 @@ export function lqipFor(abs: string | null): string {
   const sibling = abs.replace(/\.[a-z0-9]+$/i, "-lqip.webp");
   if (!fs.existsSync(sibling)) return "";
   return `data:image/webp;base64,${fs.readFileSync(sibling).toString("base64")}`;
+}
+
+/**
+ * One room's loop, read from the frame folder's own `frames.json`.
+ *
+ * `rel` is relative to the WORLD's folder, so a room says `loop: plates/hall-loop`
+ * and nothing longer. The count, the frame rate and the frame size come out of
+ * the file the cutter wrote: the scene is never handed a number that a second
+ * hand could edit out of step with the pictures, and it never has to count a
+ * folder over HTTP to find out how many frames there are.
+ *
+ * Null when the folder, the manifest file or the first frame is missing, which is
+ * a room that simply does not breathe. `scripts/cosmos-vault-check.ts` is where
+ * that becomes a refused commit.
+ */
+export function readLoop(
+  worldId: string,
+  rel: string,
+  root = cosmosRoot(),
+): RoomLoop | null {
+  const dir = path.join(root, "worlds", worldId, rel);
+  const inside = resolveVaultPath(root, path.relative(root, dir));
+  if (!inside || inside.scope !== "vault") return null;
+  const meta = path.join(dir, "frames.json");
+  if (!fs.existsSync(meta)) return null;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(fs.readFileSync(meta, "utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const count = typeof parsed.count === "number" ? parsed.count : 0;
+  if (count < 1) return null;
+  if (!fs.existsSync(path.join(dir, "frame-001.webp"))) return null;
+  const base = assetUrl(root, path.relative(root, path.join(dir, "frame-")));
+  if (!base) return null;
+  return {
+    base,
+    count,
+    fps: typeof parsed.fps === "number" ? parsed.fps : 12,
+    width: typeof parsed.width === "number" ? parsed.width : 0,
+    height: typeof parsed.height === "number" ? parsed.height : 0,
+  };
+}
+
+/** The IO-backed `LoopFor` for one world, handed to `parseRoom`. */
+function loopReader(worldId: string, root: string): LoopFor {
+  return (rel) => readLoop(worldId, rel, root);
+}
+
+/**
+ * The world's hero model, when `model:` names one.
+ *
+ * `model:` is the rigged GLB (the one with the walk clip), `model_static:` the
+ * plain one. `model_height:` and `model_clip:` default to what Meshy generated on
+ * 2026-09-09 and are overridable per world, because a second model from a
+ * different tool will not share them.
+ *
+ * The GLB never enters `public/`: it goes through the asset route behind the gate
+ * like every plate, because the Wayfarer is PG's traveller and the practice is
+ * private forever.
+ */
+export function heroModelFor(
+  w: WorldEntry,
+  root = cosmosRoot(),
+): HeroModel | null {
+  if (!w.model) return null;
+  const abs = resolveVaultPath(root, w.model)?.abs;
+  if (!abs || !fs.existsSync(abs)) return null;
+  const url = assetUrl(root, w.model);
+  if (!url) return null;
+  const staticAbs = w.modelStatic ? resolveVaultPath(root, w.modelStatic)?.abs : null;
+  return {
+    url,
+    static_url:
+      w.modelStatic && staticAbs && fs.existsSync(staticAbs)
+        ? assetUrl(root, w.modelStatic)
+        : null,
+    height: w.modelHeight ?? 1.6,
+    clip: w.modelClip,
+  };
 }
 
 /**
@@ -666,41 +758,29 @@ export type Door = { to: string; kind: "mist" | "stairs"; at: { x: number; z: nu
  * that `SCHEMA.md` names and `scripts/cosmos-vault-check.ts` enforces, and the
  * scene owns only what each word LOOKS like.
  *
- * Closed on purpose. A prop the scene cannot build is a hole in the world, so a
- * new word costs one line here, one row in SCHEMA.md and one factory or cutout,
- * and the check refuses the commit until all three exist.
+ * THE LIST ITSELF MOVED to `registers.ts` in round three, and this is a
+ * re-export, not a second copy: `registers.ts` imports nothing, so the scene's
+ * client modules can read the same array instead of keeping the second
+ * vocabulary the Critic found in `_scene/place.ts` (deduction 11).
  */
-export const PROPS = [
-  "torii",
-  "stone-lantern",
-  "shrine-bell",
-  "pine",
-  "dock",
-  "boat",
-  "dog",
-  "couch",
-  "standing-stone",
-  "paper-window",
-  "hearth",
-  "altar",
-  "stair",
-  "still-water",
-  "bench",
-  "brazier",
-  "crypt-door",
-  "anvil",
-  "smithy-door",
-  "gnome",
-  "heart-light",
-] as const;
+export { PROPS, type Prop, isProp } from "./registers.ts";
 
-export type Prop = (typeof PROPS)[number];
-
-const PROP_SET: ReadonlySet<string> = new Set(PROPS);
-
-export function isProp(v: unknown): v is Prop {
-  return typeof v === "string" && PROP_SET.has(v);
-}
+/**
+ * The frames a room scrubs, cut by `cosmos/scripts/cut-frames.sh loop`.
+ *
+ * `base` is the asset URL up to the frame number, so a frame is
+ * `${base}${String(n).padStart(3, "0")}` with NO extension (the asset route
+ * recovers it). `count`, `fps`, `width` and `height` come from the folder's own
+ * `frames.json`, written by the cutter: the scene never counts a folder over
+ * HTTP, and the frame rate is not a number typed in two places.
+ */
+export type RoomLoop = {
+  base: string;
+  count: number;
+  fps: number;
+  width: number;
+  height: number;
+};
 
 export type Room = {
   id: string;
@@ -724,6 +804,24 @@ export type Room = {
    * own map tonight. This field is here so the next pass can delete that map.
    */
   interior: string | null;
+  /**
+   * The frame folder this room breathes, or null. `loop: plates/hall-loop` in the
+   * room's block, cut by `scripts/cut-frames.sh loop`.
+   *
+   * A loop belongs to a ROOM and not to a world, because that is the truth of it:
+   * the hearth flickers in the shrine hall and the water moves at the yard's
+   * dock, and neither is a property of the whole biome. Round one's `loop:` sat
+   * on the world, pointed at an mp4 in `self/`, and was read by nothing after the
+   * scroll conductor was deleted; it is gone.
+   */
+  loop: RoomLoop | null;
+  /**
+   * The recorded ambient bed for this room, as an asset URL, or null for the
+   * world's own (`bed:` in world.yml, which is still the procedural floor
+   * everywhere it is a `.procedural` marker). A room's bed wins where it exists:
+   * the hall has a real one now and the grounds outside it do not.
+   */
+  bed: string | null;
 };
 
 export type SceneObject = {
@@ -758,6 +856,54 @@ export type Monument = {
   at: { x: number; z: number };
 };
 
+/**
+ * The three words the weather sentence is built from, and there is not a number
+ * or a duration among them.
+ *
+ * The Critic's deduction 6: the first line the eye read, top right, on every
+ * load, was "Settled afternoon, eight days since the pages." Spelling a count out
+ * does not stop it being a count, and PG's rule is that "bad nights render as
+ * weather, never as a report card". So the reader does the arithmetic on the
+ * server and hands over WORDS. The numbers stay where they belong, in the mist
+ * density and the key light, which is weather you feel rather than weather you
+ * are told.
+ */
+export type WeatherWords = {
+  /** How the sky sits: clear, settled, soft, hazy, heavy. */
+  sky: string;
+  /** Where in the season we stand: "early in the season", never a day number. */
+  season: string;
+  /** The hour, as a word: night, morning, afternoon, evening. */
+  time: string;
+};
+
+/**
+ * `state/weather.json`'s raw values plus the words. Declared as an interface with
+ * an index signature rather than an intersection, because on an intersection the
+ * declared `words` and the index signature collapse to `never`.
+ */
+export interface ManifestWeather {
+  words: WeatherWords;
+  [k: string]: number | string | null | WeatherWords;
+}
+
+/**
+ * The Wayfarer as a model, when the world names one.
+ *
+ * `url` is the rigged GLB with its walk clip, `static_url` the plain one for a
+ * device that cannot afford an armature. `height` is the rigging height the model
+ * was generated at, in metres, so the scene scales against a stated number rather
+ * than eyeballing the bounding box. `clip` names the animation exactly as it
+ * appears in the GLB, because a mistyped clip name is a hero standing in an
+ * A-pose with no error anywhere.
+ */
+export type HeroModel = {
+  url: string;
+  static_url: string | null;
+  height: number;
+  clip: string | null;
+};
+
 export type WorldManifest = {
   id: string;
   title: string;
@@ -773,9 +919,15 @@ export type WorldManifest = {
   objects: SceneObject[];
   monuments: Monument[];
   thread: { season: string; chapter: { id: string; title: string; line: string } | null };
-  weather: Record<string, number | string | null>;
+  /**
+   * `state/weather.json` as it stands, plus `words`. The raw numbers stay for the
+   * mist and the key light; `words` is the only thing the HUD should ever read.
+   */
+  weather: ManifestWeather;
   attention: Record<string, string>;
   hero: { world: string; x: number; z: number } | null;
+  /** The GLB hero this world offers, behind the scene's `?hero=model` switch. */
+  hero_model: HeroModel | null;
   backdrop: { url: string; lqip: string } | null;
   bed: string | null;
   /** Prop words with a painting on disk. See `readCutouts`: it saves the 404s. */
@@ -881,9 +1033,22 @@ export function parseDoor(raw: unknown, roomAnchor: { x: number; z: number }): D
  */
 export type AssetFor = (rel: string) => string | null;
 
-const IDENTITY_ASSET: AssetFor = (rel) => rel;
+/**
+ * Turns a room's `loop: plates/hall-loop` into the frame set, or null. Injected
+ * so `parseRoom` stays a pure parser: the IO version reads the folder's
+ * `frames.json` (see `loopReader`), and every test passes `() => null`.
+ */
+export type LoopFor = (rel: string) => RoomLoop | null;
 
-export function parseRoom(id: string, raw: unknown, assetFor: AssetFor = IDENTITY_ASSET): Room {
+const IDENTITY_ASSET: AssetFor = (rel) => rel;
+const NO_LOOP: LoopFor = () => null;
+
+export function parseRoom(
+  id: string,
+  raw: unknown,
+  assetFor: AssetFor = IDENTITY_ASSET,
+  loopFor: LoopFor = NO_LOOP,
+): Room {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const anchor = asPoint(o.anchor) ?? { x: 0, z: 0 };
   return {
@@ -896,12 +1061,15 @@ export function parseRoom(id: string, raw: unknown, assetFor: AssetFor = IDENTIT
     // an author's hint and is merged in, never trusted on its own.
     objects: Array.isArray(o.objects) ? o.objects.filter((x): x is string => typeof x === "string") : [],
     // An unknown word is DROPPED here and FAILS the vault check, so a typo is a
-    // refused commit rather than a prop that silently never appears.
+    // refused commit rather than a prop that silently never appears. Nothing is
+    // multiplied: one entry is one prop, and the check counts what the yml says.
     props: Array.isArray(o.props) ? o.props.filter(isProp) : [],
     doors: Array.isArray(o.doors)
       ? o.doors.map((d) => parseDoor(d, anchor)).filter((d): d is Door => d !== null)
       : [],
     interior: typeof o.interior === "string" ? assetFor(o.interior) : null,
+    loop: typeof o.loop === "string" ? loopFor(o.loop) : null,
+    bed: typeof o.bed === "string" ? assetFor(o.bed) : null,
   };
 }
 
@@ -954,6 +1122,8 @@ export function defaultLayout(register: Register, index = 0): WorldLayout {
         props: ["stone-lantern"],
         doors: [],
         interior: null,
+        loop: null,
+        bed: null,
       },
     ],
   };
@@ -969,6 +1139,7 @@ export function parseLayout(
   register: Register,
   index = 0,
   assetFor: AssetFor = IDENTITY_ASSET,
+  loopFor: LoopFor = NO_LOOP,
 ): WorldLayout {
   const fallback = defaultLayout(register, index);
   if (!raw || typeof raw !== "object") return fallback;
@@ -979,12 +1150,12 @@ export function parseLayout(
     rooms = o.rooms
       .map((r) => {
         const rr = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
-        return typeof rr.id === "string" ? parseRoom(rr.id, rr, assetFor) : null;
+        return typeof rr.id === "string" ? parseRoom(rr.id, rr, assetFor, loopFor) : null;
       })
       .filter((r): r is Room => r !== null);
   } else if (o.rooms && typeof o.rooms === "object") {
     rooms = Object.entries(o.rooms as Record<string, unknown>).map(([id, r]) =>
-      parseRoom(id, r, assetFor),
+      parseRoom(id, r, assetFor, loopFor),
     );
   }
 
@@ -1249,12 +1420,115 @@ export function readPageBody(
   return null;
 }
 
-function asWorldPhase(v: string | null): WorldPhase {
+/**
+ * Is the party on? A rule the vault states, not a rule the renderer guesses.
+ *
+ * `state/party.json` is `{ "on": bool, "since": iso }`. The witness may write it
+ * later (a calendar event, a message, PG saying so); nothing writes it tonight,
+ * and an absent file is the party being off, which is the honest default.
+ *
+ * `state/attention.json` is read as a second source under the reserved key
+ * `party`, because attention is the file that already exists on both machines and
+ * a one-key write there is cheaper than a new file for a first test. Same shape.
+ */
+export function partyIsOn(root = cosmosRoot()): boolean {
+  const fromFile = (() => {
+    try {
+      const raw = fs.readFileSync(path.join(root, "state", "party.json"), "utf8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      return parsed?.on === true;
+    } catch {
+      return false;
+    }
+  })();
+  if (fromFile) return true;
+  const att = readAttentionRaw(root).party;
+  return !!att && typeof att === "object" && (att as Record<string, unknown>).on === true;
+}
+
+/**
+ * `phase:` resolved to something the renderer already knows.
+ *
+ * `night-when-on` is the party's, and it is the whole of the Critic's deduction
+ * 7 stated as data: "the party's heart stands on a plinth at four in the
+ * afternoon" because the world's phase was `clock` and the heart in the night sky
+ * needs a night sky. The rule is not a special case in the renderer and not a
+ * word in a world id; it is a phase, in the vocabulary, that the reader resolves
+ * against `state/party.json`. Off, it follows the clock like everything else.
+ */
+function asWorldPhase(v: string | null, root = cosmosRoot()): WorldPhase {
+  if (v === "night-when-on") return partyIsOn(root) ? "midnight" : "clock";
   if (v === "day" || v === "twilight" || v === "clock") return v;
   if (v === "midnight" || v === "night") return "midnight";
   // Sky by hour returns in round two (plan 7i: "D9 lifted"), so a world that
   // pins nothing follows the clock rather than freezing at one hour.
   return "clock";
+}
+
+// ── The weather, as words ────────────────────────────────────────────────────
+
+/**
+ * The hour as a word. Exported so the HUD can re-derive it from its own ticking
+ * clock without inventing a second set of words: the manifest is rendered once
+ * and the scene's clock moves, so `words.time` is the vocabulary and this is how
+ * you stay inside it.
+ */
+export function timeWord(hour: number): string {
+  if (hour < 5) return "night";
+  if (hour < 11) return "morning";
+  if (hour < 17) return "afternoon";
+  if (hour < 21) return "evening";
+  return "night";
+}
+
+/**
+ * The three weather words, computed here so no count reaches a screen.
+ *
+ * The sky word carries the numbers WITHOUT saying them: a long silence and a
+ * short night thicken the sky, exactly the way they already thicken the mist. The
+ * ladder is clear, settled, soft, hazy, heavy, and the vault's own `sky:` word
+ * wins when the witness wrote one, because that is a word PG's own file chose.
+ *
+ * The season word says where in the season we are and never which day of it: a
+ * season is 91 days and "day 69 of 91" is a progress bar spelled out.
+ */
+export function weatherWords(
+  raw: Record<string, unknown>,
+  now = new Date(),
+): WeatherWords {
+  const num = (k: string): number | null =>
+    typeof raw[k] === "number" && Number.isFinite(raw[k] as number)
+      ? (raw[k] as number)
+      : null;
+
+  const written = typeof raw.sky === "string" && raw.sky.trim() ? raw.sky.trim() : null;
+
+  // Weight, not a score: nothing here is shown, and nothing here is compared to
+  // a threshold that PG could fail. It only decides which of five words the sky
+  // gets, the same way the mist density already decides how far he can see.
+  let weight = 0;
+  const recovery = num("recovery");
+  if (recovery !== null) weight += recovery >= 70 ? -1 : recovery >= 40 ? 0 : 1;
+  const pages = num("pages_days_ago");
+  if (pages !== null) weight += pages <= 1 ? -1 : pages <= 4 ? 0 : 1;
+  const ship = num("days_since_ship");
+  if (ship !== null) weight += ship <= 2 ? -1 : ship <= 14 ? 0 : 1;
+
+  const LADDER = ["clear", "settled", "soft", "hazy", "heavy"];
+  const sky = written ?? LADDER[Math.min(LADDER.length - 1, Math.max(0, weight + 2))];
+
+  const day = num("season_day") ?? seasonOf(now).day;
+  const t = day / SEASON_LENGTH;
+  const season =
+    t < 0.25
+      ? "early in the season"
+      : t < 0.5
+        ? "in the first half of the season"
+        : t < 0.75
+          ? "deep in the season"
+          : "near the close of the season";
+
+  return { sky, season, time: timeWord(now.getHours()) };
 }
 
 /**
@@ -1280,6 +1554,7 @@ export function readWorldManifest(
     register,
     index,
     (rel) => assetUrl(root, rel),
+    loopReader(worldId, root),
   );
   const roomById = new Map(layout.rooms.map((r) => [r.id, r]));
   const firstRoom =
@@ -1377,8 +1652,9 @@ export function readWorldManifest(
   }));
 
   const weatherRaw = readWeather(root) as Record<string, unknown>;
-  const weather: Record<string, number | string | null> = {};
+  const weather: ManifestWeather = { words: weatherWords(weatherRaw) };
   for (const [k, v] of Object.entries(weatherRaw)) {
+    if (k === "words") continue;
     weather[k] = typeof v === "number" || typeof v === "string" ? v : null;
   }
 
@@ -1389,7 +1665,7 @@ export function readWorldManifest(
     id: world.id,
     title: world.title,
     register,
-    phase: asWorldPhase(world.phase),
+    phase: asWorldPhase(world.phase, root),
     private: world.private,
     layout: { origin: layout.origin, size: layout.size, ground: layout.ground, rooms },
     objects,
@@ -1398,6 +1674,7 @@ export function readWorldManifest(
     weather,
     attention,
     hero: readHero(root),
+    hero_model: heroModelFor(world, root),
     backdrop: backdropUrl ? { url: backdropUrl, lqip: lqipFor(backdropAbs) } : null,
     bed: world.bed,
     cutouts: readCutouts(worldId, root),

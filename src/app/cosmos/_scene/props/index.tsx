@@ -773,15 +773,16 @@ export const PROPS: Record<string, PropDef> = {
   },
 };
 
-/** Which prop stands under which kind of emitter. The source-to-light inventory. */
-export const EMITTER_PROP: Record<string, string> = {
-  lantern: "stone-lantern",
-  torch: "torch",
-  brazier: "brazier",
-  altar: "altar",
-  fire: "hearth",
-  window: "paper-window",
-};
+/**
+ * Which prop stands under which kind of emitter. The source-to-light inventory.
+ *
+ * ONE MAP, and it is `src/lib/cosmos/registers.ts` beside `PROPS`, for the reason
+ * the prop list moved there: `registers.ts` imports nothing, so this client
+ * module, the server reader and `scripts/cosmos-vault-check.ts` under bare node
+ * all read the same rows. The check refuses a room that lights a fire with no
+ * hearth, and it can only do that against the map the renderer actually uses.
+ */
+export { EMITTER_PROP } from "../../../../lib/cosmos/registers";
 
 /** Where a light hangs on the prop that motivates it. One row, both objects. */
 export const EMITTER_SOCKET: Record<string, number> = {
