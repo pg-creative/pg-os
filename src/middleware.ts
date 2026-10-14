@@ -54,8 +54,12 @@ function cosmosGate(req: NextRequest): NextResponse | null {
 
   // `?key=` is the OS's own one-visit-per-device handshake; honouring it here
   // means the cosmos needs no second ceremony and no second cookie.
+  // A disposable invite key (PGOS_INVITE_KEY): one link carries a device in
+  // without the long-lived secret leaving the machine. Same cookie as the real
+  // handshake, so retiring the invite kills the link and keeps the device.
+  const invite = process.env.PGOS_INVITE_KEY;
   const param = searchParams.get("key");
-  if (param && param === secret) {
+  if (param && (param === secret || (invite && param === invite))) {
     const cleanUrl = req.nextUrl.clone();
     cleanUrl.searchParams.delete("key");
     const res = NextResponse.redirect(cleanUrl);
