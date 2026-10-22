@@ -25,6 +25,12 @@ A Next.js 15 + React 19 + Tailwind v4 personal dashboard running at `http://127.
 
 Kickoff: 2026-04-21. **Production: https://pg-os.vercel.app** (stable, no auth gate). Dev: `http://127.0.0.1:3030` for surfaces that need filesystem (AppleScript launcher, fs.watch SSE, live Claude session tails).
 
+## Rules
+
+- **Everything in the OS is connected:** every new item, page or build states what it reads from,
+  writes to and links to (board, jobs view, Job Logs, Brain, Needs cards, orb, Command Center,
+  calendar, planner, Open threads). No islands, no second lists (PG, 2026-10-22).
+
 ## Current Status
 **PWA + Production Deploy shipped (2026-05-06).** PG OS deployed to Vercel at `pg-os.vercel.app` — auth gate (`PGOS_SHARED_SECRET`) removed entirely for personal-tool ergonomics; cloudflared tunnel retired. PWA installable on iPhone Home Screen with V2 Midnight Ember icon (cream/gold serif PG on midnight bg, full-bleed 180/192/512). Mobile bottom thumb bar shipped (top tabbar kept on desktop, responsive at 768px); tabs converted from `<button>` to `<a href="?tab=...">` anchors so navigation survives iOS hydration failure. Bridge BrickBuilder rebuilt as V1 Donkey Kong Construction (Mario w/ hammer + NES brick stack + Press Start 2P). `/evening` rebuilt as EV2 RPG Status Panel (mission-report header, hex tier badge, jewel-tone stats, MISSION COMPLETE finale). 4 design labs preserved at `/dev/{icon,pomodoro,evening,mobile-nav}-lab/` as live archive of variant picks. iOS hardening: hardcoded RGBA (no `color-mix(oklab)`), `touch-action: manipulation`, no `backdrop-filter`, z-index 9999, pre-hydration palette resolution script. Middleware gains `?skip-evening=1` + `?skip-briefing=1` escape hatches; sameSite changed strict→lax for cross-origin compat.
 
